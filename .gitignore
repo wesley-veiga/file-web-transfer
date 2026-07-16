@@ -1,0 +1,25 @@
+# Dependências
+node_modules/
+
+# Expo / builds
+.expo/
+dist/
+web-build/
+android/app/build/
+ios/build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Testes
+coverage/
+
+# Ambiente
+.env*
+!.env.example
+
+# Sistema / editor
+.DS_Store
+*.log
