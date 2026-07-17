@@ -48,6 +48,14 @@ ruleTester.run('local/todo-format', rule, {
       name: '"TODO" no meio do texto (não ancorado ao início do comentário) não é reportado',
       code: '// isto não é um TODO de verdade, apenas prosa\nconst a = 1;',
     },
+    {
+      name: 'TODOLIST: palavra que continua em maiúsculas após "TODO" é outra palavra, não um marcador',
+      code: '// TODOLIST: fix later\nconst a = 1;',
+    },
+    {
+      name: 'comentário de bloco JSDoc multi-linha com TODO(#5): no formato correto é aceito',
+      code: '/**\n * TODO(#5): revisar depois\n */\nconst a = 1;',
+    },
   ],
   invalid: [
     {
@@ -58,6 +66,36 @@ ruleTester.run('local/todo-format', rule, {
     {
       name: 'comentário de pendência com issue mas sem dois-pontos é inválido',
       code: '// TODO(#12) texto sem dois-pontos\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    {
+      name: 'todo: minúsculo e sem referência é inválido (case-insensitive na detecção)',
+      code: '// todo: lowercase bare\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    {
+      name: 'TODO123: dígito colado logo após TODO é um marcador malformado',
+      code: '// TODO123 fix later\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    {
+      name: 'TODOfix: palavra minúscula colada logo após TODO é um marcador malformado',
+      code: '// TODOfix later\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    {
+      name: 'TODO-123: referência estilo ticket com hífen não é o formato exigido',
+      code: '// TODO-123: fix later\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    {
+      name: '//TODO sem espaço após as barras também é detectado',
+      code: '//TODO: fix later\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    {
+      name: 'comentário de bloco JSDoc multi-linha com TODO: sem referência de issue é inválido',
+      code: '/**\n * TODO: revisar depois\n */\nconst a = 1;',
       errors: [{ messageId: 'missingIssueReference' }],
     },
   ],

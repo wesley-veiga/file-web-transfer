@@ -21,14 +21,50 @@ module.exports = {
     },
   },
   create(context) {
-    // Case-sensitive e ancorado ao início da linha (após remover espaços e o
-    // "*" de continuação de comentários de bloco/JSDoc): evita falsos
-    // positivos como uma frase que apenas menciona a palavra "todo" (ex.:
-    // "menciona a regra todo-format aqui") ou "TODO" no meio do texto.
-    const TODO_LINE = /^TODO\b/;
+    // Detecção: case-insensitive (pega "todo", "Todo", "TODO"...) e ancorada
+    // ao início da linha (após remover espaços e o "*" de continuação de
+    // comentários de bloco/JSDoc) — evita falsos positivos como uma frase
+    // que apenas menciona a palavra "todo" no meio do texto (ex.: "menciona
+    // a regra todo-format aqui").
+    const TODO_PREFIX = /^todo/i;
+    // Validação: sempre case-sensitive e no formato exato exigido.
     const VALID_TODO_LINE = /^TODO\(#\d+\):/;
 
     const normalizeLine = (line) => line.trim().replace(/^\*+\s*/, '');
+
+    /**
+     * Decide se uma linha já normalizada parece um marcador de pendência
+     * (válido ou não). O caractere logo após "todo" é o que desambigua:
+     * - nada (fim da linha) → é só "todo", não há como estar no formato
+     *   válido.
+     * - letra maiúscula → continua como outra palavra/sigla em maiúsculas
+     *   (ex.: "TODOLIST"), não é um marcador de pendência.
+     * - ":" "(" ou espaço → separador plausível de marcador; só é válido no
+     *   formato exato TODO(#123):.
+     * - qualquer outra coisa colada logo em seguida (dígito, letra
+     *   minúscula, hífen…) → marcador malformado/informal (ex.: "TODO123",
+     *   "TODOfix", "TODO-123:").
+     */
+    const looksLikeBareTodo = (line) => {
+      const match = TODO_PREFIX.exec(line);
+      if (!match) {
+        return false;
+      }
+
+      const rest = line.slice(match[0].length);
+      const nextChar = rest.charAt(0);
+
+      if (nextChar === '') {
+        return true;
+      }
+      if (/[A-Z]/.test(nextChar)) {
+        return false;
+      }
+      if (/[:(\s]/.test(nextChar)) {
+        return !VALID_TODO_LINE.test(line);
+      }
+      return true;
+    };
 
     return {
       Program() {
@@ -36,11 +72,7 @@ module.exports = {
         const comments = sourceCode.getAllComments();
 
         for (const comment of comments) {
-          const lines = comment.value.split('\n');
-          const hasBareTodo = lines.some((line) => {
-            const normalized = normalizeLine(line);
-            return TODO_LINE.test(normalized) && !VALID_TODO_LINE.test(normalized);
-          });
+          const hasBareTodo = comment.value.split('\n').map(normalizeLine).some(looksLikeBareTodo);
 
           if (hasBareTodo) {
             context.report({
