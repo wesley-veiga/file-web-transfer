@@ -21,8 +21,14 @@ module.exports = {
     },
   },
   create(context) {
-    const TODO_TOKEN = /\btodo\b/i;
-    const VALID_TODO = /\bTODO\(#\d+\):/;
+    // Case-sensitive e ancorado ao início da linha (após remover espaços e o
+    // "*" de continuação de comentários de bloco/JSDoc): evita falsos
+    // positivos como uma frase que apenas menciona a palavra "todo" (ex.:
+    // "menciona a regra todo-format aqui") ou "TODO" no meio do texto.
+    const TODO_LINE = /^TODO\b/;
+    const VALID_TODO_LINE = /^TODO\(#\d+\):/;
+
+    const normalizeLine = (line) => line.trim().replace(/^\*+\s*/, '');
 
     return {
       Program() {
@@ -30,7 +36,13 @@ module.exports = {
         const comments = sourceCode.getAllComments();
 
         for (const comment of comments) {
-          if (TODO_TOKEN.test(comment.value) && !VALID_TODO.test(comment.value)) {
+          const lines = comment.value.split('\n');
+          const hasBareTodo = lines.some((line) => {
+            const normalized = normalizeLine(line);
+            return TODO_LINE.test(normalized) && !VALID_TODO_LINE.test(normalized);
+          });
+
+          if (hasBareTodo) {
             context.report({
               loc: comment.loc,
               messageId: 'missingIssueReference',

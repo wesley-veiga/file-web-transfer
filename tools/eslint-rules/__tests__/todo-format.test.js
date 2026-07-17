@@ -40,6 +40,14 @@ ruleTester.run('local/todo-format', rule, {
       name: 'comentário de bloco com TODO(#1): referência válida também é aceito',
       code: '/* TODO(#1): revisar depois */\nconst a = 1;',
     },
+    {
+      name: 'menção à palavra "todo" fora de posição de marcador (ex.: nome da própria regra) não é reportada',
+      code: '// menciona a regra todo-format aqui\nconst a = 1;',
+    },
+    {
+      name: '"TODO" no meio do texto (não ancorado ao início do comentário) não é reportado',
+      code: '// isto não é um TODO de verdade, apenas prosa\nconst a = 1;',
+    },
   ],
   invalid: [
     {
