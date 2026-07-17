@@ -14,8 +14,12 @@ import RootLayout from '../_layout';
 
 // Type-safe mock functions
 const mockedUseColorScheme = useColorScheme as jest.MockedFunction<typeof useColorScheme>;
-const mockedHideAsync = SplashScreen.hideAsync as jest.MockedFunction<typeof SplashScreen.hideAsync>;
-const mockedPreventAutoHideAsync = SplashScreen.preventAutoHideAsync as jest.MockedFunction<typeof SplashScreen.preventAutoHideAsync>;
+const mockedHideAsync = SplashScreen.hideAsync as jest.MockedFunction<
+  typeof SplashScreen.hideAsync
+>;
+const mockedPreventAutoHideAsync = SplashScreen.preventAutoHideAsync as jest.MockedFunction<
+  typeof SplashScreen.preventAutoHideAsync
+>;
 
 describe('Component Integration Tests', () => {
   beforeEach(() => {

@@ -12,7 +12,9 @@ import RootLayout from '../_layout';
 
 // Type-safe mock functions
 const mockedUseColorScheme = useColorScheme as jest.MockedFunction<typeof useColorScheme>;
-const mockedPreventAutoHideAsync = SplashScreen.preventAutoHideAsync as jest.MockedFunction<typeof SplashScreen.preventAutoHideAsync>;
+const mockedPreventAutoHideAsync = SplashScreen.preventAutoHideAsync as jest.MockedFunction<
+  typeof SplashScreen.preventAutoHideAsync
+>;
 
 describe('RootLayout (_layout.tsx)', () => {
   beforeEach(() => {
@@ -46,7 +48,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('file exports default RootLayout function', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('export default function RootLayout');
     });
@@ -56,7 +58,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('imports SplashScreen from expo-splash-screen', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('expo-splash-screen');
     });
@@ -64,7 +66,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('calls SplashScreen.preventAutoHideAsync at module level', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('SplashScreen.preventAutoHideAsync()');
     });
@@ -72,7 +74,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('preventAutoHideAsync is called before function definition', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       const callIndex = fileContent.indexOf('SplashScreen.preventAutoHideAsync()');
       const funcIndex = fileContent.indexOf('function RootLayout');
@@ -84,16 +86,16 @@ describe('RootLayout (_layout.tsx)', () => {
     it('imports useColorScheme from react-native', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('useColorScheme');
-      expect(fileContent).toContain('from \'react-native\'');
+      expect(fileContent).toContain("from 'react-native'");
     });
 
     it('uses useColorScheme hook inside component', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toMatch(/const colorScheme = useColorScheme\(\)/);
     });
@@ -101,19 +103,19 @@ describe('RootLayout (_layout.tsx)', () => {
     it('imports DarkTheme and DefaultTheme from expo-router', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('DarkTheme');
       expect(fileContent).toContain('DefaultTheme');
-      expect(fileContent).toContain('from \'expo-router\'');
+      expect(fileContent).toContain("from 'expo-router'");
     });
 
     it('selects theme based on colorScheme', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
-      expect(fileContent).toContain('colorScheme === \'dark\'');
+      expect(fileContent).toContain("colorScheme === 'dark'");
       expect(fileContent).toContain('DarkTheme');
       expect(fileContent).toContain('DefaultTheme');
     });
@@ -121,7 +123,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('uses ternary operator for theme selection', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toMatch(/colorScheme === 'dark' \? DarkTheme : DefaultTheme/);
     });
@@ -131,16 +133,16 @@ describe('RootLayout (_layout.tsx)', () => {
     it('imports Stack from expo-router', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('Stack');
-      expect(fileContent).toContain('from \'expo-router\'');
+      expect(fileContent).toContain("from 'expo-router'");
     });
 
     it('uses Stack Navigator component', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('<Stack');
     });
@@ -148,7 +150,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('configures screenOptions', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('screenOptions');
     });
@@ -156,7 +158,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('sets headerShown to false', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('headerShown: false');
     });
@@ -166,16 +168,16 @@ describe('RootLayout (_layout.tsx)', () => {
     it('imports ThemeProvider from expo-router', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('ThemeProvider');
-      expect(fileContent).toContain('from \'expo-router\'');
+      expect(fileContent).toContain("from 'expo-router'");
     });
 
     it('wraps Stack with ThemeProvider', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('<ThemeProvider');
       expect(fileContent).toContain('<Stack');
@@ -185,7 +187,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('passes selected theme to ThemeProvider', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toMatch(/value=\{colorScheme === 'dark' \? DarkTheme : DefaultTheme\}/);
     });
@@ -195,7 +197,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('imports all required modules', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
 
       expect(fileContent).toContain('SplashScreen');
@@ -209,12 +211,12 @@ describe('RootLayout (_layout.tsx)', () => {
     it('all imports are from correct modules', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
 
-      expect(fileContent).toContain('from \'expo-splash-screen\'');
-      expect(fileContent).toContain('from \'expo-router\'');
-      expect(fileContent).toContain('from \'react-native\'');
+      expect(fileContent).toContain("from 'expo-splash-screen'");
+      expect(fileContent).toContain("from 'expo-router'");
+      expect(fileContent).toContain("from 'react-native'");
     });
   });
 
@@ -222,7 +224,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('function returns JSX element', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('return');
       expect(fileContent).toContain('<');
@@ -231,7 +233,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('uses React JSX syntax', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toContain('<ThemeProvider');
       expect(fileContent).toContain('</ThemeProvider>');
@@ -240,7 +242,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('component closure is properly structured', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
       expect(fileContent).toMatch(/function RootLayout[\s\S]*\{[\s\S]*return[\s\S]*\}/);
     });
@@ -250,7 +252,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('preventAutoHideAsync is called immediately on module load', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
 
       // Check that it's called at module level (outside any function)
@@ -282,17 +284,17 @@ describe('RootLayout (_layout.tsx)', () => {
     it('proper React import is present', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
 
       // Either has React import or uses JSX shorthand (which requires React 17+)
-      expect(fileContent).toContain('from \'expo-router\'');
+      expect(fileContent).toContain("from 'expo-router'");
     });
 
     it('file has no obvious code quality issues', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
 
       // Verify no `any` type (TypeScript strict)
@@ -308,7 +310,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('all components work together in module structure', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
 
       // Verify the full flow
@@ -323,7 +325,7 @@ describe('RootLayout (_layout.tsx)', () => {
     it('module file is syntactically valid and complete', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../_layout.tsx'),
-        'utf-8'
+        'utf-8',
       );
 
       // Count opening and closing tags/braces
