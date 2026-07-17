@@ -18,7 +18,7 @@ describe('RootLayout (_layout.tsx)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedUseColorScheme.mockReturnValue('light');
-    mockedPreventAutoHideAsync.mockReturnValue(Promise.resolve() as any);
+    (mockedPreventAutoHideAsync as jest.Mock).mockReturnValue(Promise.resolve());
   });
 
   describe('Module and Exports', () => {

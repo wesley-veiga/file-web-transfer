@@ -45,12 +45,12 @@ describe('Component Integration Tests', () => {
     });
 
     it('HomeScreen renders with undefined theme', () => {
-      mockedUseColorScheme.mockReturnValue(undefined as any);
+      mockedUseColorScheme.mockReturnValue(undefined);
       expect(() => render(<HomeScreen />)).not.toThrow();
     });
 
     it('HomeScreen renders with null theme', () => {
-      mockedUseColorScheme.mockReturnValue(null as any);
+      mockedUseColorScheme.mockReturnValue(null);
       expect(() => render(<HomeScreen />)).not.toThrow();
     });
   });
@@ -71,7 +71,7 @@ describe('Component Integration Tests', () => {
     });
 
     it('RootLayout renders with undefined theme', () => {
-      mockedUseColorScheme.mockReturnValue(undefined as any);
+      mockedUseColorScheme.mockReturnValue(undefined);
       expect(() => render(<RootLayout />)).not.toThrow();
     });
   });
@@ -157,7 +157,7 @@ describe('Component Integration Tests', () => {
     });
 
     it('Components can be rendered with error states mocked', () => {
-      mockedUseColorScheme.mockReturnValue(undefined as any);
+      mockedUseColorScheme.mockReturnValue(undefined);
 
       expect(() => {
         render(<HomeScreen />);
