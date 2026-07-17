@@ -5,6 +5,20 @@
  * `TODO(#123): descrição`. Bare `TODO`s (without an issue reference) are
  * rejected — see constitution.md Princípio VII.
  *
+ * LIMITAÇÃO CONHECIDA (decisão deliberada, não é um bug pendente): a
+ * detecção é uma heurística best-effort, não uma gramática formal — ela
+ * balanceia dois falsos positivos/negativos concorrentes (prosa pt-BR vs.
+ * marcadores TODO malformados) e há variantes residuais que escapam de
+ * ambos os caminhos de detecção (ex.: um único caractere colado entre
+ * "todo" e o separador, como "TODOX:" ou "todo123:"). Essa regra é uma
+ * conveniência de feedback rápido local (pre-commit) — ela NÃO é, e não
+ * pretende ser, à prova de bypass adversarial ou de typos incomuns. A
+ * garantia formal de que todo TODO tem issue associada vem do pipeline de
+ * CI (T-004) e da proteção de branch (T-006), não deste hook isolado.
+ * Não abrir novas rodadas de ajuste de regex para perseguir cobertura
+ * perfeita aqui — ver decisão registrada no histórico de commits desta
+ * regra.
+ *
  * @type {import('eslint').Rule.RuleModule}
  */
 module.exports = {
