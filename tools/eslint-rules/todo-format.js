@@ -21,50 +21,24 @@ module.exports = {
     },
   },
   create(context) {
-    // Detecção: case-insensitive (pega "todo", "Todo", "TODO"...) e ancorada
-    // ao início da linha (após remover espaços e o "*" de continuação de
-    // comentários de bloco/JSDoc) — evita falsos positivos como uma frase
-    // que apenas menciona a palavra "todo" no meio do texto (ex.: "menciona
-    // a regra todo-format aqui").
-    const TODO_PREFIX = /^todo/i;
+    // O projeto é pt-BR (constitution.md Seção 4), onde "todo"/"todos"/"toda"
+    // são palavras comuns da língua (pronome/adjetivo — "Todos os testes...",
+    // "todo arquivo...", "Todo o código..."), não um marcador de pendência.
+    // Por isso a detecção exige um sinal explícito e inequívoco de metadado
+    // logo após "todo": ":" ou "(" (com ou sem espaço no meio) — é assim que
+    // um marcador de pendência real se anuncia ("TODO:", "TODO(#123):").
+    // Isso é uma troca consciente: marcadores malformados sem separador em
+    // inglês, colados a outra palavra (ex.: "TODOfix", "TODO123"), deixam de
+    // ser detectados — mas evitar falsos positivos em prosa natural pt-BR
+    // tem prioridade sobre capturar esse caso raro (ver constitution.md
+    // Princípio VII e a decisão registrada no PR desta regra).
+    const TODO_MARKER_START = /^todo\s*[:(]/i;
     // Validação: sempre case-sensitive e no formato exato exigido.
     const VALID_TODO_LINE = /^TODO\(#\d+\):/;
 
     const normalizeLine = (line) => line.trim().replace(/^\*+\s*/, '');
 
-    /**
-     * Decide se uma linha já normalizada parece um marcador de pendência
-     * (válido ou não). O caractere logo após "todo" é o que desambigua:
-     * - nada (fim da linha) → é só "todo", não há como estar no formato
-     *   válido.
-     * - letra maiúscula → continua como outra palavra/sigla em maiúsculas
-     *   (ex.: "TODOLIST"), não é um marcador de pendência.
-     * - ":" "(" ou espaço → separador plausível de marcador; só é válido no
-     *   formato exato TODO(#123):.
-     * - qualquer outra coisa colada logo em seguida (dígito, letra
-     *   minúscula, hífen…) → marcador malformado/informal (ex.: "TODO123",
-     *   "TODOfix", "TODO-123:").
-     */
-    const looksLikeBareTodo = (line) => {
-      const match = TODO_PREFIX.exec(line);
-      if (!match) {
-        return false;
-      }
-
-      const rest = line.slice(match[0].length);
-      const nextChar = rest.charAt(0);
-
-      if (nextChar === '') {
-        return true;
-      }
-      if (/[A-Z]/.test(nextChar)) {
-        return false;
-      }
-      if (/[:(\s]/.test(nextChar)) {
-        return !VALID_TODO_LINE.test(line);
-      }
-      return true;
-    };
+    const looksLikeBareTodo = (line) => TODO_MARKER_START.test(line) && !VALID_TODO_LINE.test(line);
 
     return {
       Program() {

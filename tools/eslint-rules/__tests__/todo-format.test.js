@@ -56,6 +56,39 @@ ruleTester.run('local/todo-format', rule, {
       name: 'comentário de bloco JSDoc multi-linha com TODO(#5): no formato correto é aceito',
       code: '/**\n * TODO(#5): revisar depois\n */\nconst a = 1;',
     },
+    // Prosa pt-BR com "todo/todos/toda" como pronome/adjetivo (não marcador
+    // de pendência) — o projeto é pt-BR (constitution.md Seção 4), então
+    // esses casos NUNCA podem ser bloqueados. Reprodução real reportada
+    // pelo validador: um comentário assim foi rejeitado incorretamente pelo
+    // hook de pre-commit antes desta correção.
+    {
+      name: 'prosa pt-BR: "Todos os testes..." não é um marcador de pendência',
+      code: '// Todos os testes desta função devem cobrir os casos de borda.\nconst a = 1;',
+    },
+    {
+      name: 'prosa pt-BR: "todo arquivo..." não é um marcador de pendência',
+      code: '// todo arquivo deve ser sanitizado\nconst a = 1;',
+    },
+    {
+      name: 'prosa pt-BR: "Todo o código..." não é um marcador de pendência',
+      code: '// Todo o código deve ter testes\nconst a = 1;',
+    },
+    // Troca consciente (ver comentário na implementação da regra): exigir
+    // ":" ou "(" logo após "todo" para evitar falsos positivos em pt-BR
+    // tem como efeito colateral aceito não capturar mais marcadores em
+    // inglês malformados sem separador (colados a outra palavra/dígito).
+    {
+      name: '[troca consciente] "TODO123" sem separador não é mais detectado como marcador malformado',
+      code: '// TODO123 fix later\nconst a = 1;',
+    },
+    {
+      name: '[troca consciente] "TODOfix" sem separador não é mais detectado como marcador malformado',
+      code: '// TODOfix later\nconst a = 1;',
+    },
+    {
+      name: '[troca consciente] "TODO-123:" (hífen antes do separador) não é mais detectado como marcador malformado',
+      code: '// TODO-123: fix later\nconst a = 1;',
+    },
   ],
   invalid: [
     {
@@ -74,23 +107,13 @@ ruleTester.run('local/todo-format', rule, {
       errors: [{ messageId: 'missingIssueReference' }],
     },
     {
-      name: 'TODO123: dígito colado logo após TODO é um marcador malformado',
-      code: '// TODO123 fix later\nconst a = 1;',
-      errors: [{ messageId: 'missingIssueReference' }],
-    },
-    {
-      name: 'TODOfix: palavra minúscula colada logo após TODO é um marcador malformado',
-      code: '// TODOfix later\nconst a = 1;',
-      errors: [{ messageId: 'missingIssueReference' }],
-    },
-    {
-      name: 'TODO-123: referência estilo ticket com hífen não é o formato exigido',
-      code: '// TODO-123: fix later\nconst a = 1;',
-      errors: [{ messageId: 'missingIssueReference' }],
-    },
-    {
       name: '//TODO sem espaço após as barras também é detectado',
       code: '//TODO: fix later\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    {
+      name: 'TODO (#123): com espaço antes do parêntese é detectado como candidato mas não bate o formato exato',
+      code: '// TODO (#123): fix later\nconst a = 1;',
       errors: [{ messageId: 'missingIssueReference' }],
     },
     {
