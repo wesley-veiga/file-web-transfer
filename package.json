@@ -28,9 +28,17 @@
     "react-native-worklets": "0.10.0"
   },
   "devDependencies": {
+    "@react-native/babel-preset": "^0.86.0",
+    "@react-native/jest-preset": "^0.86.0",
+    "@testing-library/react-native": "^14.0.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.1",
     "@types/react": "~19.2.2",
+    "babel-jest": "^30.4.1",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -39,7 +47,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "private": true
 }
