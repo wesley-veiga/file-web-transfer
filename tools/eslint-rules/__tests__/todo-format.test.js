@@ -73,22 +73,6 @@ ruleTester.run('local/todo-format', rule, {
       name: 'prosa pt-BR: "Todo o código..." não é um marcador de pendência',
       code: '// Todo o código deve ter testes\nconst a = 1;',
     },
-    // Troca consciente (ver comentário na implementação da regra): exigir
-    // ":" ou "(" logo após "todo" para evitar falsos positivos em pt-BR
-    // tem como efeito colateral aceito não capturar mais marcadores em
-    // inglês malformados sem separador (colados a outra palavra/dígito).
-    {
-      name: '[troca consciente] "TODO123" sem separador não é mais detectado como marcador malformado',
-      code: '// TODO123 fix later\nconst a = 1;',
-    },
-    {
-      name: '[troca consciente] "TODOfix" sem separador não é mais detectado como marcador malformado',
-      code: '// TODOfix later\nconst a = 1;',
-    },
-    {
-      name: '[troca consciente] "TODO-123:" (hífen antes do separador) não é mais detectado como marcador malformado',
-      code: '// TODO-123: fix later\nconst a = 1;',
-    },
   ],
   invalid: [
     {
@@ -119,6 +103,33 @@ ruleTester.run('local/todo-format', rule, {
     {
       name: 'comentário de bloco JSDoc multi-linha com TODO: sem referência de issue é inválido',
       code: '/**\n * TODO: revisar depois\n */\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    // Reprodução real reportada pelo validador: "TODO" maiúsculo seguido de
+    // espaço, sem ":" nem "(", é uma forma comum e nada adversarial de
+    // escrever um TODO informal — precisa ser bloqueado.
+    {
+      name: 'TODO seguido de espaço, sem dois-pontos nem parênteses, é inválido',
+      code: '// TODO fix this later, no colon, no parens\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    // A nova heurística (caminho 1: "TODO" maiúsculo não seguido de outra
+    // maiúscula) cobre esses marcadores malformados colados a outra
+    // palavra/dígito sem reintroduzir a regressão pt-BR — não é mais um
+    // gap aceito (ver commits anteriores desta regra).
+    {
+      name: 'TODO123: dígito colado logo após TODO é um marcador malformado (agora detectado)',
+      code: '// TODO123 fix later\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    {
+      name: 'TODOfix: palavra minúscula colada logo após TODO é um marcador malformado (agora detectado)',
+      code: '// TODOfix later\nconst a = 1;',
+      errors: [{ messageId: 'missingIssueReference' }],
+    },
+    {
+      name: 'TODO-123: referência estilo ticket com hífen não é o formato exigido (agora detectado)',
+      code: '// TODO-123: fix later\nconst a = 1;',
       errors: [{ messageId: 'missingIssueReference' }],
     },
   ],
