@@ -1,8 +1,30 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+interface AppConfig {
+  expo: {
+    name: string;
+    slug: string;
+    version: string;
+    orientation: string;
+    icon: string;
+    scheme: string;
+    userInterfaceStyle: string;
+    ios: Record<string, unknown>;
+    android: {
+      minSdkVersion: number;
+      package: string;
+      adaptiveIcon: Record<string, unknown>;
+      predictiveBackGestureEnabled: boolean;
+    };
+    web: Record<string, unknown>;
+    plugins: unknown[];
+    experiments: Record<string, unknown>;
+  };
+}
+
 describe('app.json configuration', () => {
-  let appConfig: any;
+  let appConfig: AppConfig;
 
   beforeAll(() => {
     const appJsonPath = path.join(process.cwd(), 'app.json');
