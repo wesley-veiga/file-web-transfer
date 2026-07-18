@@ -35,7 +35,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Pipeline (GitHub Actions): typecheck → lint → testes com cobertura, bloqueando merge.
   *Pronto quando:* PR de teste com erro proposital fica vermelho.
 
-- [ ] **T-006 · Governança do repositório** ⬅ T-004
+- [x] **T-006 · Governança do repositório** ⬅ T-004
   No GitHub (`wesley-veiga/file-web-transfer`): proteção das branches `main` e `develop` (PR obrigatório, CI verde obrigatório, squash merge), template de PR com o checklist do `validador`, labels por fase.
   *Pronto quando:* push direto em `main`/`develop` é rejeitado; PR novo já nasce com o template.
 
