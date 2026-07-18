@@ -1,0 +1,47 @@
+name: CI
+
+# Rodar em pull requests para develop e main, ou em push para essas branches
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+  # Job único que roda todas as etapas em sequência:
+  # typecheck → lint → testes com cobertura (bloqueando merge se alguma falhar)
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout do repositório
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Setup Node.js 20 LTS com cache de dependências npm
+      - name: Setup Node.js 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # Clean install de dependências (respeitando package-lock.json)
+      - name: Install dependencies
+        run: npm ci
+
+      # Typecheck: valida tipos TypeScript (strict: true)
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
+
+      # Lint: verifica estilo, regras de dependência, proíbe any/console.log/TODO
+      - name: Lint
+        run: npm run lint
+
+      # Testes com cobertura: roda Jest e valida thresholds configurados em jest.config.js
+      # (80% global, 90% em shared/lib e features/*/services)
+      - name: Tests with coverage
+        run: npm test -- --coverage
