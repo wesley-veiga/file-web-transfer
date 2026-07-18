@@ -31,7 +31,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Jest + React Native Testing Library configurados; thresholds de cobertura (90% domínio/serviços, 80% global); mocks base para `expo-file-system`, `expo-network` e módulo do servidor.
   *Pronto quando:* `npm test` roda um teste exemplo com cobertura reportada.
 
-- [ ] **T-004 · CI** ⬅ T-002, T-003
+- [x] **T-004 · CI** ⬅ T-002, T-003
   Pipeline (GitHub Actions): typecheck → lint → testes com cobertura, bloqueando merge.
   *Pronto quando:* PR de teste com erro proposital fica vermelho.
 
@@ -39,7 +39,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   No GitHub (`wesley-veiga/file-web-transfer`): proteção das branches `main` e `develop` (PR obrigatório, CI verde obrigatório, squash merge), template de PR com o checklist do `validador`, labels por fase.
   *Pronto quando:* push direto em `main`/`develop` é rejeitado; PR novo já nasce com o template.
 
-- [ ] **T-005 · NativeWind + design tokens** ⬅ T-001 **[P]**
+- [x] **T-005 · NativeWind + design tokens** ⬅ T-001 **[P]**
   NativeWind instalado; `tailwind.config.js` com tokens de cor/espaçamento/tipografia; tema claro/escuro; componentes base em `shared/components` (Button, Card, Screen).
   *Pronto quando:* tela placeholder estilizada via `className` nos dois temas.
 
