@@ -38,8 +38,7 @@ describe('Screen Component', () => {
           <Text>Screen Content</Text>
         </Screen>,
       );
-      const tree = toJSON();
-      // @ts-expect-error - accessing children from RNTL serialized tree
+      const tree = toJSON() as { props?: { className?: string }; children?: unknown[] };
       expect(tree?.children).toBeDefined();
     });
 
@@ -68,23 +67,37 @@ describe('Screen Component', () => {
   });
 
   describe('Theme and Layout', () => {
-    it('renders with light/dark theme className structure', async () => {
+    it('includes bg-background-light in className', async () => {
       const { toJSON } = await render(
         <Screen>
-          <Text>Theme</Text>
+          <Text>Light</Text>
         </Screen>,
       );
-      expect(toJSON()).toBeDefined();
+      const tree = toJSON() as { props?: { className?: string }; children?: unknown[] };
+      const className = tree?.props?.className || '';
+      expect(className).toContain('bg-background-light');
     });
 
-    it('renders with full-screen layout', async () => {
+    it('includes dark:bg-background-dark in className', async () => {
+      const { toJSON } = await render(
+        <Screen>
+          <Text>Dark</Text>
+        </Screen>,
+      );
+      const tree = toJSON() as { props?: { className?: string }; children?: unknown[] };
+      const className = tree?.props?.className || '';
+      expect(className).toContain('dark:bg-background-dark');
+    });
+
+    it('includes flex-1 in className', async () => {
       const { toJSON } = await render(
         <Screen>
           <Text>Full</Text>
         </Screen>,
       );
-      const tree = toJSON();
-      expect(tree).toBeDefined();
+      const tree = toJSON() as { props?: { className?: string }; children?: unknown[] };
+      const className = tree?.props?.className || '';
+      expect(className).toContain('flex-1');
     });
   });
 

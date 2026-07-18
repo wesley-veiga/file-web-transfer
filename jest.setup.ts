@@ -14,7 +14,8 @@ jest.mock('expo-splash-screen', () => ({
 
 // Mock react-native-safe-area-context to allow rendering
 jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children, style }: any) => React.createElement('View', { style }, children),
+  SafeAreaView: ({ children, className, style, ...props }: any) =>
+    React.createElement('View', { className, style, ...props }, children),
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 

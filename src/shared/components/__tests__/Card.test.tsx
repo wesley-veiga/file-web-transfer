@@ -38,8 +38,7 @@ describe('Card Component', () => {
           <Text>Card Content</Text>
         </Card>,
       );
-      const tree = toJSON();
-      // @ts-expect-error - accessing children from RNTL serialized tree
+      const tree = toJSON() as { props?: { className?: string }; children?: unknown[] };
       expect(tree?.children).toBeDefined();
     });
 
@@ -55,13 +54,48 @@ describe('Card Component', () => {
   });
 
   describe('Styling and Props', () => {
-    it('renders with theme and styling classes', async () => {
+    it('includes bg-surface-light in className', async () => {
       const { toJSON } = await render(
         <Card>
           <Text>Themed</Text>
         </Card>,
       );
-      expect(toJSON()).toBeDefined();
+      const tree = toJSON() as { props?: { className?: string }; children?: unknown[] };
+      const className = tree?.props?.className || '';
+      expect(className).toContain('bg-surface-light');
+    });
+
+    it('includes dark:bg-surface-dark in className', async () => {
+      const { toJSON } = await render(
+        <Card>
+          <Text>Dark</Text>
+        </Card>,
+      );
+      const tree = toJSON() as { props?: { className?: string }; children?: unknown[] };
+      const className = tree?.props?.className || '';
+      expect(className).toContain('dark:bg-surface-dark');
+    });
+
+    it('includes rounded-lg in className', async () => {
+      const { toJSON } = await render(
+        <Card>
+          <Text>Rounded</Text>
+        </Card>,
+      );
+      const tree = toJSON() as { props?: { className?: string }; children?: unknown[] };
+      const className = tree?.props?.className || '';
+      expect(className).toContain('rounded-lg');
+    });
+
+    it('includes p-4 in className', async () => {
+      const { toJSON } = await render(
+        <Card>
+          <Text>Padded</Text>
+        </Card>,
+      );
+      const tree = toJSON() as { props?: { className?: string }; children?: unknown[] };
+      const className = tree?.props?.className || '';
+      expect(className).toContain('p-4');
     });
 
     it('accepts custom className when provided', async () => {
@@ -70,7 +104,9 @@ describe('Card Component', () => {
           <Text>Custom</Text>
         </Card>,
       );
-      expect(toJSON()).toBeDefined();
+      const tree = toJSON() as { props?: { className?: string }; children?: unknown[] };
+      const className = tree?.props?.className || '';
+      expect(className).toContain('custom-class');
     });
 
     it('accepts testID prop', async () => {
