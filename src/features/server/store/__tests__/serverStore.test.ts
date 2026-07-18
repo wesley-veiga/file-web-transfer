@@ -114,8 +114,7 @@ describe('useServerStore', () => {
 
   describe('valid state machine flow', () => {
     it('should complete full cycle: idle → starting → running → stopping → idle', () => {
-      const { startRequested, started, stopRequested, stopped, serverInfo } =
-        useServerStore.getState();
+      const { startRequested, started, stopRequested, stopped } = useServerStore.getState();
 
       // idle → starting
       startRequested();
@@ -222,7 +221,6 @@ describe('useServerStore', () => {
 
   describe('invalid transition handling', () => {
     it('should ignore transition from idle to running', () => {
-      const { serverInfo: initialState } = useServerStore.getState();
       useServerStore.getState().started({
         ip: '192.168.1.100',
         port: 8080,
@@ -273,6 +271,316 @@ describe('useServerStore', () => {
       expect(info.sessionId).toBe('banana-99');
       expect(info.networkMode).toBe('hotspot');
       expect(info.startedAt).toBe(1234567890);
+    });
+
+    it('should handle empty info object gracefully', () => {
+      const { startRequested, started } = useServerStore.getState();
+
+      startRequested();
+      started({}); // Empty object — only status changes
+
+      const info = useServerStore.getState().serverInfo;
+      expect(info.status).toBe('running');
+      // Other fields should remain null from initial state (no merge)
+      expect(info.ip).toBeNull();
+      expect(info.port).toBeNull();
+      expect(info.url).toBeNull();
+      expect(info.sessionId).toBeNull();
+      expect(info.networkMode).toBeNull();
+    });
+
+    it('should merge partial info while preserving other fields', () => {
+      const { startRequested, started } = useServerStore.getState();
+
+      startRequested();
+      started({
+        ip: '192.168.1.1',
+        port: 8080,
+      }); // Partial merge — only ip and port provided
+
+      const info = useServerStore.getState().serverInfo;
+      expect(info.status).toBe('running');
+      expect(info.ip).toBe('192.168.1.1');
+      expect(info.port).toBe(8080);
+      expect(info.url).toBeNull(); // Not provided
+      expect(info.sessionId).toBeNull(); // Not provided
+    });
+  });
+
+  describe('failed action', () => {
+    it('should update error on transition to error state', () => {
+      const { startRequested, failed } = useServerStore.getState();
+      const error: ServerError = {
+        code: 'UNKNOWN',
+        message: 'Something went wrong',
+      };
+
+      startRequested();
+      failed(error);
+
+      const info = useServerStore.getState().serverInfo;
+      expect(info.status).toBe('error');
+      expect(info.error).toEqual(error);
+    });
+
+    it('should reject multiple failed() calls from error state (error → error is invalid)', () => {
+      const { startRequested, failed } = useServerStore.getState();
+      const error1: ServerError = {
+        code: 'NO_NETWORK',
+        message: 'First error',
+      };
+      const error2: ServerError = {
+        code: 'PORT_UNAVAILABLE',
+        message: 'Second error',
+      };
+
+      // Reach error state via valid transition (idle → starting → error)
+      startRequested();
+      failed(error1);
+      expect(useServerStore.getState().serverInfo.status).toBe('error');
+      expect(useServerStore.getState().serverInfo.error).toEqual(error1);
+
+      // Try to transition from error to error (should be no-op)
+      failed(error2);
+      // Error should not update because error → error is invalid
+      expect(useServerStore.getState().serverInfo.status).toBe('error');
+      expect(useServerStore.getState().serverInfo.error).toEqual(error1);
+    });
+  });
+
+  describe('stopped action', () => {
+    it('should reset all network-related fields when transitioning to idle', () => {
+      const { startRequested, started, stopRequested, stopped } = useServerStore.getState();
+
+      startRequested();
+      started({
+        ip: '192.168.1.100',
+        port: 8080,
+        url: 'http://192.168.1.100:8080',
+        sessionId: 'test-123',
+        networkMode: 'wifi',
+        startedAt: Date.now(),
+        hotspot: {
+          ssid: 'Test Network',
+          password: 'password123',
+          wifiQrPayload: 'WIFI:S:Test Network;T:WPA;P:password123;;',
+        },
+      });
+
+      stopRequested();
+      stopped();
+
+      const info = useServerStore.getState().serverInfo;
+      expect(info.status).toBe('idle');
+      expect(info.ip).toBeNull();
+      expect(info.port).toBeNull();
+      expect(info.url).toBeNull();
+      expect(info.sessionId).toBeNull();
+      expect(info.networkMode).toBeNull();
+      expect(info.startedAt).toBeNull();
+      expect(info.hotspot).toBeNull();
+      expect(info.error).toBeNull();
+    });
+  });
+
+  describe('reset action', () => {
+    it('should reset from error state to idle', () => {
+      const { reset } = useServerStore.getState();
+      const error: ServerError = {
+        code: 'HOTSPOT_FAILED',
+        message: 'Failed to start hotspot',
+      };
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'error',
+          error,
+        },
+      }));
+
+      reset();
+
+      const info = useServerStore.getState().serverInfo;
+      expect(info.status).toBe('idle');
+      expect(info.error).toBeNull();
+      expect(info.ip).toBeNull();
+    });
+
+    it('should be callable from running state (administrative reset)', () => {
+      const { startRequested, started, reset } = useServerStore.getState();
+
+      startRequested();
+      started({
+        ip: '192.168.1.50',
+        port: 9000,
+        url: 'http://192.168.1.50:9000',
+        sessionId: 'admin-reset',
+        networkMode: 'hotspot',
+        startedAt: Date.now(),
+      });
+
+      expect(useServerStore.getState().serverInfo.status).toBe('running');
+
+      // Administrative reset from running state
+      reset();
+
+      const info = useServerStore.getState().serverInfo;
+      expect(info.status).toBe('idle');
+      expect(info.ip).toBeNull();
+      expect(info.port).toBeNull();
+      expect(info.url).toBeNull();
+      expect(info.sessionId).toBeNull();
+      expect(info.networkMode).toBeNull();
+      expect(info.startedAt).toBeNull();
+    });
+
+    it('should reset from any state (unconditional administrative action)', () => {
+      const reset = useServerStore.getState().reset;
+
+      const statuses: ServerStatus[] = ['idle', 'starting', 'running', 'stopping', 'error'];
+
+      for (const status of statuses) {
+        useServerStore.setState((state) => ({
+          serverInfo: {
+            ...state.serverInfo,
+            status,
+            ip: '192.168.1.1',
+            port: 8080,
+            url: 'http://192.168.1.1:8080',
+            error: { code: 'UNKNOWN', message: 'error' },
+          },
+        }));
+
+        reset();
+
+        const info = useServerStore.getState().serverInfo;
+        expect(info.status).toBe('idle');
+        expect(info.ip).toBeNull();
+        expect(info.error).toBeNull();
+      }
+    });
+  });
+
+  describe('console.warn on invalid transitions', () => {
+    it('should log warning when startRequested from non-idle state', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const { startRequested, started } = useServerStore.getState();
+
+      startRequested();
+      started({ ip: '192.168.1.1', port: 8080 });
+
+      // Try to start again from running state (invalid)
+      startRequested();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid transition: running → starting'),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('should log warning when stopRequested from non-running state', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const { stopRequested } = useServerStore.getState();
+
+      // Try to stop from idle state (invalid)
+      stopRequested();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid transition: idle → stopping'),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('should log warning when failed from invalid state', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Set state to error directly
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'error',
+        },
+      }));
+
+      const { failed } = useServerStore.getState();
+      const error: ServerError = {
+        code: 'UNKNOWN',
+        message: 'Another error',
+      };
+
+      // Try to transition from error to error (invalid)
+      failed(error);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid transition: error → error'),
+      );
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('edge cases and state integrity', () => {
+    it('should not allow transitions: idle → running (skip starting)', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const { started } = useServerStore.getState();
+
+      // Try to transition directly from idle to running
+      started({ ip: '192.168.1.1', port: 8080 });
+
+      expect(useServerStore.getState().serverInfo.status).toBe('idle');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid transition: idle → running'),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('should preserve error state when attempting invalid transition', () => {
+      const error: ServerError = {
+        code: 'PORT_UNAVAILABLE',
+        message: 'Port not available',
+      };
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'error',
+          error,
+        },
+      }));
+
+      const { startRequested } = useServerStore.getState();
+
+      // Try invalid transition from error to starting
+      startRequested();
+
+      const info = useServerStore.getState().serverInfo;
+      expect(info.status).toBe('error');
+      expect(info.error).toEqual(error); // Error state preserved
+    });
+
+    it('should handle hotspot info in started action', () => {
+      const { startRequested, started } = useServerStore.getState();
+      const hotspotInfo = {
+        ssid: 'MyHotspot',
+        password: 'secure123',
+        wifiQrPayload: 'WIFI:S:MyHotspot;T:WPA;P:secure123;;',
+      };
+
+      startRequested();
+      started({
+        ip: '192.168.137.1',
+        port: 8080,
+        url: 'http://192.168.137.1:8080',
+        sessionId: 'hotspot-test',
+        networkMode: 'hotspot',
+        hotspot: hotspotInfo,
+        startedAt: Date.now(),
+      });
+
+      const info = useServerStore.getState().serverInfo;
+      expect(info.status).toBe('running');
+      expect(info.hotspot).toEqual(hotspotInfo);
+      expect(info.networkMode).toBe('hotspot');
     });
   });
 });
