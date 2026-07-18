@@ -2,28 +2,14 @@
  * Tests for src/shared/components/Button.tsx
  *
  * T-005 · NativeWind + design tokens
- * Testa renderização e comportamento do componente Button com variantes, tamanhos e estados
+ * Verifica renderização real com className correto via RNTL render() assíncrono
  */
 
 import React from 'react';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { render } from '@testing-library/react-native';
-import { useColorScheme } from 'react-native';
 import { Button } from '../Button';
 
-const mockedUseColorScheme = useColorScheme as jest.MockedFunction<typeof useColorScheme>;
-
-function readButtonSource(): string {
-  return readFileSync(join(__dirname, '../Button.tsx'), 'utf-8');
-}
-
 describe('Button Component', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockedUseColorScheme.mockReturnValue('light');
-  });
-
   describe('Module and Exports', () => {
     it('exports Button as a named export', () => {
       expect(typeof Button).toBe('function');
@@ -36,192 +22,194 @@ describe('Button Component', () => {
   });
 
   describe('Rendering', () => {
-    it('renders without crashing', () => {
-      expect(() => render(<Button label="Test" />)).not.toThrow();
+    it('renders without crashing', async () => {
+      const { toJSON } = await render(<Button label="Test" />);
+      expect(toJSON()).toBeDefined();
     });
 
-    it('renders and returns a result', () => {
-      const result = render(<Button label="Click Me" testID="test-button" />);
-      expect(result).toBeDefined();
+    it('renders with label text', async () => {
+      const { toJSON } = await render(<Button label="Click Me" testID="test-btn" />);
+      const tree = toJSON();
+      expect(tree).toBeDefined();
+      expect(tree?.children).toBeDefined();
     });
 
-    it('renders with testID prop', () => {
-      expect(() => render(<Button label="Test" testID="my-button" />)).not.toThrow();
-    });
-
-    it('renders with different labels', () => {
+    it('renders with different labels', async () => {
       const labels = ['Submit', 'Cancel', 'Delete', 'Save'];
-      labels.forEach((label) => {
-        expect(() => render(<Button label={label} />)).not.toThrow();
-      });
+      for (const label of labels) {
+        const { toJSON } = await render(<Button label={label} />);
+        expect(toJSON()).toBeDefined();
+      }
     });
   });
 
-  describe('Variants', () => {
-    it('renders with primary variant', () => {
-      expect(() =>
-        render(<Button label="Primary" variant="primary" testID="primary-btn" />),
-      ).not.toThrow();
+  describe('Variant Classes', () => {
+    it('applies bg-primary class for primary variant', async () => {
+      const { toJSON } = await render(<Button label="Primary" variant="primary" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('bg-primary');
     });
 
-    it('renders with secondary variant', () => {
-      expect(() =>
-        render(<Button label="Secondary" variant="secondary" testID="secondary-btn" />),
-      ).not.toThrow();
+    it('applies bg-secondary class for secondary variant', async () => {
+      const { toJSON } = await render(<Button label="Secondary" variant="secondary" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('bg-secondary');
     });
 
-    it('renders with success variant', () => {
-      expect(() =>
-        render(<Button label="Success" variant="success" testID="success-btn" />),
-      ).not.toThrow();
+    it('applies bg-success class for success variant', async () => {
+      const { toJSON } = await render(<Button label="Success" variant="success" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('bg-success');
     });
 
-    it('renders with error variant', () => {
-      expect(() =>
-        render(<Button label="Error" variant="error" testID="error-btn" />),
-      ).not.toThrow();
+    it('applies bg-error class for error variant', async () => {
+      const { toJSON } = await render(<Button label="Error" variant="error" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('bg-error');
     });
 
-    it('uses primary variant as default', () => {
-      expect(() => render(<Button label="Default" />)).not.toThrow();
-    });
-
-    it('accepts all variant types without error', () => {
-      const variants: ('primary' | 'secondary' | 'success' | 'error')[] = [
-        'primary',
-        'secondary',
-        'success',
-        'error',
-      ];
-      variants.forEach((variant) => {
-        expect(() => render(<Button label="Test" variant={variant} />)).not.toThrow();
-      });
+    it('uses primary variant as default', async () => {
+      const { toJSON } = await render(<Button label="Default" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('bg-primary');
     });
   });
 
-  describe('Sizes', () => {
-    it('renders with small size', () => {
-      expect(() => render(<Button label="Small" size="sm" testID="sm-btn" />)).not.toThrow();
+  describe('Size Classes', () => {
+    it('applies px-3 py-1 text-xs for small size', async () => {
+      const { toJSON } = await render(<Button label="Small" size="sm" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('px-3');
+      expect(className).toContain('py-1');
+      expect(className).toContain('text-xs');
     });
 
-    it('renders with medium size', () => {
-      expect(() => render(<Button label="Medium" size="md" testID="md-btn" />)).not.toThrow();
+    it('applies px-4 py-2 text-base for medium size', async () => {
+      const { toJSON } = await render(<Button label="Medium" size="md" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('px-4');
+      expect(className).toContain('py-2');
+      expect(className).toContain('text-base');
     });
 
-    it('renders with large size', () => {
-      expect(() => render(<Button label="Large" size="lg" testID="lg-btn" />)).not.toThrow();
+    it('applies px-6 py-3 text-lg for large size', async () => {
+      const { toJSON } = await render(<Button label="Large" size="lg" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('px-6');
+      expect(className).toContain('py-3');
+      expect(className).toContain('text-lg');
     });
 
-    it('uses medium size as default', () => {
-      expect(() => render(<Button label="Default" />)).not.toThrow();
-    });
-
-    it('accepts all size types without error', () => {
-      const sizes: ('sm' | 'md' | 'lg')[] = ['sm', 'md', 'lg'];
-      sizes.forEach((size) => {
-        expect(() => render(<Button label="Test" size={size} />)).not.toThrow();
-      });
+    it('uses medium size as default', async () => {
+      const { toJSON } = await render(<Button label="Default" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('px-4');
+      expect(className).toContain('py-2');
     });
   });
 
   describe('Disabled State', () => {
-    it('renders when not disabled', () => {
-      expect(() => render(<Button label="Active" disabled={false} />)).not.toThrow();
+    it('applies opacity-50 when disabled is true', async () => {
+      const { toJSON } = await render(<Button label="Disabled" disabled={true} />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('opacity-50');
     });
 
-    it('renders when disabled', () => {
-      expect(() => render(<Button label="Disabled" disabled={true} />)).not.toThrow();
+    it('does not apply opacity-50 when disabled is false', async () => {
+      const { toJSON } = await render(<Button label="Enabled" disabled={false} />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).not.toContain('opacity-50');
     });
 
-    it('renders with disabled prop', () => {
-      expect(() =>
-        render(<Button label="Disabled" disabled testID="disabled-btn" />),
-      ).not.toThrow();
-    });
-
-    it('defaults to not disabled', () => {
-      expect(() => render(<Button label="Test" />)).not.toThrow();
-    });
-  });
-
-  describe('Styling', () => {
-    it('uses NativeWind className for styling', () => {
-      // Testing that Button uses className and includes NativeWind utilities
-      const content = readButtonSource();
-      expect(content).toContain('className');
-      expect(content).toContain('rounded-md');
-    });
-
-    it('includes active state styling', () => {
-      // Testing that Button includes active state opacity change
-      const content = readButtonSource();
-      expect(content).toContain('active:opacity-75');
-    });
-
-    it('passes className prop to rendered component', () => {
-      expect(() =>
-        render(<Button label="Test" className="custom-class" testID="styled-btn" />),
-      ).not.toThrow();
-    });
-
-    it('accepts style prop', () => {
-      expect(() =>
-        render(<Button label="Test" style={{ marginTop: 10 }} testID="style-btn" />),
-      ).not.toThrow();
+    it('does not apply opacity-50 by default', async () => {
+      const { toJSON } = await render(<Button label="Default" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).not.toContain('opacity-50');
     });
   });
 
-  describe('Accessibility', () => {
-    it('renders with accessible attributes', () => {
-      expect(() => render(<Button label="Accessible" testID="a11y-btn" />)).not.toThrow();
+  describe('Base Classes Always Present', () => {
+    it('always includes rounded-md', async () => {
+      const { toJSON } = await render(<Button label="Test" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('rounded-md');
     });
 
-    it('renders with label for screen readers', () => {
-      expect(() => render(<Button label="Read Me" testID="readable-btn" />)).not.toThrow();
+    it('always includes items-center and justify-center', async () => {
+      const { toJSON } = await render(<Button label="Test" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('items-center');
+      expect(className).toContain('justify-center');
+    });
+
+    it('always includes active:opacity-75', async () => {
+      const { toJSON } = await render(<Button label="Test" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('active:opacity-75');
+    });
+
+    it('text child is white and bold', async () => {
+      const { toJSON } = await render(<Button label="Test" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing children and props from RNTL serialized tree
+      const textElement = tree?.children?.[0];
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const textClassName = textElement?.props?.className || '';
+      expect(textClassName).toContain('text-white');
+      expect(textClassName).toContain('font-bold');
     });
   });
 
   describe('Props Combinations', () => {
-    it('renders with variant and size combined', () => {
-      expect(() =>
-        render(<Button label="Styled" variant="success" size="lg" testID="combined-btn" />),
-      ).not.toThrow();
+    it('combines variant, size, and disabled correctly', async () => {
+      const { toJSON } = await render(
+        <Button label="Complex" variant="error" size="lg" disabled={true} />,
+      );
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('bg-error');
+      expect(className).toContain('px-6');
+      expect(className).toContain('py-3');
+      expect(className).toContain('opacity-50');
     });
 
-    it('renders with variant, size, and disabled combined', () => {
-      expect(() =>
-        render(<Button label="Complex" variant="error" size="sm" disabled testID="complex-btn" />),
-      ).not.toThrow();
-    });
-
-    it('renders with all custom props', () => {
-      expect(() =>
-        render(
-          <Button
-            label="Full"
-            variant="primary"
-            size="md"
-            disabled={false}
-            className="custom"
-            style={{ padding: 5 }}
-            testID="full-btn"
-          />,
-        ),
-      ).not.toThrow();
-    });
-  });
-
-  describe('File Structure', () => {
-    it('component file exists', () => {
-      // This test will pass because Button is successfully imported
-      expect(Button).toBeDefined();
-    });
-
-    it('is exported from index', () => {
-      // Testing that Button is properly exported and importable
-      const indexContent = readFileSync(join(__dirname, '../index.ts'), 'utf-8');
-      expect(indexContent).toContain('export { Button }');
-      expect(indexContent).toContain('./Button');
+    it('applies custom className when provided', async () => {
+      const { toJSON } = await render(<Button label="Custom" className="custom-class" />);
+      const tree = toJSON();
+      // @ts-expect-error - accessing props from RNTL serialized tree
+      const className = tree?.props?.className || '';
+      expect(className).toContain('custom-class');
     });
   });
 });
