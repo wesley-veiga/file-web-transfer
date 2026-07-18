@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { View, ViewProps, useColorScheme } from 'react-native';
+import { View, ViewProps } from 'react-native';
 
 interface CardProps extends ViewProps {
   children: ReactNode;
@@ -7,26 +7,15 @@ interface CardProps extends ViewProps {
 
 /**
  * Card component - a container with padding, border, and shadow using NativeWind
- * Automatically adapts to light/dark theme
+ * Automatically adapts to light/dark theme via dark: variant
  * @param children - The content to display inside the card
  */
-export function Card({ children, style, className, ...props }: CardProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const backgroundColor = isDark ? '#2A2A2A' : '#F5F5F5';
-
-  const mergedStyle = {
-    backgroundColor,
-    borderRadius: 8,
-    padding: 16,
-    ...style,
-  };
-
+export function Card({ children, className, ...props }: CardProps) {
   const baseClasses = 'bg-surface-light dark:bg-surface-dark rounded-lg p-4';
   const allClasses = `${baseClasses} ${className || ''}`;
 
   return (
-    <View style={mergedStyle} className={allClasses} {...props}>
+    <View className={allClasses} {...props}>
       {children}
     </View>
   );

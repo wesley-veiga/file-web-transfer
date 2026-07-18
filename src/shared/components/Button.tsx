@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, Text, PressableProps, StyleProp, ViewStyle } from 'react-native';
+import { Pressable, Text, PressableProps } from 'react-native';
 
 interface ButtonProps extends Omit<PressableProps, 'children'> {
   label: string;
@@ -7,20 +7,17 @@ interface ButtonProps extends Omit<PressableProps, 'children'> {
   size?: 'sm' | 'md' | 'lg';
 }
 
-const variantToColor: Record<string, string> = {
-  primary: '#208AEF',
-  secondary: '#6C757D',
-  success: '#28A745',
-  error: '#DC3545',
+const variantClasses: Record<string, string> = {
+  primary: 'bg-primary',
+  secondary: 'bg-secondary',
+  success: 'bg-success',
+  error: 'bg-error',
 };
 
-const sizeToStyle: Record<
-  string,
-  { paddingHorizontal: number; paddingVertical: number; fontSize: number }
-> = {
-  sm: { paddingHorizontal: 12, paddingVertical: 4, fontSize: 12 },
-  md: { paddingHorizontal: 16, paddingVertical: 8, fontSize: 16 },
-  lg: { paddingHorizontal: 24, paddingVertical: 12, fontSize: 18 },
+const sizeClasses: Record<string, string> = {
+  sm: 'px-3 py-1 text-xs',
+  md: 'px-4 py-2 text-base',
+  lg: 'px-6 py-3 text-lg',
 };
 
 /**
@@ -35,32 +32,18 @@ export function Button({
   variant = 'primary',
   size = 'md',
   disabled = false,
-  style,
   className,
   ...props
 }: ButtonProps) {
-  const sizeStyle = sizeToStyle[size];
-  const backgroundColor = variantToColor[variant];
-  const opacity = disabled ? 0.5 : 1;
+  const variantClass = variantClasses[variant];
+  const sizeClass = sizeClasses[size];
+  const disabledClass = disabled ? 'opacity-50' : '';
 
-  const mergedStyle: StyleProp<ViewStyle> = {
-    backgroundColor,
-    borderRadius: 8,
-    paddingHorizontal: sizeStyle.paddingHorizontal,
-    paddingVertical: sizeStyle.paddingVertical,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    opacity,
-    ...style,
-  };
-
-  const allClasses = `rounded-md items-center justify-center active:opacity-75 ${className || ''}`;
+  const allClasses = `rounded-md items-center justify-center active:opacity-75 ${variantClass} ${sizeClass} ${disabledClass} ${className || ''}`;
 
   return (
-    <Pressable disabled={disabled} style={mergedStyle} className={allClasses} {...props}>
-      <Text style={{ color: 'white', fontWeight: 'bold', fontSize: sizeStyle.fontSize }}>
-        {label}
-      </Text>
+    <Pressable disabled={disabled} className={allClasses} {...props}>
+      <Text className="text-white font-bold">{label}</Text>
     </Pressable>
   );
 }
