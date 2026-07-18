@@ -19,31 +19,23 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 // Mock expo-router for Stack and ThemeProvider
-jest.mock('expo-router', () => {
-  return {
-    Stack: (props: any) => {
-      return React.createElement('Stack', { screenOptions: props.screenOptions }, props.children);
-    },
-    ThemeProvider: (props: any) => {
-      return React.createElement('ThemeProvider', { value: props.value }, props.children);
-    },
-    DarkTheme: { isDark: true },
-    DefaultTheme: { isDark: false },
-  };
-});
+jest.mock('expo-router', () => ({
+  Stack: (props: any) => {
+    return React.createElement('Stack', { screenOptions: props.screenOptions }, props.children);
+  },
+  ThemeProvider: (props: any) => {
+    return React.createElement('ThemeProvider', { value: props.value }, props.children);
+  },
+  DarkTheme: { isDark: true },
+  DefaultTheme: { isDark: false },
+}));
 
 // Setup react-native with proper component mocks
 jest.mock('react-native', () => {
   const mockReactNative: any = {
-    View: React.forwardRef((props: any, ref: any) => {
-      return React.createElement('View', { ...props, ref }, props.children);
-    }),
-    Text: React.forwardRef((props: any, ref: any) => {
-      return React.createElement('Text', { ...props, ref }, props.children);
-    }),
-    Pressable: React.forwardRef((props: any, ref: any) => {
-      return React.createElement('Pressable', { ...props, ref }, props.children);
-    }),
+    View: ({ children, ...props }: any) => React.createElement('View', props, children),
+    Text: ({ children, ...props }: any) => React.createElement('Text', props, children),
+    Pressable: ({ children, ...props }: any) => React.createElement('Pressable', props, children),
     StyleSheet: {
       create: (styles: any) => styles,
       flatten: (styles: any) => {
