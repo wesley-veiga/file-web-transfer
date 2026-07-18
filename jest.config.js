@@ -2,11 +2,14 @@ module.exports = {
   preset: '@react-native/jest-preset',
   testEnvironment: 'node',
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: {
-        jsx: 'react',
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        tsconfig: {
+          jsx: 'react',
+        },
       },
-    }],
+    ],
   },
   globals: {
     'ts-jest': {
@@ -21,13 +24,6 @@ module.exports = {
     '^@/assets/(.*)$': '<rootDir>/assets/$1',
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
-  collectCoverageFrom: [
-    'src/**/*.{ts,tsx}',
-    '!src/**/*.d.ts',
-    '!src/**/__tests__/**',
-  ],
-  coveragePathIgnorePatterns: [
-    '/node_modules/',
-    '/__tests__/',
-  ],
+  collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/**/*.d.ts', '!src/**/__tests__/**'],
+  coveragePathIgnorePatterns: ['/node_modules/', '/__tests__/'],
 };

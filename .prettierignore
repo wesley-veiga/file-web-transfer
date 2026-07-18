@@ -1,0 +1,16 @@
+node_modules
+dist
+web-build
+coverage
+android
+ios
+.expo
+*.lock
+package-lock.json
+
+# Documentação de projeto e agentes — fora do escopo de formatação automática
+*.md
+.claude/
+
+# Assets gerados por ferramentas do Expo
+assets/expo.icon/
