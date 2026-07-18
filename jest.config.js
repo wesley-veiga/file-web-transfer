@@ -22,17 +22,11 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@/assets/(.*)$': '<rootDir>/assets/$1',
+    '\\.(css|less|scss|sass)$': '<rootDir>/__mocks__/styleMock.js',
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
-  collectCoverageFrom: [
-    'src/**/*.{ts,tsx}',
-    '!src/**/*.d.ts',
-    '!src/**/__tests__/**',
-  ],
-  coveragePathIgnorePatterns: [
-    '/node_modules/',
-    '/__tests__/',
-  ],
+  collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/**/*.d.ts', '!src/**/__tests__/**'],
+  coveragePathIgnorePatterns: ['/node_modules/', '/__tests__/'],
   // Reseta mock.calls/mock.instances (não a implementação) antes de cada teste, para que
   // testes de features não vazem chamadas registradas nos mocks globais de
   // expo-file-system/expo-network entre casos de teste.

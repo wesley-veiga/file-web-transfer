@@ -43,13 +43,13 @@ describe('HomeScreen (src/app/index.tsx)', () => {
       expect(fs.existsSync(filePath)).toBe(true);
     });
 
-    it('component structure includes SafeAreaView wrapper', () => {
+    it('component uses Screen component from shared/components', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('SafeAreaView');
-      expect(fileContent).toContain('return');
+      expect(fileContent).toContain('Screen');
+      expect(fileContent).toContain('shared/components');
     });
 
     it('component uses View and Text from react-native', () => {
@@ -81,64 +81,31 @@ describe('HomeScreen (src/app/index.tsx)', () => {
   });
 
   describe('Theme Support Verification', () => {
-    it('uses useColorScheme from react-native', () => {
+    it('delegates theme handling to Screen component', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('useColorScheme');
-      expect(fileContent).toContain("from 'react-native'");
+      expect(fileContent).toContain('Screen');
+      expect(fileContent).toContain('shared/components');
     });
 
-    it('has theme color variables', () => {
+    it('uses useEffect hook properly', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('isDark');
-      expect(fileContent).toContain('containerBg');
-      expect(fileContent).toContain('textColor');
+      expect(fileContent).toContain('useEffect');
+      expect(fileContent).toContain('[]');
     });
 
-    it('light theme uses white background', () => {
+    it('component is properly structured', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('#FFFFFF');
-    });
-
-    it('dark theme uses dark background', () => {
-      const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
-        'utf-8',
-      );
-      expect(fileContent).toContain('#1F1F1F');
-    });
-
-    it('light theme uses black text', () => {
-      const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
-        'utf-8',
-      );
-      expect(fileContent).toContain('#000000');
-    });
-
-    it('dark theme uses white text', () => {
-      const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
-        'utf-8',
-      );
-      const whiteCount = (fileContent.match(/#FFFFFF/g) || []).length;
-      expect(whiteCount).toBeGreaterThanOrEqual(1);
-    });
-
-    it('theme selection uses ternary operator on isDark', () => {
-      const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
-        'utf-8',
-      );
-      expect(fileContent).toContain('isDark ?');
+      expect(fileContent).toContain('export default function HomeScreen');
+      expect(fileContent).toContain('return');
     });
   });
 
@@ -170,51 +137,58 @@ describe('HomeScreen (src/app/index.tsx)', () => {
   });
 
   describe('Styling Verification', () => {
-    it('applies flex: 1 to container', () => {
+    it('uses NativeWind className for styling', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('flex: 1');
+      expect(fileContent).toContain('className');
     });
 
-    it('centers content with justifyContent and alignItems', () => {
+    it('uses flex-1 class for full height', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain("justifyContent: 'center'");
-      expect(fileContent).toContain("alignItems: 'center'");
+      expect(fileContent).toContain('flex-1');
     });
 
-    it('text has fontSize 24', () => {
+    it('uses justify-center and items-center for centering', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('fontSize: 24');
+      expect(fileContent).toContain('justify-center');
+      expect(fileContent).toContain('items-center');
     });
 
-    it('text has bold fontWeight', () => {
+    it('uses text-2xl for large text', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain("fontWeight: 'bold'");
+      expect(fileContent).toContain('text-2xl');
     });
 
-    it('uses inline styles instead of StyleSheet.create', () => {
+    it('uses font-bold for bold text', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../index.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('font-bold');
+    });
+
+    it('does not use StyleSheet.create', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
       expect(fileContent).not.toContain('StyleSheet.create');
-      expect(fileContent).toContain('style={{');
     });
   });
 
   describe('Dependencies and Imports', () => {
-    it('imports View, Text, useColorScheme from react-native', () => {
+    it('imports View and Text from react-native', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
@@ -222,7 +196,6 @@ describe('HomeScreen (src/app/index.tsx)', () => {
       expect(fileContent).toContain("from 'react-native'");
       expect(fileContent).toContain('View');
       expect(fileContent).toContain('Text');
-      expect(fileContent).toContain('useColorScheme');
     });
 
     it('imports useEffect from react', () => {
@@ -234,13 +207,13 @@ describe('HomeScreen (src/app/index.tsx)', () => {
       expect(fileContent).toContain('useEffect');
     });
 
-    it('imports SafeAreaView from react-native-safe-area-context', () => {
+    it('imports Screen from shared/components', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('react-native-safe-area-context');
-      expect(fileContent).toContain('SafeAreaView');
+      expect(fileContent).toContain('Screen');
+      expect(fileContent).toContain('shared/components');
     });
 
     it('all required imports are present', () => {
@@ -251,22 +224,13 @@ describe('HomeScreen (src/app/index.tsx)', () => {
       expect(fileContent).toContain('import');
       expect(fileContent).toContain('View');
       expect(fileContent).toContain('Text');
-      expect(fileContent).toContain('useColorScheme');
       expect(fileContent).toContain('useEffect');
       expect(fileContent).toContain('SplashScreen');
-      expect(fileContent).toContain('SafeAreaView');
+      expect(fileContent).toContain('Screen');
     });
   });
 
   describe('Hook Usage', () => {
-    it('uses useColorScheme hook to determine theme', () => {
-      const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
-        'utf-8',
-      );
-      expect(fileContent).toContain('const colorScheme = useColorScheme()');
-    });
-
     it('uses useEffect hook for side effects', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
@@ -283,6 +247,15 @@ describe('HomeScreen (src/app/index.tsx)', () => {
       );
       expect(fileContent).toContain('useEffect(');
       expect(fileContent).toContain('[]');
+    });
+
+    it('calls SplashScreen.hideAsync in useEffect', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../index.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('SplashScreen.hideAsync');
+      expect(fileContent).toContain('await');
     });
   });
 
@@ -329,7 +302,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
       );
 
       // Verify all key components are present
-      expect(fileContent).toContain('SafeAreaView');
+      expect(fileContent).toContain('Screen');
       expect(fileContent).toContain('View');
       expect(fileContent).toContain('Text');
       expect(fileContent).toContain('Transfer Files - Home');

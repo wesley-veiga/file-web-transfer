@@ -1,6 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  presets: [require('nativewind/preset')],
   content: ['./src/**/*.{js,jsx,ts,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -52,6 +54,9 @@ module.exports = {
         md: '8px',
         lg: '12px',
         xl: '16px',
+      },
+      shadowColor: {
+        DEFAULT: 'rgba(0, 0, 0, 0.1)',
       },
     },
   },

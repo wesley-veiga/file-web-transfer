@@ -36,10 +36,13 @@ jest.mock('expo-router', () => {
 jest.mock('react-native', () => {
   const mockReactNative: any = {
     View: React.forwardRef((props: any, ref: any) => {
-      return React.createElement('View', { ...props, ref });
+      return React.createElement('View', { ...props, ref }, props.children);
     }),
     Text: React.forwardRef((props: any, ref: any) => {
       return React.createElement('Text', { ...props, ref }, props.children);
+    }),
+    Pressable: React.forwardRef((props: any, ref: any) => {
+      return React.createElement('Pressable', { ...props, ref }, props.children);
     }),
     StyleSheet: {
       create: (styles: any) => styles,
