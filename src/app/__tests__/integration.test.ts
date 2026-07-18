@@ -96,10 +96,11 @@ describe('T-001 Bootstrap - Integration', () => {
       expect(content).toContain('Transfer Files - Home');
     });
 
-    it('Home screen uses SafeAreaView', () => {
+    it('Home screen uses Screen component from shared/components', () => {
       const indexPath = path.join(process.cwd(), 'src/app/index.tsx');
       const content = fs.readFileSync(indexPath, 'utf-8');
-      expect(content).toContain('SafeAreaView');
+      expect(content).toContain('Screen');
+      expect(content).toContain('shared/components');
     });
 
     it('Home screen uses expo-splash-screen', () => {
@@ -108,10 +109,16 @@ describe('T-001 Bootstrap - Integration', () => {
       expect(content).toContain('expo-splash-screen');
     });
 
-    it('Home screen uses useColorScheme for theme support', () => {
+    it('Home screen has proper theme support via Screen component', () => {
       const indexPath = path.join(process.cwd(), 'src/app/index.tsx');
       const content = fs.readFileSync(indexPath, 'utf-8');
-      expect(content).toContain('useColorScheme');
+      // Screen component handles theme support internally
+      expect(content).toContain('Screen');
+      // Verify Screen component file has theme support via NativeWind dark: variant
+      const screenPath = path.join(process.cwd(), 'src/shared/components/Screen.tsx');
+      const screenContent = fs.readFileSync(screenPath, 'utf-8');
+      expect(screenContent).toContain('dark:');
+      expect(screenContent).toContain('SafeAreaView');
     });
   });
 

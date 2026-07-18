@@ -1,11 +1,9 @@
-import { View, Text, useColorScheme } from 'react-native';
+import { View, Text } from 'react-native';
 import { useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Screen } from '@/shared/components';
 
 export default function HomeScreen() {
-  const colorScheme = useColorScheme();
-
   useEffect(() => {
     const hideSplash = async () => {
       await SplashScreen.hideAsync();
@@ -13,23 +11,13 @@ export default function HomeScreen() {
     hideSplash();
   }, []);
 
-  const isDark = colorScheme === 'dark';
-  const containerBg = isDark ? '#1F1F1F' : '#FFFFFF';
-  const textColor = isDark ? '#FFFFFF' : '#000000';
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: containerBg }}>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text
-          style={{
-            fontSize: 24,
-            fontWeight: 'bold',
-            color: textColor,
-          }}
-        >
+    <Screen>
+      <View className="flex-1 justify-center items-center">
+        <Text className="text-2xl font-bold text-text-light dark:text-text-dark">
           Transfer Files - Home
         </Text>
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }

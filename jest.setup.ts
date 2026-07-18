@@ -14,33 +14,29 @@ jest.mock('expo-splash-screen', () => ({
 
 // Mock react-native-safe-area-context to allow rendering
 jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children, style }: any) => React.createElement('View', { style }, children),
+  SafeAreaView: ({ children, className, style, ...props }: any) =>
+    React.createElement('View', { className, style, ...props }, children),
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
 // Mock expo-router for Stack and ThemeProvider
-jest.mock('expo-router', () => {
-  return {
-    Stack: (props: any) => {
-      return React.createElement('Stack', { screenOptions: props.screenOptions }, props.children);
-    },
-    ThemeProvider: (props: any) => {
-      return React.createElement('ThemeProvider', { value: props.value }, props.children);
-    },
-    DarkTheme: { isDark: true },
-    DefaultTheme: { isDark: false },
-  };
-});
+jest.mock('expo-router', () => ({
+  Stack: (props: any) => {
+    return React.createElement('Stack', { screenOptions: props.screenOptions }, props.children);
+  },
+  ThemeProvider: (props: any) => {
+    return React.createElement('ThemeProvider', { value: props.value }, props.children);
+  },
+  DarkTheme: { isDark: true },
+  DefaultTheme: { isDark: false },
+}));
 
 // Setup react-native with proper component mocks
 jest.mock('react-native', () => {
   const mockReactNative: any = {
-    View: React.forwardRef((props: any, ref: any) => {
-      return React.createElement('View', { ...props, ref });
-    }),
-    Text: React.forwardRef((props: any, ref: any) => {
-      return React.createElement('Text', { ...props, ref }, props.children);
-    }),
+    View: ({ children, ...props }: any) => React.createElement('View', props, children),
+    Text: ({ children, ...props }: any) => React.createElement('Text', props, children),
+    Pressable: ({ children, ...props }: any) => React.createElement('Pressable', props, children),
     StyleSheet: {
       create: (styles: any) => styles,
       flatten: (styles: any) => {
