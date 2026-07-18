@@ -45,19 +45,19 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 
 ## Fase 1 — Biblioteca Compartilhada (funções puras, TDD)
 
-- [ ] **T-101 · Utilitários de formatação** ⬅ T-003 **[P]**
+- [x] **T-101 · Utilitários de formatação** ⬅ T-003 **[P]**
   `formatBytes`, `formatSpeed`, `formatDuration` em `shared/lib`.
   *Pronto quando:* 100% de cobertura (funções puras).
 
-- [ ] **T-102 · Sanitização de nomes de arquivo** ⬅ T-003 **[P]**
+- [x] **T-102 · Sanitização de nomes de arquivo** ⬅ T-003 **[P]**
   `sanitizeFileName` (basename, sem `..`/controle, máx. 255) e `resolveDuplicateName` (sufixo `(1)`, `(2)`…). Casos de path traversal como testes obrigatórios.
   *Pronto quando:* todos os vetores de ataque da spec (Seção 4, regras transversais) cobertos por teste.
 
-- [ ] **T-103 · Schemas Zod da API** ⬅ T-003 **[P]**
+- [x] **T-103 · Schemas Zod da API** ⬅ T-003 **[P]**
   `shared/types/api.ts` conforme Seção 3 da spec (`fileEntryDtoSchema`, `sessionInfoSchema`, `apiErrorSchema`).
   *Pronto quando:* testes de parse válido/inválido para cada schema.
 
-- [ ] **T-104 · Gerador de sessionId humano** ⬅ T-003 **[P]**
+- [x] **T-104 · Gerador de sessionId humano** ⬅ T-003 **[P]**
   `generateSessionId()` (ex.: `maçã-42`), determinístico sob seed injetável para teste.
   *Pronto quando:* testes de formato e unicidade razoável.
 
