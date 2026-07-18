@@ -34,7 +34,7 @@ O Transfer Files precisa de um **servidor HTTP embarcado** que rode nativamente 
 ### 2.1 `react-native-http-bridge-refurbished`
 
 #### O que é
-- Bifurcação/restauração da biblioteca `react-native-http-bridge` original, que foi descontinuada há anos
+- Bifurcação (fork Alwinator) da biblioteca `react-native-http-bridge` original, cujo repositório principal teve último push em julho de 2022
 - Módulo nativo que expõe um servidor HTTP simples, escrito em Swift (iOS) e Java (Android)
 - Permite registrar "rotas" simples via JavaScript e responder a requests
 
@@ -46,7 +46,7 @@ O Transfer Files precisa de um **servidor HTTP embarcado** que rode nativamente 
 - **Simplicidade conceitual:** abstração clara entre "app envia request" → "handler JS responde"
 
 #### Contras / Riscos Conhecidos
-- **Manutenção incerta:** `react-native-http-bridge-refurbished` é uma bifurcação comunitária, não oficial. O repositório original está inativo; não há garantia de que a bifurcação receberá updates críticos ou correções de segurança
+- **Manutenção incerta:** `react-native-http-bridge-refurbished` é uma bifurcação comunitária, não oficial. Enquanto o repositório está ativo (último commit 2026-01-22), **o pacote npm não recebe updates desde janeiro de 2024** (v1.3.2); não há garantia de que atualizações críticas ou correções de segurança serão publicadas
 - **Bugs de streaming em dispositivos antigos:** alguns relatos anedóticos (2022–2023) mencionam que em Android < 10 o handling de streams grandes pode ter memory leaks ou corromper dados; a bifurcação pode não ter backports de correções
 - **Suporte multipart não completo em edge cases:** edge cases de RFC 2388 (multipart boundaries malformados, charset incomum) podem não ser cobertos; não está claro se a lib trata upload de arquivo com `Content-Length` ausente
 - **API trívia com WebSocket:** a lib também expõe um servidor WebSocket; parte desnecessária que aumenta a superfície de bugs
@@ -105,7 +105,7 @@ O Transfer Files precisa de um **servidor HTTP embarcado** que rode nativamente 
 | **Streaming de upload 1GB** | Nativo (rápido, não bufferiza); suportado em princípio | Possível, mas overhead JS; risco de stall |
 | **Multipart parsing** | Implementado em iOS/Android nativo | Implementação manual em JS; complexo |
 | **Tempo até produção** | ~3 dias: integração, testes, PoC em device | 7+ dias: implementação + testes + PoC |
-| **Manutenção a longo prazo** | Risco: bifurcação comunitária inativa | Risco: código proprietary, sem comunidade |
+| **Manutenção a longo prazo** | Risco: npm parado desde jan/2024, repo ativo mas bifurcação | Risco: código proprietary, sem comunidade |
 | **Compatibilidade Expo** | Confirmado (usa dev build) | Confirmado (tcp-socket tem suporte) |
 | **Suporte Android 14+** | Previsto (API nativa 1.1); não testado | Previsto (sockets não mudaram) |
 | **Suporte iOS** | Previsto (URLSession nativa); não testado | Confirmado (TCP funciona em iOS) |
@@ -128,7 +128,7 @@ O Transfer Files precisa de um **servidor HTTP embarcado** que rode nativamente 
 ### Contingência: **Fallback para TCP Socket + lib pronta**
 
 Se PoC com `react-native-http-bridge-refurbished` revelar problemas críticos (stream corrompe dados, memory leak, incompatibilidade com Expo dev build), pivot para:
-- Usar `react-native-tcp-socket` (mantida, ~1k stars) como transporte
+- Usar `react-native-tcp-socket` (mantida, 390 stars) como transporte
 - Implementar parser HTTP/multipart **simplificado**: suportar apenas multipart com Content-Length (bloquear uploads com chunked), Content-Disposition com nomes ASCII (não UTF-8 complexo)
 - Custo: adiciona 4 dias, mas aceitável se alternativa primária falhar
 
@@ -166,9 +166,13 @@ A análise acima documenta adequadamente os riscos de `react-native-http-bridge-
 
 Para tornar esta decisão **definitiva**, o time DEVE realizar o seguinte **antes de prosseguir para T-203 e além:**
 
-### 6.1 Prova de Conceito Medida (PoC)
+### 6.1 Prova de Conceito Medida (PoC) — Abordagem Comparativa
 
-#### Android 14 (obrigatório)
+**Nota importante:** dado o estado de manutenção relativo entre as alternativas (ver Seção 4.1), recomenda-se que a PoC seja executada em **ambas** as alternativas antes de decisão final, não sequencial (apenas primária com fallback). Isso permite comparação real de comportamento sob carga.
+
+#### Alternativa A: `react-native-http-bridge-refurbished` (Primária Recomendada)
+
+##### Android 14 (obrigatório)
 
 1. **Setup:** Device real ou emulador robusto (Pixel 6+ ou similar) com Android 14+.
 2. **Implementação mínima:** criar app Expo dev build com `react-native-http-bridge-refurbished`; servir rota `POST /api/upload` que recebe arquivo multipart e escreve em `DocumentsDirectory`.
@@ -184,19 +188,23 @@ Para tornar esta decisão **definitiva**, o time DEVE realizar o seguinte **ante
 5. **Sucesso:** arquivo salvo com checksum válido; memória não vazou; sem crash.
 6. **Documentar:** resultado (passa/falha) + métricas em `docs/poc-uploads.md`.
 
-#### iOS (obrigatório)
+##### iOS (obrigatório)
 
 1. **Setup:** Device real (iPhone XS+) ou simulador macOS.
 2. **Mesmo PoC:** app Expo, upload de 1 GB.
 3. **Medições:** idem Android.
 4. **Documentar:** resultado + métricas em `docs/poc-uploads.md`.
 
-#### Fallback para TCP Socket (se PoC falha)
+#### Alternativa B: `react-native-tcp-socket` + Parser Simplificado (Contingência)
 
-Se PoC revelar problema crítico (stream corrompe, memory leak, incompatibilidade Expo):
-1. Repetir PoC com `react-native-tcp-socket` + parser HTTP simplificado.
-2. Mesmas medições.
-3. Documentar decisão de mudança + justificativa em `docs/adr/001-servidor-http.md` (emenda).
+**Condição:** executar se Alternativa A falhar, OU em paralelo para comparação real.
+
+Se Alternativa A revelar problema crítico (stream corrompe, memory leak, incompatibilidade Expo):
+1. Repetir PoC com `react-native-tcp-socket` + parser HTTP simplificado (ver Seção 2.2).
+2. Mesmas medições (Android 14 + iOS, 1GB, mesmos critérios).
+3. Documentar resultado + decisão de mudança em `docs/adr/001-servidor-http.md` (emenda).
+
+**Alternativa:** se houver tempo/recursos, executar Alternativa B em paralelo com A para comparação direta de throughput e memória (recomendado).
 
 ### 6.2 Critério de Aceitação (PoC)
 
@@ -219,8 +227,8 @@ Se PoC revelar problema crítico (stream corrompe, memory leak, incompatibilidad
 ## 7. Referências e Fontes
 
 ### Documentação Primária
-- **react-native-http-bridge-refurbished:** https://github.com/Doko-Demo-Doa/react-native-http-bridge-refurbished (GitHub, último commit 2023; bifurcação de react-native-http-bridge descontinuada em ~2018; última publicação npm v1.3.2 em 2024-01-24)
-- **react-native-tcp-socket:** https://github.com/Rapsssito/react-native-tcp-socket (~1k stars; v6.4.1, última atualização npm em 2026-01-16)
+- **react-native-http-bridge-refurbished:** https://github.com/Alwinator/react-native-http-bridge-refurbished (GitHub, último commit 2026-01-22; bifurcação de react-native-http-bridge original cujo último push foi 2022-07-04; última publicação npm v1.3.2 em 2024-01-24)
+- **react-native-tcp-socket:** https://github.com/Rapsssito/react-native-tcp-socket (390 stars; v6.4.1, última atualização npm em 2026-01-16)
 - **RFC 7230 (HTTP 1.1):** https://tools.ietf.org/html/rfc7230
 - **RFC 2388 (multipart/form-data):** https://tools.ietf.org/html/rfc2388
 
