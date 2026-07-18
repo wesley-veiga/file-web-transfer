@@ -134,6 +134,24 @@ Se PoC com `react-native-http-bridge-refurbished` revelar problemas críticos (s
 
 ---
 
+## 4.1 ANOTAÇÃO CRÍTICA DO REVISOR (2026-07-18)
+
+⚠️ **Questão sobre a recomendação primária: a justificativa é suficiente dado os riscos documentados?**
+
+A análise acima documenta adequadamente os riscos de `react-native-http-bridge-refurbished`, mas a recomendação de fazê-lo a **primeira escolha** é questionável pelos seguintes pontos:
+
+1. **Estado de manutenção — achado empírico**: verificação de npm registra que `react-native-http-bridge-refurbished` teve seu último release em **janeiro de 2024** (v1.3.2), há 2.5 anos. Já `react-native-tcp-socket` teve atualização em **janeiro de 2026** (v6.4.1), bem mais recente. A alternativa "contingência" está **mais ativamente mantida** que a recomendação primária.
+
+2. **Risco de dead-end da PoC**: se a PoC com HTTP Bridge falhar (memory leak, incompatibilidade New Architecture, etc.), a equipe perde ~3 dias e volta ao início, já que "contingência" exige 7+ dias. A inversão (começar com TCP socket, contingência é HTTP Bridge) não sofreria esse problema — pior caso, adiciona latência, não reduz a chance de sucesso.
+
+3. **New Architecture (não quantificado)**: O ADR admite que "não é claro se a lib foi testada com New Architecture". Essa incerteza é grave — Expo está adotando New Architecture. Uma lib que pode não ser compatível é risco **estratégico** de longo prazo, não tático.
+
+4. **Proposta alternativa para consideração**: Recomenda-se revisar a decisão após a PoC ser executada em AMBAS alternativas (não só a primária), ou revertê-la para "TCP socket + simplificado como primeira escolha" com "HTTP Bridge como contingência", dado que TCP socket está mais ativo no npm e o custo de fallback seria mais baixo.
+
+---
+
+---
+
 ## 5. Impacto nas Tarefas Subsequentes
 
 - **T-203 (Serviço do servidor HTTP):** wrapper em `ServerService` que inicia a lib escolhida, abstrai a interface e permite injetar. Testes com mock da lib, não do servidor real.
@@ -201,8 +219,8 @@ Se PoC revelar problema crítico (stream corrompe, memory leak, incompatibilidad
 ## 7. Referências e Fontes
 
 ### Documentação Primária
-- **react-native-http-bridge-refurbished:** https://github.com/Doko-Demo-Doa/react-native-http-bridge-refurbished (GitHub, último commit 2023; bifurcação de react-native-http-bridge descontinuada em ~2018)
-- **react-native-tcp-socket:** https://github.com/Rapsssito/react-native-tcp-socket (~1k stars, ativo 2024)
+- **react-native-http-bridge-refurbished:** https://github.com/Doko-Demo-Doa/react-native-http-bridge-refurbished (GitHub, último commit 2023; bifurcação de react-native-http-bridge descontinuada em ~2018; última publicação npm v1.3.2 em 2024-01-24)
+- **react-native-tcp-socket:** https://github.com/Rapsssito/react-native-tcp-socket (~1k stars; v6.4.1, última atualização npm em 2026-01-16)
 - **RFC 7230 (HTTP 1.1):** https://tools.ietf.org/html/rfc7230
 - **RFC 2388 (multipart/form-data):** https://tools.ietf.org/html/rfc2388
 
