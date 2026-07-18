@@ -14,8 +14,7 @@ jest.mock('expo-splash-screen', () => ({
 
 // Mock react-native-safe-area-context to allow rendering
 jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children, style }: any) =>
-    React.createElement('View', { style }, children),
+  SafeAreaView: ({ children, style }: any) => React.createElement('View', { style }, children),
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
@@ -23,18 +22,10 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('expo-router', () => {
   return {
     Stack: (props: any) => {
-      return React.createElement(
-        'Stack',
-        { screenOptions: props.screenOptions },
-        props.children
-      );
+      return React.createElement('Stack', { screenOptions: props.screenOptions }, props.children);
     },
     ThemeProvider: (props: any) => {
-      return React.createElement(
-        'ThemeProvider',
-        { value: props.value },
-        props.children
-      );
+      return React.createElement('ThemeProvider', { value: props.value }, props.children);
     },
     DarkTheme: { isDark: true },
     DefaultTheme: { isDark: false },
