@@ -27,12 +27,13 @@ No iOS, a criação programática do Hotspot Pessoal não é permitida pelo sist
 #### Opções identificadas:
 
 - **`react-native-wifi-admin`**
-  - Status: Descontinuada (último commit 2020).
+  - Repositório: https://github.com/doomsower/react-native-wifi-admin
+  - Status: Descontinuada (último commit 2020). **[Nota de revisão: a ser reverificado em T-207 com busca de forks ativos]**
   - Não suporta Local Only Hotspot; focada em conectar a redes existentes.
 
 - **`react-native-hotspot`** (vários mantedores com variações)
-  - Referência: GitHub `RN-Hotspot` e forks. Status: Manutenção irregular.
-  - Oferece alguns bindings para `startLocalOnlyHotspot`, mas com cobertura incompleta de API 33+ (permissão `NEARBY_WIFI_DEVICES`).
+  - Repositório principal: https://github.com/warejandvalid/react-native-hotspot (manutenção irregular). Múltiplos forks com diferentes níveis de atividade.
+  - Oferece alguns bindings para `startLocalOnlyHotspot`, mas com cobertura incompleta de API 33+ (permissão `NEARBY_WIFI_DEVICES`). **[Nota de revisão: status exato de issues abertos e última release a ser confirmado em T-207]**
   - Problema: risco de incompatibilidade futura; mudanças do Android 14 e 15 podem quebrar a lib sem aviso.
 
 - **`expo-network`** (oficial Expo)
@@ -68,12 +69,17 @@ Nenhuma biblioteca de prateleira oferece suporte robusto e mantido para Local On
   - Callback fornece eventos: `onStarted`, `onStopped`, `onFailed`
   - O hotspot permanece ativo enquanto a reserva estiver mantida em memória
 
+- **Permissões para criação e leitura (Android 13+ mudanças):**
+  - **Para CRIAR hotspot:** `CHANGE_WIFI_STATE` (obrigatória) + `ACCESS_WIFI_STATE` (recomendada). Em Android 12+, `ACCESS_FINE_LOCATION` pode ser necessária como restrição adicional de segurança.
+  - **Para LER configurações:** `NEARBY_WIFI_DEVICES` (runtime) é necessária desde Android 13 (API 33) para chamar `WifiManager.getSoftApConfiguration()` e ler `getSsid()` e `getPassphrase()`.
+  - **⚠️ CRÍTICO — A ser validado em T-207:** Documentação oficial do Android 34 deve ser consultada para confirmar se `NEARBY_WIFI_DEVICES` é **obrigatória** ou **recomendada** para `startLocalOnlyHotspot()`. Este ADR assume que é necessária para LER APÓS criar; confirmação empírica é essencial antes de implementação.
+
 - **Obtenção de SSID e Senha (Android 13+ mudanças):**
   - **Android 8–12:** Via `WifiConfiguration` (deprecated em API 31)
   - **Android 13+ (API 33+):** Via `SoftApConfiguration.Builder` + `WifiManager.getSoftApConfiguration()`
   - **Android 14 (API 34+):** `android.net.wifi.SoftApConfiguration` é a forma recomendada
   - Métodos: `getSsid()` e `getPassphrase()` retornam os valores gerados pelo sistema
-  - **Restrição crítica:** essas informações só podem ser lidas com permissão `NEARBY_WIFI_DEVICES` (runtime)
+  - **Restrição crítica:** essas informações só podem ser lidas com permissão `NEARBY_WIFI_DEVICES` (runtime, conforme esclarecimento acima)
 
 - **Obtenção do IP da Interface:**
   - Interface de hotspot aparece como `wlan0_ap` (pode variar)
@@ -87,11 +93,11 @@ Nenhuma biblioteca de prateleira oferece suporte robusto e mantido para Local On
 
 #### Complexidade Estimada:
 
-- **Módulo Kotlin:** 200–300 linhas (Kotlin é mais conciso que Java)
+- **Módulo Kotlin:** 200–300 linhas inicial; **realística 300–500 com tratamento robusto de lifecycle** (callbacks de falha, retry, event listeners para parada do hotspot pelo sistema)
 - **Config Plugin:** 50–80 linhas
-- **Integração TypeScript:** 100–150 linhas
+- **Integração TypeScript:** 100–150 linhas + tipos para `HotspotConfig`, `HotspotError`
 - **Testes do módulo nativo:** requer Android real ou emulador; fora do escopo desta spike
-- **Tempo estimado de implementação:** 1–2 dias (excluindo testes em dispositivo real)
+- **Tempo estimado de implementação:** 1–2 dias base; adicionar 1 dia se tratamento de edge cases for necessário
 
 ---
 
@@ -135,14 +141,55 @@ Esta spike é pesquisa de mesa. **Não temos acesso a dispositivo Android 14 fí
 - ✅ Documentação da abordagem (este ADR)
 - ❌ **NÃO FEITO:** Prova de conceito real (criar hotspot em Android 14 físico e outro dispositivo conectar)
 
+### Fase 1.1: Contrato TypeScript Esperado (Referência para T-207)
+
+O módulo nativo deve expor a seguinte interface TypeScript, permitindo mock type-safe nos testes Jest:
+
+```typescript
+// features/server/types/hotspot.ts
+export type HotspotInfo = {
+  ssid: string;
+  password: string;
+  ip: string;
+  gateway?: string;  // ex.: "192.168.43.1"; opcional se não obtido
+};
+
+export type HotspotErrorCode = 
+  | 'UNSUPPORTED'          // Device/OS não suporta Local Only Hotspot
+  | 'PERMISSION_DENIED'    // Permissão negada pelo usuário
+  | 'FAILED'               // Falha ao criar hotspot (motivo desconhecido)
+  | 'TIMEOUT'              // Callback de criação não respondeu em tempo hábil
+  | 'NOT_RUNNING';         // Tentativa de stop/getConfig sem hotspot ativo
+
+// Interface do módulo nativo (via NativeModules)
+export const NativeHotspot = {
+  // Promise rejeita com HotspotErrorCode (lançar ou retornar error discriminated)
+  startLocalOnlyHotspot(): Promise<HotspotInfo>;
+  stopLocalOnlyHotspot(): Promise<void>;
+  getHotspotConfig(): Promise<HotspotInfo | null>;  // null se não ativo
+};
+```
+
+**Notas de design:**
+- Nome `HotspotInfo` (não `HotspotConfig`) permite futura composição com `ServerInfo` (T-201), evitando duplicação de tipos
+- `HotspotErrorCode` como discriminated union permite tipo-safe error handling em TypeScript
+- Métodos nomeados com prefixo `startLocalOnlyHotspot` (não `startHotspot`) deixa explícito que é "local only" (evita confusão com tethering)
+
+**Config Plugin** deve injetar permissões via `withAndroidManifest`:
+- `CHANGE_WIFI_STATE` (criar hotspot)
+- `ACCESS_WIFI_STATE` (ler estado)
+- `NEARBY_WIFI_DEVICES` (ler SSID/senha em Android 13+)
+
+A solicitação de permissão runtime ao usuário é responsabilidade da UI (T-208, hook customizado `useHotspotPermission` ou similar).
+
 ### Fase 2: Implementação Nativa (Próxima Tarefa — T-207)
 
 Prerequisitos:
 
 1. Ter Kotlin + Android SDK configurado no dev build Expo (já garantido por `minSdkVersion = 34`)
-2. Escrever módulo Kotlin com os métodos: `startHotspot()`, `stopHotspot()`, `getHotspotConfig()`
-3. Criar Config Plugin para declarar permissões
-4. Testes com mock do módulo
+2. Escrever módulo Kotlin com os métodos: `startLocalOnlyHotspot()`, `stopLocalOnlyHotspot()`, `getHotspotConfig()` conforme assinaturas acima
+3. Criar Config Plugin (`plugins/with-hotspot.js`) usando `withAndroidManifest` para declarar permissões
+4. Testes com mock do módulo nativo via Jest + dependência injetável
 
 ### Fase 3: Validação Empírica E2E (Próxima Tarefa — T-701, "Teste de fogo")
 
@@ -172,7 +219,7 @@ Quando o projeto chegar à fase de integração:
 
 4. **IP da interface:**
    - ✓ Confirmado: interface de hotspot no range `192.168.43–44.x`
-   - ❌ **Não testado:** qual é o IP exato nesta implementação específica do Android 14; quanto tempo leva até estar disponível
+   - ❌ **Não testado:** qual é o IP exato nesta implementação específica do Android 14; **quanto tempo leva até interface estar disponível após callback `onStarted`** (DHCP timing; pode levar 1–3 segundos)
 
 5. **Outro dispositivo conectando via QR Wi-Fi:**
    - ✅ Confirmado: o formato `WIFI:S:...;T:WPA;P:...;;` é padrão e câmeras Android/iOS o reconhecem
@@ -188,7 +235,10 @@ Quando o projeto chegar à fase de integração:
 | ----------------------------------------------------- | ----------------------- | --------------------------- | ---------------------------------------------------------------------------- |
 | **Permissão NEARBY_WIFI_DEVICES negada pelo usuário** | Média (usuário em foco) | Alto (feature inutilizável) | Explicação clara na UI antes de pedir permissão; fallback "mesma rede Wi-Fi" |
 | **Hotspot não sobe no Android 14 específico**         | Baixa (API estável)     | Crítico (feature quebrada)  | Validação E2E em múltiplos Android 14; tratamento de erro `HOTSPOT_FAILED`   |
+| **LocalOnlyHotspotReservation garbage collected**     | Média (lifecycle)       | Crítico (hotspot desativa)  | Manter referência em store global; testar retaining reference; validar E2E |
+| **OEM bloqueia Local Only Hotspot (policy)**          | Baixa (ROM variações)   | Alto (feature indisponível) | Coletar logs de erro em E2E; documentar limitação; fallback manual |
 | **IP não acessível na prática**                       | Baixa                   | Alto (servidor inacessível) | Testar conectividade antes de servir; logs de IP obtido                      |
+| **IP indisponível no timing esperado**                | Média (timing DHCP)     | Médio (retry necessário)    | Polling com timeout 3s; fallback gateway `192.168.43.1`; validar tempo      |
 | **Timeout obtendo SSID/senha**                        | Média (timing)          | Médio (UI hang)             | Timeout de 2–3 s; fallback com valores padrão                                |
 | **Hotspot órfão se app morrer**                       | Média (crash/ANR)       | Médio (usuário manual off)  | Cleanup em `onDestroy()` do servidor; testar com force kill                  |
 
