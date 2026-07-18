@@ -19,15 +19,15 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 
 ## Fase 0 — Fundação do Projeto
 
-- [ ] **T-001 · Bootstrap do projeto Expo**
+- [x] **T-001 · Bootstrap do projeto Expo**
   Criar projeto Expo (dev build) com TypeScript `strict: true`, Expo Router, **`minSdkVersion = 34` (Android 14+)** e estrutura de pastas da constituição (`src/app`, `src/features/{server,transfer,files}`, `src/shared`, `web-ui/`).
   *Pronto quando:* app abre em Android 14+ e iOS com tela placeholder; build falha em `minSdk < 34`; `tsc --noEmit` limpo.
 
-- [ ] **T-002 · Qualidade automatizada** ⬅ T-001
+- [x] **T-002 · Qualidade automatizada** ⬅ T-001
   ESLint (flat config) + Prettier + `eslint-plugin-boundaries` (regras de dependência do Princípio IV) + Husky + lint-staged + Conventional Commits. Bloquear `any`, `console.log` e `TODO` sem issue.
   *Pronto quando:* commit com violação é rejeitado localmente; `npm run lint` limpo.
 
-- [ ] **T-003 · Infra de testes** ⬅ T-001
+- [x] **T-003 · Infra de testes** ⬅ T-001
   Jest + React Native Testing Library configurados; thresholds de cobertura (90% domínio/serviços, 80% global); mocks base para `expo-file-system`, `expo-network` e módulo do servidor.
   *Pronto quando:* `npm test` roda um teste exemplo com cobertura reportada.
 
