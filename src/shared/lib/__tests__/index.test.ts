@@ -1,21 +1,23 @@
-import * as libExports from '../index';
+import { sanitizeFileName, resolveDuplicateName } from '../index';
 
-describe('shared/lib barrel exports', () => {
-  it('should export formatBytes', () => {
-    expect(typeof libExports.formatBytes).toBe('function');
+describe('shared/lib — barrel exports', () => {
+  it('should export sanitizeFileName from barrel', () => {
+    expect(sanitizeFileName).toBeDefined();
+    expect(typeof sanitizeFileName).toBe('function');
   });
 
-  it('should export formatSpeed', () => {
-    expect(typeof libExports.formatSpeed).toBe('function');
+  it('should export resolveDuplicateName from barrel', () => {
+    expect(resolveDuplicateName).toBeDefined();
+    expect(typeof resolveDuplicateName).toBe('function');
   });
 
-  it('should export formatDuration', () => {
-    expect(typeof libExports.formatDuration).toBe('function');
+  it('should call sanitizeFileName via barrel correctly', () => {
+    const result = sanitizeFileName('../../etc/passwd');
+    expect(result).toBe('passwd');
   });
 
-  it('should export all three functions with correct behavior', () => {
-    expect(libExports.formatBytes(1024)).toBe('1 KB');
-    expect(libExports.formatSpeed(1024)).toBe('1 KB/s');
-    expect(libExports.formatDuration(60)).toBe('1m');
+  it('should call resolveDuplicateName via barrel correctly', () => {
+    const result = resolveDuplicateName('file.txt', ['file.txt']);
+    expect(result).toBe('file (1).txt');
   });
 });
