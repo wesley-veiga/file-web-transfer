@@ -114,10 +114,10 @@ describe('T-001 Bootstrap - Integration', () => {
       const content = fs.readFileSync(indexPath, 'utf-8');
       // Screen component handles theme support internally
       expect(content).toContain('Screen');
-      // Verify Screen component file has theme support
+      // Verify Screen component file has theme support via NativeWind dark: variant
       const screenPath = path.join(process.cwd(), 'src/shared/components/Screen.tsx');
       const screenContent = fs.readFileSync(screenPath, 'utf-8');
-      expect(screenContent).toContain('useColorScheme');
+      expect(screenContent).toContain('dark:');
       expect(screenContent).toContain('SafeAreaView');
     });
   });

@@ -160,10 +160,10 @@ describe('Screen Component', () => {
       ).not.toThrow();
     });
 
-    it('applies dark theme classes', () => {
+    it('applies dark theme classes via NativeWind dark: variant', () => {
       const content = readScreenSource();
       expect(content).toContain('background-dark');
-      expect(content).toContain('isDark');
+      expect(content).toContain('dark:bg-background-dark');
     });
   });
 
