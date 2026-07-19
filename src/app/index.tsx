@@ -5,7 +5,11 @@ import { ServerHomeScreen } from '@/features/server/components';
 export default function HomeScreen() {
   useEffect(() => {
     const hideSplash = async () => {
-      await SplashScreen.hideAsync();
+      try {
+        await SplashScreen.hideAsync();
+      } catch {
+        // Ignora falha ao esconder a splash screen: não deve impedir o app de renderizar.
+      }
     };
     hideSplash();
   }, []);
