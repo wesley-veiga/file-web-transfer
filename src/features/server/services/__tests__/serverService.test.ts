@@ -36,6 +36,11 @@ describe('ServerService', () => {
   });
 
   describe('start', () => {
+    beforeEach(() => {
+      // Mockar stop para sucesso no fallback (findAvailablePort)
+      mockHttpModule.stop.mockResolvedValue(undefined);
+    });
+
     it('deve iniciar servidor em modo wifi com sucesso', async () => {
       const result = await serverService.start('wifi');
 
@@ -94,8 +99,8 @@ describe('ServerService', () => {
       }
     });
 
-    it('deve lançar PORT_UNAVAILABLE quando httpModule.start falha com erro de porta', async () => {
-      mockHttpModule.start.mockRejectedValue(new Error('Port 8080 already in use'));
+    it('deve lançar PORT_UNAVAILABLE quando todas as portas (8080-8089) estão ocupadas', async () => {
+      mockHttpModule.start.mockRejectedValue(new Error('Port already in use (EADDRINUSE)'));
 
       try {
         await serverService.start('wifi');
@@ -107,21 +112,31 @@ describe('ServerService', () => {
           expect(error.message).toBe('Nenhuma porta livre disponível');
         }
       }
+
+      // Verificar que tentou todas as 10 portas (8080-8089)
+      expect(mockHttpModule.start).toHaveBeenCalledTimes(10);
     });
 
-    it('deve lançar UNKNOWN para erro genérico não mapeado', async () => {
-      mockHttpModule.start.mockRejectedValue(new Error('Generic error'));
+    it('deve fazer fallback para próxima porta se a primeira estiver indisponível', async () => {
+      // 8080 falha em findAvailablePort, 8081 funciona em findAvailablePort,
+      // depois 8081 é chamado novamente em start()
+      mockHttpModule.start
+        .mockRejectedValueOnce(new Error('Port 8080 already in use (EADDRINUSE)')) // findAvailablePort tenta 8080
+        .mockResolvedValueOnce(undefined) // findAvailablePort tenta 8081 (sucesso)
+        .mockResolvedValueOnce(undefined); // start() tenta 8081 novamente
+      mockHttpModule.stop.mockResolvedValue(undefined);
 
-      try {
-        await serverService.start('wifi');
-        throw new Error('Expected start() to throw');
-      } catch (error) {
-        expect(error).toBeInstanceOf(ServerServiceError);
-        if (error instanceof ServerServiceError) {
-          expect(error.code).toBe('UNKNOWN');
-          expect(error.message).toBe('Erro desconhecido ao iniciar servidor');
-        }
-      }
+      const result = await serverService.start('wifi');
+
+      // Verificar que tentou: 8080 (falha), 8081 (findAvailablePort), 8081 (start)
+      expect(mockHttpModule.start).toHaveBeenCalledTimes(3);
+      expect(mockHttpModule.start).toHaveBeenNthCalledWith(1, 8080);
+      expect(mockHttpModule.start).toHaveBeenNthCalledWith(2, 8081);
+      expect(mockHttpModule.start).toHaveBeenNthCalledWith(3, 8081);
+
+      // Verificar que resultado contém porta 8081
+      expect(result.port).toBe(8081);
+      expect(result.url).toBe('http://192.168.1.42:8081');
     });
 
     it('deve relançar ServerServiceError se for já um ServerServiceError', async () => {
@@ -131,7 +146,8 @@ describe('ServerService', () => {
       await expect(serverService.start('wifi')).rejects.toThrow(serverError);
     });
 
-    it('deve mapear error com "port" na mensagem para PORT_UNAVAILABLE', async () => {
+    it('deve tentar próxima porta quando error contém "port" (e depois falhar se todas estiverem ocupadas)', async () => {
+      // Todas as portas retornam erro com "port" na mensagem
       mockHttpModule.start.mockRejectedValue(new Error('Cannot bind to port'));
 
       try {
@@ -143,9 +159,13 @@ describe('ServerService', () => {
           expect(error.code).toBe('PORT_UNAVAILABLE');
         }
       }
+
+      // Verificar que tentou todas as portas
+      expect(mockHttpModule.start).toHaveBeenCalledTimes(10);
     });
 
-    it('deve mapear error com "already in use" na mensagem para PORT_UNAVAILABLE', async () => {
+    it('deve tentar próxima porta quando error contém "already in use"', async () => {
+      // Todas as portas retornam erro "already in use"
       mockHttpModule.start.mockRejectedValue(new Error('Address already in use'));
 
       try {
@@ -157,6 +177,9 @@ describe('ServerService', () => {
           expect(error.code).toBe('PORT_UNAVAILABLE');
         }
       }
+
+      // Verificar que tentou todas as portas
+      expect(mockHttpModule.start).toHaveBeenCalledTimes(10);
     });
 
     it('deve mapear error com "network" na mensagem para NO_NETWORK', async () => {
@@ -197,11 +220,16 @@ describe('ServerService', () => {
       expect(result.port).toBe(8080);
     });
 
-    it('deve chamar httpModule.start com a porta 8080', async () => {
+    it('deve chamar httpModule.start com a porta 8080 (findAvailablePort) e depois novamente para iniciar de verdade', async () => {
+      mockHttpModule.stop.mockResolvedValue(undefined);
+
       await serverService.start('wifi');
 
+      // findAvailablePort chama start(8080) uma vez e depois stop
+      // Depois start() chama start(8080) novamente para iniciar de verdade
       expect(mockHttpModule.start).toHaveBeenCalledWith(8080);
-      expect(mockHttpModule.start).toHaveBeenCalledTimes(1);
+      expect(mockHttpModule.start).toHaveBeenCalledTimes(2); // Uma vez em findAvailablePort, uma em start()
+      expect(mockHttpModule.stop).toHaveBeenCalledTimes(1); // stop() é chamado por findAvailablePort após verificação
     });
 
     it('deve gerar sessionId determinístico (mockado)', async () => {

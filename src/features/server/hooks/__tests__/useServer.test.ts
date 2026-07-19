@@ -165,7 +165,7 @@ describe('useServer hook integration', () => {
         UNKNOWN: 'Erro desconhecido ao gerenciar servidor.',
       };
 
-      for (const [code, expectedMessage] of Object.entries(errorMappings)) {
+      for (const [codeStr, expectedMessage] of Object.entries(errorMappings)) {
         // Reset store
         useServerStore.setState({
           serverInfo: {
@@ -184,6 +184,7 @@ describe('useServer hook integration', () => {
         const serverService = new ServerServiceImpl(mockHttpModule);
         const store = useServerStore.getState();
 
+        const code = codeStr as import('../../types').ServerErrorCode;
         const error = new ServerServiceError(code, 'Technical message');
         mockHttpModule.start.mockRejectedValueOnce(error);
 

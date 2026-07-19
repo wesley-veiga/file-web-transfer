@@ -67,8 +67,11 @@ export class ServerServiceImpl implements ServerService {
         throw this.createServerError('NO_NETWORK', 'Nenhuma rede disponível');
       }
 
-      // Tentar portas incrementalmente
+      // Tentar portas com fallback
       const port = await this.findAvailablePort();
+      if (!port) {
+        throw this.createServerError('PORT_UNAVAILABLE', 'Nenhuma porta livre disponível');
+      }
 
       // Iniciar servidor HTTP na porta encontrada
       await this.httpModule.start(port);
@@ -95,9 +98,6 @@ export class ServerServiceImpl implements ServerService {
       // Tentar inferir o erro
       if (error instanceof Error) {
         const message = error.message.toLowerCase();
-        if (message.includes('port') || message.includes('already in use')) {
-          throw this.createServerError('PORT_UNAVAILABLE', 'Nenhuma porta livre disponível');
-        }
         if (message.includes('network') || message.includes('offline')) {
           throw this.createServerError('NO_NETWORK', 'Nenhuma rede disponível');
         }
@@ -144,19 +144,49 @@ export class ServerServiceImpl implements ServerService {
 
   /**
    * Tenta encontrar uma porta livre começando de `minPort` até `maxPort`.
-   * Como não temos forma de verificar disponibilidade sem tentar, tentamos
-   * apenas uma vez na porta preferida (8080) e se falhar, retornamos a próxima.
    *
-   * Nota: O módulo HTTP nativo será o que realmente tenta bind; se falhar,
-   * lança erro que `start()` captura e traduz para PORT_UNAVAILABLE.
+   * Estratégia:
+   * - Tenta cada porta sequencialmente chamando httpModule.start(port)
+   * - Se start() lançar erro de "port already in use" ou similar, tenta a próxima
+   * - Retorna a primeira porta que conseguir iniciar o servidor
+   * - Retorna null se nenhuma porta no intervalo estiver disponível
    *
-   * Para agora, retornamos a porta preferida e deixamos o módulo HTTP
-   * tentar; futuras melhorias podem tentar múltiplas portas.
+   * Nota: `findAvailablePort()` inicia e para o servidor para cada tentativa,
+   * pois não há forma de verificar disponibilidade sem tentar bind. O servidor
+   * é parado imediatamente após verificação bem-sucedida (antes de retornar).
    */
-  private async findAvailablePort(): Promise<number> {
-    // Por simplicidade, sempre tentamos a porta 8080
-    // O módulo HTTP nativo será quem realmente valida disponibilidade
-    return this.minPort;
+  private async findAvailablePort(): Promise<number | null> {
+    for (let port = this.minPort; port <= this.maxPort; port++) {
+      try {
+        // Tentar iniciar na porta
+        await this.httpModule.start(port);
+
+        // Se chegou aqui, porta está disponível
+        // Parar servidor imediatamente (será reiniciado em start() com dados finais)
+        await this.httpModule.stop();
+
+        return port;
+      } catch (error) {
+        // Se erro é "porta em uso", tenta a próxima
+        if (error instanceof Error) {
+          const message = error.message.toLowerCase();
+          if (
+            message.includes('port') ||
+            message.includes('already in use') ||
+            message.includes('eaddrinuse')
+          ) {
+            // Porta ocupada, tenta a próxima
+            continue;
+          }
+        }
+
+        // Se não é erro de porta, relança (pode ser outro problema)
+        throw error;
+      }
+    }
+
+    // Nenhuma porta disponível no intervalo
+    return null;
   }
 
   /**
