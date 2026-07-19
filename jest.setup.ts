@@ -12,21 +12,6 @@ jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn(() => Promise.resolve()),
 }));
 
-// Mock expo-network
-jest.mock('expo-network', () => ({
-  getNetworkStateAsync: jest.fn().mockResolvedValue({
-    isConnected: true,
-    isInternetReachable: true,
-    type: 'wifi',
-    ssid: 'TestNetwork',
-  }),
-  addNetworkStateListener: jest.fn((callback) => {
-    return {
-      remove: jest.fn(),
-    };
-  }),
-}));
-
 // Mock react-native-qrcode-svg for unit tests
 jest.mock(
   'react-native-qrcode-svg',
