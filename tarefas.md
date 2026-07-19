@@ -63,7 +63,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 
 ## Fase 2 — Feature: Servidor (`features/server`)
 
-- [ ] **T-201 · Máquina de estados do servidor** ⬅ T-103
+- [x] **T-201 · Máquina de estados do servidor** ⬅ T-103
   Tipos `ServerInfo`/`ServerStatus`/`ServerError` + store Zustand com transições válidas (`idle → starting → running → stopping → idle`; `error` de qualquer estado). Sem I/O real — o serviço HTTP é injetado.
   *Pronto quando:* todas as transições (válidas e inválidas) testadas.
 
