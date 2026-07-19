@@ -71,7 +71,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Avaliar `react-native-http-bridge-refurbished` vs. implementação sobre TCP socket. Critério decisivo: upload multipart ≥ 1 GB com streaming, Android e iOS. Registrar decisão em `docs/adr/001-servidor-http.md`.
   *Pronto quando:* ADR escrito com prova de conceito medida. **(timebox: 1 dia)**
 
-- [ ] **T-203 · Serviço do servidor HTTP** ⬅ T-201, T-202
+- [x] **T-203 · Serviço do servidor HTTP** ⬅ T-201, T-202
   `ServerService` (start/stop, porta 8080 com fallback, IP via `expo-network` — rede Wi-Fi **ou** interface do hotspot, campo `networkMode`) atrás de interface injetável.
   *Pronto quando:* testes com mock do módulo nativo cobrindo sucesso nos dois modos, `NO_NETWORK`, `PORT_UNAVAILABLE`.
 
