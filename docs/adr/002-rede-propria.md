@@ -141,39 +141,52 @@ Esta spike é pesquisa de mesa. **Não temos acesso a dispositivo Android 14 fí
 - ✅ Documentação da abordagem (este ADR)
 - ❌ **NÃO FEITO:** Prova de conceito real (criar hotspot em Android 14 físico e outro dispositivo conectar)
 
-### Fase 1.1: Contrato TypeScript Esperado (Referência para T-207)
+### Fase 1.1: Contrato do Módulo Nativo (Referência para T-207)
 
 O módulo nativo deve expor a seguinte interface TypeScript, permitindo mock type-safe nos testes Jest:
 
 ```typescript
-// features/server/types/hotspot.ts
-export type HotspotInfo = {
+// features/server/services/nativeHotspot.ts (módulo nativo — resultado bruto)
+// Estrutura retornada pela API Kotlin; será transformada em HotspotInfo de domínio pelo HotspotService
+export type NativeHotspotResult = {
   ssid: string;
   password: string;
   ip: string;
   gateway?: string;  // ex.: "192.168.43.1"; opcional se não obtido
 };
 
-export type HotspotErrorCode = 
+export type NativeHotspotErrorCode = 
   | 'UNSUPPORTED'          // Device/OS não suporta Local Only Hotspot
   | 'PERMISSION_DENIED'    // Permissão negada pelo usuário
   | 'FAILED'               // Falha ao criar hotspot (motivo desconhecido)
   | 'TIMEOUT'              // Callback de criação não respondeu em tempo hábil
-  | 'NOT_RUNNING';         // Tentativa de stop/getConfig sem hotspot ativo
+  | 'NOT_RUNNING';         // Tentativa de operação sem hotspot ativo
 
 // Interface do módulo nativo (via NativeModules)
 export const NativeHotspot = {
-  // Promise rejeita com HotspotErrorCode (lançar ou retornar error discriminated)
-  startLocalOnlyHotspot(): Promise<HotspotInfo>;
+  // Promise rejeita com NativeHotspotErrorCode (lançar ou retornar error discriminated)
+  startLocalOnlyHotspot(): Promise<NativeHotspotResult>;
   stopLocalOnlyHotspot(): Promise<void>;
-  getHotspotConfig(): Promise<HotspotInfo | null>;  // null se não ativo
+  getHotspotConfig(): Promise<NativeHotspotResult | null>;  // null se não ativo
 };
 ```
 
-**Notas de design:**
-- Nome `HotspotInfo` (não `HotspotConfig`) permite futura composição com `ServerInfo` (T-201), evitando duplicação de tipos
-- `HotspotErrorCode` como discriminated union permite tipo-safe error handling em TypeScript
-- Métodos nomeados com prefixo `startLocalOnlyHotspot` (não `startHotspot`) deixa explícito que é "local only" (evita confusão com tethering)
+**Transformação para tipo de domínio (T-207, `HotspotService`):**
+
+O tipo `HotspotInfo` já está definido em T-201 (`src/features/server/types/index.ts`) como:
+
+```typescript
+export interface HotspotInfo {
+  ssid: string;
+  password: string;
+  wifiQrPayload: string;  // ex.: "WIFI:S:rede123;T:WPA;P:senha456;;"
+}
+```
+
+O `HotspotService` (T-207) é responsável por:
+1. Chamar `NativeHotspot.startLocalOnlyHotspot()` → obtém `NativeHotspotResult`
+2. Gerar o `wifiQrPayload` a partir de ssid/password usando padrão ZXing: `WIFI:S:<ssid>;T:WPA;P:<password>;;`
+3. Retornar `HotspotInfo` (com ssid, password, wifiQrPayload) para integração com `ServerInfo` em T-203
 
 **Config Plugin** deve injetar permissões via `withAndroidManifest`:
 - `CHANGE_WIFI_STATE` (criar hotspot)
