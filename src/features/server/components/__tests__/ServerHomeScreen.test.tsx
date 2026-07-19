@@ -7,6 +7,7 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import { ServerHomeScreen } from '../ServerHomeScreen';
+import type { HttpModule } from '../../services/httpModule';
 
 describe('ServerHomeScreen (T-204)', () => {
   describe('Rendering', () => {
@@ -20,10 +21,12 @@ describe('ServerHomeScreen (T-204)', () => {
     });
 
     it('renders with httpModule prop (for testing)', () => {
-      const mockHttpModule = {
-        start: jest.fn(),
-        stop: jest.fn(),
+      const mockHttpModule: HttpModule = {
+        start: jest.fn().mockResolvedValue(undefined),
+        stop: jest.fn().mockResolvedValue(undefined),
         isRunning: jest.fn(() => false),
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
       };
       expect(() => render(<ServerHomeScreen httpModule={mockHttpModule} />)).not.toThrow();
     });
