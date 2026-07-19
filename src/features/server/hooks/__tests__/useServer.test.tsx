@@ -204,5 +204,53 @@ describe('useServer hook', () => {
       await result.current.start('wifi');
     });
     expect(useServerStore.getState().serverInfo.status).toBe('running');
+
+    // Testa Error genérico no stop() (linhas 19-26 + 130-135)
+    // serverService.stop() não trata erro, então Error genérico vai direto
+    // para mapErrorToServerError() nas linhas 19-26
+    mockHttpModule.stop.mockRejectedValueOnce(new Error('Falha ao parar'));
+
+    await act(async () => {
+      try {
+        await result.current.stop();
+      } catch (error) {
+        caughtError = error;
+      }
+    });
+
+    expect(caughtError).toBeInstanceOf(Error);
+    const state = useServerStore.getState().serverInfo;
+    expect(state.status).toBe('error');
+    expect(state.error?.code).toBe('UNKNOWN');
+    // mapErrorToServerError() para Error genérico (linhas 19-26) retorna mensagem sem ponto
+    expect(state.error?.message).toBe('Erro desconhecido ao gerenciar servidor');
+
+    // Testar também o fallback de linha 26 (erro non-Error) no stop()
+    act(() => {
+      result.current.reset();
+    });
+
+    await act(async () => {
+      await result.current.start('wifi');
+    });
+    expect(useServerStore.getState().serverInfo.status).toBe('running');
+
+    // Mock stop para rejeitar com valor non-Error (string)
+    // Isso vai para mapErrorToServerError() linha 26 (fallback)
+    mockHttpModule.stop.mockRejectedValueOnce('non-error-value');
+
+    await act(async () => {
+      try {
+        await result.current.stop();
+      } catch (error) {
+        caughtError = error;
+      }
+    });
+
+    expect(caughtError).toBe('non-error-value');
+    const state2 = useServerStore.getState().serverInfo;
+    expect(state2.status).toBe('error');
+    // Fallback de linha 26 retorna code 'UNKNOWN'
+    expect(state2.error?.code).toBe('UNKNOWN');
   });
 });

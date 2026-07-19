@@ -151,4 +151,34 @@ describe('serverServiceFactory', () => {
       expect(service).toHaveProperty('isRunning');
     });
   });
+
+  describe('error cases - branch coverage', () => {
+    it('deve lançar erro se createServerService é chamado sem módulo e sem setHttpModule prévio', () => {
+      // Usar jest.isolateModules para ter um estado "fresco" do módulo
+      // onde realHttpModule não foi setado e nenhum parâmetro é fornecido
+      jest.isolateModules(() => {
+        // Dentro de isolateModules, importar uma cópia do módulo que não foi inicializado
+        const {
+          createServerService: isolatedCreateServerService,
+        } = require('../serverServiceFactory');
+
+        // Deve lançar erro porque realHttpModule é null e não há parâmetro
+        expect(() => {
+          isolatedCreateServerService();
+        }).toThrow(/HttpModule não foi inicializado/);
+      });
+    });
+  });
+});
+
+describe('services/index.ts - barrel exports', () => {
+  it('deve exportar ServerService e tipos relacionados', () => {
+    const barrel = require('../index');
+
+    // Verificar que os exports principais estão definidos
+    expect(barrel.ServerServiceImpl).toBeDefined();
+    expect(barrel.ServerServiceError).toBeDefined();
+    expect(barrel.createServerService).toBeDefined();
+    expect(barrel.setHttpModule).toBeDefined();
+  });
 });
