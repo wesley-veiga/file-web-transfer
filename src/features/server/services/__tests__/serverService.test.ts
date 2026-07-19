@@ -67,12 +67,14 @@ describe('ServerService', () => {
         isConnected: false,
       });
 
-      await expect(serverService.start('wifi')).rejects.toThrow(ServerServiceError);
       try {
         await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
       } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
         if (error instanceof ServerServiceError) {
           expect(error.code).toBe('NO_NETWORK');
+          expect(error.message).toBe('Nenhuma rede disponível');
         }
       }
     });
@@ -82,9 +84,12 @@ describe('ServerService', () => {
 
       try {
         await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
       } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
         if (error instanceof ServerServiceError) {
           expect(error.code).toBe('NO_NETWORK');
+          expect(error.message).toBe('Nenhuma rede disponível');
         }
       }
     });
@@ -94,9 +99,12 @@ describe('ServerService', () => {
 
       try {
         await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
       } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
         if (error instanceof ServerServiceError) {
           expect(error.code).toBe('PORT_UNAVAILABLE');
+          expect(error.message).toBe('Nenhuma porta livre disponível');
         }
       }
     });
@@ -106,9 +114,12 @@ describe('ServerService', () => {
 
       try {
         await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
       } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
         if (error instanceof ServerServiceError) {
           expect(error.code).toBe('UNKNOWN');
+          expect(error.message).toBe('Erro desconhecido ao iniciar servidor');
         }
       }
     });
@@ -118,6 +129,95 @@ describe('ServerService', () => {
       mockHttpModule.start.mockRejectedValue(serverError);
 
       await expect(serverService.start('wifi')).rejects.toThrow(serverError);
+    });
+
+    it('deve mapear error com "port" na mensagem para PORT_UNAVAILABLE', async () => {
+      mockHttpModule.start.mockRejectedValue(new Error('Cannot bind to port'));
+
+      try {
+        await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
+        if (error instanceof ServerServiceError) {
+          expect(error.code).toBe('PORT_UNAVAILABLE');
+        }
+      }
+    });
+
+    it('deve mapear error com "already in use" na mensagem para PORT_UNAVAILABLE', async () => {
+      mockHttpModule.start.mockRejectedValue(new Error('Address already in use'));
+
+      try {
+        await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
+        if (error instanceof ServerServiceError) {
+          expect(error.code).toBe('PORT_UNAVAILABLE');
+        }
+      }
+    });
+
+    it('deve mapear error com "network" na mensagem para NO_NETWORK', async () => {
+      mockHttpModule.start.mockRejectedValue(new Error('Network error'));
+
+      try {
+        await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
+        if (error instanceof ServerServiceError) {
+          expect(error.code).toBe('NO_NETWORK');
+        }
+      }
+    });
+
+    it('deve mapear error com "offline" na mensagem para NO_NETWORK', async () => {
+      mockHttpModule.start.mockRejectedValue(new Error('Device is offline'));
+
+      try {
+        await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
+        if (error instanceof ServerServiceError) {
+          expect(error.code).toBe('NO_NETWORK');
+        }
+      }
+    });
+
+    it('deve retornar URL construída corretamente com IP e porta', async () => {
+      (Network.getIpAddressAsync as jest.Mock).mockResolvedValue('10.0.0.5');
+
+      const result = await serverService.start('wifi');
+
+      expect(result.url).toBe('http://10.0.0.5:8080');
+      expect(result.ip).toBe('10.0.0.5');
+      expect(result.port).toBe(8080);
+    });
+
+    it('deve chamar httpModule.start com a porta 8080', async () => {
+      await serverService.start('wifi');
+
+      expect(mockHttpModule.start).toHaveBeenCalledWith(8080);
+      expect(mockHttpModule.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('deve gerar sessionId determinístico (mockado)', async () => {
+      const result = await serverService.start('wifi');
+
+      expect(result.sessionId).toBe('test-session-123');
+    });
+
+    it('deve passar networkMode corretamente no resultado', async () => {
+      const resultWifi = await serverService.start('wifi');
+      expect(resultWifi.networkMode).toBe('wifi');
+
+      mockHttpModule.start.mockClear();
+
+      const resultHotspot = await serverService.start('hotspot');
+      expect(resultHotspot.networkMode).toBe('hotspot');
     });
   });
 
@@ -139,17 +239,66 @@ describe('ServerService', () => {
     });
   });
 
-  describe('getLocalIp (private)', () => {
-    it('deve retornar null quando getNetworkStateAsync lança erro', async () => {
+  describe('error handling in getLocalIp', () => {
+    it('deve lançar NO_NETWORK quando getNetworkStateAsync lança erro', async () => {
       (Network.getNetworkStateAsync as jest.Mock).mockRejectedValue(new Error('Network error'));
 
-      await expect(serverService.start('wifi')).rejects.toThrow(ServerServiceError);
+      try {
+        await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
+        if (error instanceof ServerServiceError) {
+          expect(error.code).toBe('NO_NETWORK');
+        }
+      }
     });
 
-    it('deve retornar null quando getIpAddressAsync lança erro', async () => {
+    it('deve lançar NO_NETWORK quando getIpAddressAsync lança erro', async () => {
       (Network.getIpAddressAsync as jest.Mock).mockRejectedValue(new Error('IP error'));
 
-      await expect(serverService.start('wifi')).rejects.toThrow(ServerServiceError);
+      try {
+        await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
+        if (error instanceof ServerServiceError) {
+          expect(error.code).toBe('NO_NETWORK');
+        }
+      }
+    });
+
+    it('deve ignorar error de getIpAddressAsync quando network não está conectado', async () => {
+      (Network.getNetworkStateAsync as jest.Mock).mockResolvedValue({
+        isConnected: false,
+      });
+      (Network.getIpAddressAsync as jest.Mock).mockRejectedValue(new Error('IP error'));
+
+      try {
+        await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
+        if (error instanceof ServerServiceError) {
+          expect(error.code).toBe('NO_NETWORK');
+        }
+      }
+    });
+  });
+
+  describe('non-object errors', () => {
+    it('deve lançar UNKNOWN quando error não é uma instância de Error', async () => {
+      mockHttpModule.start.mockRejectedValue('string error');
+
+      try {
+        await serverService.start('wifi');
+        throw new Error('Expected start() to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServerServiceError);
+        if (error instanceof ServerServiceError) {
+          expect(error.code).toBe('UNKNOWN');
+        }
+      }
     });
   });
 });
