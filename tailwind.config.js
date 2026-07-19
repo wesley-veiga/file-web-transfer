@@ -27,6 +27,14 @@ module.exports = {
           light: '#000000',
           dark: '#FFFFFF',
         },
+        'text-secondary': {
+          light: '#6C757D',
+          dark: '#B0B0B0',
+        },
+        'warning-light': '#FFF3CD',
+        'warning-dark': '#664D03',
+        'error-light': '#F8D7DA',
+        'error-dark': '#842029',
       },
       spacing: {
         0: '0px',
