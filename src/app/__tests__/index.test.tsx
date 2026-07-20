@@ -43,18 +43,27 @@ describe('HomeScreen (src/app/index.tsx)', () => {
       expect(fs.existsSync(filePath)).toBe(true);
     });
 
-    it('component uses Screen component from shared/components', () => {
+    it('component uses ServerHomeScreen from features/server (T-204)', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('ServerHomeScreen');
+      expect(fileContent).toContain('features/server');
+    });
+
+    it('ServerHomeScreen uses Screen component from shared/components', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('Screen');
       expect(fileContent).toContain('shared/components');
     });
 
-    it('component uses View and Text from react-native', () => {
+    it('ServerHomeScreen uses View and Text from react-native', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('View');
@@ -63,40 +72,42 @@ describe('HomeScreen (src/app/index.tsx)', () => {
   });
 
   describe('Content Verification', () => {
-    it('displays text "Transfer Files - Home"', () => {
+    it('ServerHomeScreen is the main UI component (delegated from HomeScreen)', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('Transfer Files - Home');
+      expect(fileContent).toContain('return <ServerHomeScreen');
     });
 
-    it('text is rendered in a Text component', () => {
+    it('ServerHomeScreen handles server state rendering', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
-      expect(fileContent).toMatch(/<Text[\s\S]*?Transfer Files - Home[\s\S]*?<\/Text>/);
+      expect(fileContent).toContain('serverInfo.status');
+      expect(fileContent).toContain('idle');
+      expect(fileContent).toContain('running');
     });
   });
 
   describe('Theme Support Verification', () => {
-    it('delegates theme handling to Screen component', () => {
+    it('delegates theme handling through ServerHomeScreen', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('Screen');
-      expect(fileContent).toContain('shared/components');
+      expect(fileContent).toContain('dark:');
+      expect(fileContent).toContain('className');
     });
 
-    it('uses useEffect hook properly', () => {
+    it('uses useEffect hook for splash screen lifecycle', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('useEffect');
-      expect(fileContent).toContain('[]');
+      expect(fileContent).toContain('expo-splash-screen');
     });
 
     it('component is properly structured', () => {
@@ -137,50 +148,43 @@ describe('HomeScreen (src/app/index.tsx)', () => {
   });
 
   describe('Styling Verification', () => {
-    it('uses NativeWind className for styling', () => {
+    it('ServerHomeScreen uses NativeWind className for styling', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('className');
     });
 
-    it('uses flex-1 class for full height', () => {
+    it('ServerHomeScreen uses flex-1 class for full height', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('flex-1');
     });
 
-    it('uses justify-center and items-center for centering', () => {
+    it('ServerHomeScreen uses styling classes for layout', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('justify-center');
-      expect(fileContent).toContain('items-center');
+      expect(fileContent).toContain('px-');
+      expect(fileContent).toContain('py-');
     });
 
-    it('uses text-2xl for large text', () => {
+    it('ServerHomeScreen uses responsive text sizing', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('text-2xl');
+      expect(fileContent).toContain('text-');
+      expect(fileContent).toContain('font-');
     });
 
-    it('uses font-bold for bold text', () => {
+    it('ServerHomeScreen does not use StyleSheet.create', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
-        'utf-8',
-      );
-      expect(fileContent).toContain('font-bold');
-    });
-
-    it('does not use StyleSheet.create', () => {
-      const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).not.toContain('StyleSheet.create');
@@ -188,16 +192,6 @@ describe('HomeScreen (src/app/index.tsx)', () => {
   });
 
   describe('Dependencies and Imports', () => {
-    it('imports View and Text from react-native', () => {
-      const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../index.tsx'),
-        'utf-8',
-      );
-      expect(fileContent).toContain("from 'react-native'");
-      expect(fileContent).toContain('View');
-      expect(fileContent).toContain('Text');
-    });
-
     it('imports useEffect from react', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
@@ -207,26 +201,33 @@ describe('HomeScreen (src/app/index.tsx)', () => {
       expect(fileContent).toContain('useEffect');
     });
 
-    it('imports Screen from shared/components', () => {
+    it('imports SplashScreen', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('Screen');
-      expect(fileContent).toContain('shared/components');
+      expect(fileContent).toContain('expo-splash-screen');
+      expect(fileContent).toContain('SplashScreen');
     });
 
-    it('all required imports are present', () => {
+    it('imports ServerHomeScreen from features/server', () => {
       const fileContent = require('fs').readFileSync(
         require('path').join(__dirname, '../index.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('ServerHomeScreen');
+      expect(fileContent).toContain('features/server');
+    });
+
+    it('ServerHomeScreen imports React Native components', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('import');
       expect(fileContent).toContain('View');
       expect(fileContent).toContain('Text');
-      expect(fileContent).toContain('useEffect');
-      expect(fileContent).toContain('SplashScreen');
-      expect(fileContent).toContain('Screen');
+      expect(fileContent).toContain('react-native');
     });
   });
 
@@ -301,12 +302,25 @@ describe('HomeScreen (src/app/index.tsx)', () => {
         'utf-8',
       );
 
+      // Verify key elements
+      expect(fileContent).toContain('ServerHomeScreen');
+      expect(fileContent).toContain('useEffect');
+      expect(fileContent).toContain('SplashScreen');
+      expect(fileContent).toContain('export default');
+    });
+
+    it('ServerHomeScreen has complete structure', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        'utf-8',
+      );
+
       // Verify all key components are present
       expect(fileContent).toContain('Screen');
       expect(fileContent).toContain('View');
       expect(fileContent).toContain('Text');
-      expect(fileContent).toContain('Transfer Files - Home');
-      expect(fileContent).toContain('export default');
+      expect(fileContent).toContain('Button');
+      expect(fileContent).toContain('Card');
     });
 
     it('file has no obvious code quality issues', () => {

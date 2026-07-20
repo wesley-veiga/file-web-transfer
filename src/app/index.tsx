@@ -1,23 +1,22 @@
-import { View, Text } from 'react-native';
 import { useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
-import { Screen } from '@/shared/components';
+import { ServerHomeScreen } from '@/features/server/components';
 
 export default function HomeScreen() {
   useEffect(() => {
     const hideSplash = async () => {
-      await SplashScreen.hideAsync();
+      try {
+        await SplashScreen.hideAsync();
+      } catch {
+        // Ignora falha ao esconder a splash screen: não deve impedir o app de renderizar.
+      }
     };
     hideSplash();
   }, []);
 
-  return (
-    <Screen>
-      <View className="flex-1 justify-center items-center">
-        <Text className="text-2xl font-bold text-text-light dark:text-text-dark">
-          Transfer Files - Home
-        </Text>
-      </View>
-    </Screen>
-  );
+  const handleCreateNetworkPress = () => {
+    // TODO(#208): Implementar fluxo de criação de rede
+  };
+
+  return <ServerHomeScreen onCreateNetworkPress={handleCreateNetworkPress} />;
 }

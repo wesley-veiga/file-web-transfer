@@ -90,15 +90,19 @@ describe('T-001 Bootstrap - Integration', () => {
   });
 
   describe('Home Screen Content', () => {
-    it('Home screen contains placeholder text', () => {
+    it('Home screen uses ServerHomeScreen component (T-204)', () => {
       const indexPath = path.join(process.cwd(), 'src/app/index.tsx');
       const content = fs.readFileSync(indexPath, 'utf-8');
-      expect(content).toContain('Transfer Files - Home');
+      expect(content).toContain('ServerHomeScreen');
+      expect(content).toContain('features/server');
     });
 
-    it('Home screen uses Screen component from shared/components', () => {
-      const indexPath = path.join(process.cwd(), 'src/app/index.tsx');
-      const content = fs.readFileSync(indexPath, 'utf-8');
+    it('ServerHomeScreen uses Screen component from shared/components', () => {
+      const screenHomePath = path.join(
+        process.cwd(),
+        'src/features/server/components/ServerHomeScreen.tsx',
+      );
+      const content = fs.readFileSync(screenHomePath, 'utf-8');
       expect(content).toContain('Screen');
       expect(content).toContain('shared/components');
     });

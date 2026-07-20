@@ -12,6 +12,14 @@ jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn(() => Promise.resolve()),
 }));
 
+// Mock react-native-qrcode-svg for unit tests
+jest.mock(
+  'react-native-qrcode-svg',
+  () =>
+    ({ value, size }: any) =>
+      React.createElement('MockQRCode', { 'data-testid': 'qrcode', value, size }),
+);
+
 // Mock react-native-safe-area-context to allow rendering
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children, className, style, ...props }: any) =>
@@ -37,6 +45,12 @@ jest.mock('react-native', () => {
     View: ({ children, ...props }: any) => React.createElement('View', props, children),
     Text: ({ children, ...props }: any) => React.createElement('Text', props, children),
     Pressable: ({ children, ...props }: any) => React.createElement('Pressable', props, children),
+    ScrollView: ({ children, ...props }: any) => React.createElement('ScrollView', props, children),
+    ActivityIndicator: ({ size, color }: any) =>
+      React.createElement('ActivityIndicator', { size, color }),
+    Alert: {
+      alert: jest.fn(),
+    },
     StyleSheet: {
       create: (styles: any) => styles,
       flatten: (styles: any) => {
