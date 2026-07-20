@@ -37,24 +37,22 @@ describe('useNetworkStatus (T-204)', () => {
     mockGetNetworkStateAsync.mockResolvedValue({
       isConnected: true,
       isInternetReachable: true,
-      type: 'wifi',
+      type: Network.NetworkStateType.WIFI,
       ssid: 'TestNetwork',
-    });
+    } as Network.NetworkState);
 
-    mockAddNetworkStateListener.mockImplementation(
-      (
-        callback: (state: {
-          isConnected: boolean | null;
-          type?: string;
-          ssid?: string | number;
-        }) => void,
-      ) => {
-        capturedListener = callback;
-        return {
-          remove: mockListenerRemove,
-        };
-      },
-    );
+    mockAddNetworkStateListener.mockImplementation(((
+      callback: (state: {
+        isConnected: boolean | null;
+        type?: string;
+        ssid?: string | number;
+      }) => void,
+    ) => {
+      capturedListener = callback;
+      return {
+        remove: mockListenerRemove,
+      };
+    }) as unknown as typeof Network.addNetworkStateListener);
   });
 
   describe('Hook initialization', () => {
@@ -82,9 +80,9 @@ describe('useNetworkStatus (T-204)', () => {
     it('updates with WiFi network info', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
-        type: 'wifi',
+        type: Network.NetworkStateType.WIFI,
         ssid: 'HomeWiFi',
-      });
+      } as Network.NetworkState);
 
       const { result } = await renderHook(() => useNetworkStatus());
 
@@ -99,7 +97,7 @@ describe('useNetworkStatus (T-204)', () => {
     it('updates with disconnected state', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: false,
-        type: 'none',
+        type: Network.NetworkStateType.NONE,
       });
 
       const { result } = await renderHook(() => useNetworkStatus());
@@ -114,7 +112,7 @@ describe('useNetworkStatus (T-204)', () => {
     it('handles missing SSID', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
-        type: 'wifi',
+        type: Network.NetworkStateType.WIFI,
       });
 
       const { result } = await renderHook(() => useNetworkStatus());
@@ -129,9 +127,9 @@ describe('useNetworkStatus (T-204)', () => {
     it('treats empty SSID as null', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
-        type: 'wifi',
+        type: Network.NetworkStateType.WIFI,
         ssid: '',
-      });
+      } as Network.NetworkState);
 
       const { result } = await renderHook(() => useNetworkStatus());
 
@@ -145,9 +143,9 @@ describe('useNetworkStatus (T-204)', () => {
     it('converts numeric SSID to string', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
-        type: 'wifi',
+        type: Network.NetworkStateType.WIFI,
         ssid: 123 as unknown as string | number,
-      });
+      } as Network.NetworkState);
 
       const { result } = await renderHook(() => useNetworkStatus());
 
@@ -162,9 +160,9 @@ describe('useNetworkStatus (T-204)', () => {
       const ssid = 'Café-WiFi-😊';
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
-        type: 'wifi',
+        type: Network.NetworkStateType.WIFI,
         ssid,
-      });
+      } as Network.NetworkState);
 
       const { result } = await renderHook(() => useNetworkStatus());
 
@@ -178,7 +176,7 @@ describe('useNetworkStatus (T-204)', () => {
     it('handles undefined isConnected', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: undefined,
-        type: 'none',
+        type: Network.NetworkStateType.NONE,
       });
 
       const { result } = await renderHook(() => useNetworkStatus());
@@ -193,8 +191,8 @@ describe('useNetworkStatus (T-204)', () => {
     it('handles null isConnected', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: null,
-        type: 'none',
-      });
+        type: Network.NetworkStateType.NONE,
+      } as unknown as Network.NetworkState);
 
       const { result } = await renderHook(() => useNetworkStatus());
 
@@ -339,7 +337,6 @@ describe('useNetworkStatus (T-204)', () => {
           act(() => {
             capturedListener!({
               isConnected: 'invalid' as unknown as boolean,
-              type: null,
             });
           });
         }).not.toThrow();
@@ -386,10 +383,10 @@ describe('useNetworkStatus (T-204)', () => {
     it('handles network state with extra properties', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
-        type: 'wifi',
+        type: Network.NetworkStateType.WIFI,
         ssid: 'Test',
         extra: 'ignored',
-      });
+      } as Network.NetworkState);
 
       const { result } = await renderHook(() => useNetworkStatus());
 
@@ -403,9 +400,9 @@ describe('useNetworkStatus (T-204)', () => {
     it('handles numeric 0 as SSID', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
-        type: 'wifi',
+        type: Network.NetworkStateType.WIFI,
         ssid: 0 as unknown as number,
-      });
+      } as Network.NetworkState);
 
       const { result } = await renderHook(() => useNetworkStatus());
 
@@ -420,9 +417,9 @@ describe('useNetworkStatus (T-204)', () => {
       const longSsid = 'A'.repeat(255);
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
-        type: 'wifi',
+        type: Network.NetworkStateType.WIFI,
         ssid: longSsid,
-      });
+      } as Network.NetworkState);
 
       const { result } = await renderHook(() => useNetworkStatus());
 
@@ -445,9 +442,9 @@ describe('useNetworkStatus (T-204)', () => {
     it('line 29: updates state in try block when mounted during resolution', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
-        type: 'wifi',
+        type: Network.NetworkStateType.WIFI,
         ssid: 'SuccessNetwork',
-      });
+      } as Network.NetworkState);
 
       const { result } = await renderHook(() => useNetworkStatus());
 
@@ -476,9 +473,9 @@ describe('useNetworkStatus (T-204)', () => {
     it('line 50: listener updates state when mounted via callback', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
-        type: 'wifi',
+        type: Network.NetworkStateType.WIFI,
         ssid: 'Initial',
-      });
+      } as Network.NetworkState);
 
       const { result } = await renderHook(() => useNetworkStatus());
 
