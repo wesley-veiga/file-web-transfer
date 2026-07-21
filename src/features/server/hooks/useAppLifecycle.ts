@@ -78,6 +78,7 @@ export function useAppLifecycle(
           try {
             const serverService = createServerService(httpModule);
             await serverService.stop();
+            useServerStore.getState().stopRequested();
             useServerStore.getState().stopped();
 
             // Descartar notificação

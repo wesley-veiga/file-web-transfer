@@ -2,13 +2,15 @@
  * Tests for useAppLifecycle hook.
  *
  * Tests verify:
- * - Hook can be called with various dependency configurations
- * - Hook properly integrates with serverStore and notification service
- * - Error handling for notification operations
- * - Notification lifecycle (show on server running, dismiss on server stop)
+ * - Persistent notification shown when server transitions to `running`
+ * - Notification dismissed when server leaves `running`
+ * - AppState transition to background stops the running server and dismisses the notification
+ * - AppState transition to background is a no-op when the server is not running
+ * - Errors from notification/server-stop calls are swallowed (logged, not thrown)
  */
 
-import { renderHook } from '@testing-library/react-native';
+import { AppState } from 'react-native';
+import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useAppLifecycle } from '../useAppLifecycle';
 import { useServerStore } from '../../store/serverStore';
 import { createServerService } from '../../services/serverServiceFactory';
@@ -19,14 +21,23 @@ import type { HttpModule } from '../../services/httpModule';
 jest.mock('../../services/serverServiceFactory');
 jest.mock('../../services/notificationService');
 
+function getAppStateChangeHandler(): (status: string) => void {
+  const calls = (AppState.addEventListener as jest.Mock).mock.calls;
+  const changeCall = calls.find(([event]) => event === 'change');
+  if (!changeCall) {
+    throw new Error('AppState "change" listener was not registered');
+  }
+  return changeCall[1];
+}
+
 describe('useAppLifecycle', () => {
-  let mockNotificationService: Partial<NotificationService>;
-  let mockHttpModule: Partial<HttpModule>;
+  let mockNotificationService: jest.Mocked<NotificationService>;
+  let mockServerServiceInstance: { stop: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    useServerStore.getState().reset();
 
-    // Setup mock notification service
     mockNotificationService = {
       requestPermission: jest.fn().mockResolvedValue(true),
       showPersistentNotification: jest.fn().mockResolvedValue('notification-id-123'),
@@ -34,99 +45,208 @@ describe('useAppLifecycle', () => {
       dismissAllNotifications: jest.fn().mockResolvedValue(undefined),
     };
 
-    // Setup mock http module
-    mockHttpModule = {
-      start: jest.fn().mockResolvedValue(undefined),
+    mockServerServiceInstance = {
       stop: jest.fn().mockResolvedValue(undefined),
-      isRunning: jest.fn().mockReturnValue(true),
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
     };
 
-    // Mock createNotificationService to return our mock
-    (createNotificationService as jest.Mock).mockImplementation(
-      (service) => service || mockNotificationService,
-    );
-
-    // Mock createServerService to return our mock
-    (createServerService as jest.Mock).mockImplementation(() => ({
-      stop: jest.fn().mockResolvedValue(undefined),
-    }));
-
-    // Reset server store to idle state
-    useServerStore.getState().reset();
+    (createNotificationService as jest.Mock).mockReturnValue(mockNotificationService);
+    (createServerService as jest.Mock).mockReturnValue(mockServerServiceInstance);
   });
 
-  it('should initialize without errors with all dependencies', () => {
-    expect(() => {
-      renderHook(() =>
-        useAppLifecycle(
-          mockHttpModule as HttpModule,
-          mockNotificationService as NotificationService,
-        ),
+  const startServer = async () => {
+    await act(async () => {
+      useServerStore.getState().startRequested();
+      useServerStore.getState().started({
+        ip: '192.168.1.100',
+        port: 8080,
+        url: 'http://192.168.1.100:8080',
+        sessionId: 'test-123',
+        networkMode: 'wifi',
+      });
+    });
+  };
+
+  it('shows a persistent notification when the server starts running', async () => {
+    await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
+
+    await startServer();
+
+    await waitFor(() => {
+      expect(mockNotificationService.requestPermission).toHaveBeenCalled();
+      expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+    });
+  });
+
+  it('does not request a second notification while already running', async () => {
+    await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
+
+    await startServer();
+
+    await waitFor(() => {
+      expect(mockNotificationService.showPersistentNotification).toHaveBeenCalledTimes(1);
+    });
+
+    // A no-op re-render with the same running status should not show a second notification
+    await act(async () => {
+      useServerStore.getState().started({ sessionId: 'test-123' });
+    });
+
+    expect(mockNotificationService.showPersistentNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('dismisses the notification when the server stops', async () => {
+    await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
+
+    await startServer();
+
+    await waitFor(() => {
+      expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      useServerStore.getState().stopRequested();
+      useServerStore.getState().stopped();
+    });
+
+    await waitFor(() => {
+      expect(mockNotificationService.dismissNotification).toHaveBeenCalledWith(
+        'notification-id-123',
       );
-    }).not.toThrow();
+    });
   });
 
-  it('should initialize without errors without dependencies', () => {
-    expect(() => {
-      renderHook(() => useAppLifecycle());
-    }).not.toThrow();
+  it('logs and swallows errors when showing the notification fails', async () => {
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockNotificationService.requestPermission.mockRejectedValueOnce(new Error('denied'));
+
+    await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
+
+    await startServer();
+
+    await waitFor(() => {
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[useAppLifecycle] Erro ao mostrar notificação:',
+        expect.any(Error),
+      );
+    });
+
+    consoleWarnSpy.mockRestore();
   });
 
-  it('should initialize with only httpModule', () => {
-    expect(() => {
-      renderHook(() => useAppLifecycle(mockHttpModule as HttpModule));
-    }).not.toThrow();
+  it('logs and swallows errors when dismissing the notification fails', async () => {
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockNotificationService.dismissNotification.mockRejectedValueOnce(new Error('failed'));
+
+    await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
+
+    await startServer();
+
+    await waitFor(() => {
+      expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      useServerStore.getState().stopRequested();
+      useServerStore.getState().stopped();
+    });
+
+    await waitFor(() => {
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[useAppLifecycle] Erro ao descartar notificação:',
+        expect.any(Error),
+      );
+    });
+
+    consoleWarnSpy.mockRestore();
   });
 
-  it('should initialize with only notificationService', () => {
-    expect(() => {
-      renderHook(() => useAppLifecycle(undefined, mockNotificationService as NotificationService));
-    }).not.toThrow();
+  it('stops the running server and dismisses the notification when the app goes to background', async () => {
+    await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
+
+    await startServer();
+    await waitFor(() => {
+      expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+    });
+
+    const handleAppStateChange = getAppStateChangeHandler();
+
+    await act(async () => {
+      await handleAppStateChange('background');
+    });
+
+    expect(createServerService).toHaveBeenCalled();
+    expect(mockServerServiceInstance.stop).toHaveBeenCalled();
+    expect(useServerStore.getState().serverInfo.status).toBe('idle');
+    expect(mockNotificationService.dismissNotification).toHaveBeenCalledWith('notification-id-123');
   });
 
-  it('should accept all combination of parameters', () => {
-    // No parameters
-    expect(() => renderHook(() => useAppLifecycle())).not.toThrow();
+  it('does nothing when the app goes to background and the server is not running', async () => {
+    await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
 
-    // Only httpModule
-    expect(() => renderHook(() => useAppLifecycle(mockHttpModule as HttpModule))).not.toThrow();
+    const handleAppStateChange = getAppStateChangeHandler();
 
-    // Only notificationService
-    expect(() =>
-      renderHook(() => useAppLifecycle(undefined, mockNotificationService as NotificationService)),
-    ).not.toThrow();
+    await act(async () => {
+      await handleAppStateChange('background');
+    });
 
-    // Both parameters
-    expect(() =>
-      renderHook(() =>
-        useAppLifecycle(
-          mockHttpModule as HttpModule,
-          mockNotificationService as NotificationService,
-        ),
-      ),
-    ).not.toThrow();
+    expect(mockServerServiceInstance.stop).not.toHaveBeenCalled();
   });
 
-  it('should use custom notification service if provided', () => {
-    const customService: Partial<NotificationService> = {
-      requestPermission: jest.fn().mockResolvedValue(true),
-      showPersistentNotification: jest.fn(),
-      dismissNotification: jest.fn(),
-      dismissAllNotifications: jest.fn(),
-    };
+  it('does not stop the server again on repeated background transitions', async () => {
+    await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
 
-    (createNotificationService as jest.Mock).mockImplementation(
-      (service) => service || mockNotificationService,
+    await startServer();
+    await waitFor(() => {
+      expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+    });
+
+    const handleAppStateChange = getAppStateChangeHandler();
+
+    await act(async () => {
+      await handleAppStateChange('inactive');
+      await handleAppStateChange('background');
+    });
+
+    expect(mockServerServiceInstance.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs an error when stopping the server on backgrounding fails', async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockServerServiceInstance.stop.mockRejectedValueOnce(new Error('stop failed'));
+
+    await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
+
+    await startServer();
+    await waitFor(() => {
+      expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+    });
+
+    const handleAppStateChange = getAppStateChangeHandler();
+
+    await act(async () => {
+      await handleAppStateChange('background');
+    });
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[useAppLifecycle] Erro ao parar servidor na saída do app:',
+      expect.any(Error),
     );
 
-    expect(() => {
-      renderHook(() => useAppLifecycle(undefined, customService as NotificationService));
-    }).not.toThrow();
+    consoleErrorSpy.mockRestore();
   });
 
-  it('should use custom http module if provided', () => {
+  it('removes the AppState subscription on unmount', async () => {
+    const removeSpy = jest.fn();
+    (AppState.addEventListener as jest.Mock).mockReturnValueOnce({ remove: removeSpy });
+
+    const { unmount } = await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
+
+    await unmount();
+
+    expect(removeSpy).toHaveBeenCalled();
+  });
+
+  it('creates the server service with the injected http module', async () => {
     const customModule: Partial<HttpModule> = {
       start: jest.fn(),
       stop: jest.fn(),
@@ -135,132 +255,29 @@ describe('useAppLifecycle', () => {
       removeListener: jest.fn(),
     };
 
-    expect(() => {
-      renderHook(() => useAppLifecycle(customModule as HttpModule));
-    }).not.toThrow();
-  });
+    await renderHook(() => useAppLifecycle(customModule as HttpModule, mockNotificationService));
 
-  it('should handle undefined dependencies gracefully', () => {
-    // Should use factory functions to create defaults
-    expect(() => {
-      renderHook(() => useAppLifecycle());
-    }).not.toThrow();
-  });
-
-  it('should accept NotificationService with all required methods', () => {
-    const completeService: NotificationService = {
-      requestPermission: jest.fn().mockResolvedValue(true),
-      showPersistentNotification: jest.fn().mockResolvedValue('id'),
-      dismissNotification: jest.fn().mockResolvedValue(undefined),
-      dismissAllNotifications: jest.fn().mockResolvedValue(undefined),
-    };
-
-    expect(() => {
-      renderHook(() => useAppLifecycle(undefined, completeService));
-    }).not.toThrow();
-  });
-
-  it('should accept HttpModule with all required methods', () => {
-    const completeModule: HttpModule = {
-      start: jest.fn().mockResolvedValue(undefined),
-      stop: jest.fn().mockResolvedValue(undefined),
-      isRunning: jest.fn().mockReturnValue(false),
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-    };
-
-    expect(() => {
-      renderHook(() => useAppLifecycle(completeModule));
-    }).not.toThrow();
-  });
-
-  it('should work with mock services having all required functionality', () => {
-    const mockService: NotificationService = {
-      requestPermission: jest.fn(async () => true),
-      showPersistentNotification: jest.fn(async () => 'mock-id'),
-      dismissNotification: jest.fn(async () => {}),
-      dismissAllNotifications: jest.fn(async () => {}),
-    };
-
-    (createNotificationService as jest.Mock).mockReturnValue(mockService);
-
-    expect(() => {
-      renderHook(() => useAppLifecycle(undefined, mockService));
-    }).not.toThrow();
-  });
-
-  it('should handle server store properly', () => {
-    renderHook(() => useAppLifecycle());
-
-    const storeState = useServerStore.getState();
-    expect(storeState.serverInfo).toBeDefined();
-  });
-
-  it('should work after server store changes', () => {
-    renderHook(() => useAppLifecycle());
-
-    // Simulate server state changes
-    useServerStore.getState().startRequested();
-    expect(useServerStore.getState().serverInfo.status).toBe('starting');
-
-    useServerStore.getState().reset();
-    expect(useServerStore.getState().serverInfo.status).toBe('idle');
-  });
-
-  describe('server state transitions', () => {
-    it('should handle server starting and stopping', () => {
-      renderHook(() =>
-        useAppLifecycle(
-          mockHttpModule as HttpModule,
-          mockNotificationService as NotificationService,
-        ),
-      );
-
-      // Simulate starting the server
-      useServerStore.getState().startRequested();
-      expect(useServerStore.getState().serverInfo.status).toBe('starting');
-
-      useServerStore.getState().started({
-        ip: '192.168.1.100',
-        port: 8080,
-        url: 'http://192.168.1.100:8080',
-        sessionId: 'test-123',
-        networkMode: 'wifi',
-      });
-      expect(useServerStore.getState().serverInfo.status).toBe('running');
-
-      // Stop the server
-      useServerStore.getState().stopRequested();
-      expect(useServerStore.getState().serverInfo.status).toBe('stopping');
-
-      useServerStore.getState().stopped();
-      expect(useServerStore.getState().serverInfo.status).toBe('idle');
+    await startServer();
+    await waitFor(() => {
+      expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
     });
 
-    it('should handle error state properly', () => {
-      renderHook(() =>
-        useAppLifecycle(
-          mockHttpModule as HttpModule,
-          mockNotificationService as NotificationService,
-        ),
-      );
+    const handleAppStateChange = getAppStateChangeHandler();
 
-      useServerStore.getState().startRequested();
-      useServerStore.getState().started({
-        ip: '192.168.1.100',
-        port: 8080,
-        url: 'http://192.168.1.100:8080',
-        sessionId: 'test-123',
-        networkMode: 'wifi',
-      });
+    await act(async () => {
+      await handleAppStateChange('background');
+    });
 
-      // Transition to error state
-      useServerStore.getState().failed({
-        code: 'PORT_UNAVAILABLE',
-        message: 'Port not available',
-      });
+    expect(createServerService).toHaveBeenCalledWith(customModule);
+  });
 
-      expect(useServerStore.getState().serverInfo.status).toBe('error');
+  it('falls back to the default notification service when none is injected', async () => {
+    await renderHook(() => useAppLifecycle());
+
+    await startServer();
+
+    await waitFor(() => {
+      expect(createNotificationService).toHaveBeenCalledWith(undefined);
     });
   });
 });

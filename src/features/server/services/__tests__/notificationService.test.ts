@@ -6,7 +6,23 @@ import { NotificationServiceImpl, createNotificationService } from '../notificat
 jest.mock('expo-notifications');
 jest.mock('expo-device');
 
+// Captured at module-import time, before any `beforeEach` clears the mock's call history.
+const notificationHandlerConfig = (Notifications.setNotificationHandler as jest.Mock).mock
+  .calls[0][0];
+
 describe('NotificationService', () => {
+  describe('setNotificationHandler (module scope)', () => {
+    it('configures the foreground handler to always show the alert', async () => {
+      await expect(notificationHandlerConfig.handleNotification()).resolves.toEqual({
+        shouldShowAlert: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      });
+    });
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     // Reset Platform.OS to default
@@ -22,16 +38,21 @@ describe('NotificationService', () => {
     });
 
     describe('requestPermission', () => {
+      afterEach(() => {
+        (Device as { isDevice: boolean }).isDevice = true;
+      });
+
       it('should return true when not on a device (web/desktop)', async () => {
-        (Device.isDevice as unknown as jest.Mock).mockReturnValue(false);
+        (Device as { isDevice: boolean }).isDevice = false;
 
         const result = await service.requestPermission();
 
         expect(result).toBe(true);
+        expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
       });
 
       it('should return true on Android (no runtime permission needed)', async () => {
-        (Device.isDevice as unknown as jest.Mock).mockReturnValue(true);
+        (Device as { isDevice: boolean }).isDevice = true;
         const platformWithOS = Platform as { OS: string };
         platformWithOS.OS = 'android';
 
@@ -43,7 +64,7 @@ describe('NotificationService', () => {
       });
 
       it('should request iOS permission when permissions granted', async () => {
-        (Device.isDevice as unknown as jest.Mock).mockReturnValue(true);
+        (Device as { isDevice: boolean }).isDevice = true;
         const platformWithOS = Platform as { OS: string };
         platformWithOS.OS = 'ios';
         (Notifications.requestPermissionsAsync as jest.Mock).mockResolvedValue({
@@ -63,7 +84,7 @@ describe('NotificationService', () => {
       });
 
       it('should return false on iOS when permissions denied', async () => {
-        (Device.isDevice as unknown as jest.Mock).mockReturnValue(true);
+        (Device as { isDevice: boolean }).isDevice = true;
         const platformWithOS = Platform as { OS: string };
         platformWithOS.OS = 'ios';
         (Notifications.requestPermissionsAsync as jest.Mock).mockResolvedValue({
@@ -77,7 +98,7 @@ describe('NotificationService', () => {
       });
 
       it('should handle iOS permission request errors', async () => {
-        (Device.isDevice as unknown as jest.Mock).mockReturnValue(true);
+        (Device as { isDevice: boolean }).isDevice = true;
         const platformWithOS = Platform as { OS: string };
         platformWithOS.OS = 'ios';
         const error = new Error('Permission request failed');

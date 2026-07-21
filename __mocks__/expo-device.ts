@@ -1,1 +1,1 @@
-export const isDevice = jest.fn(() => false);
+export const isDevice = true;
