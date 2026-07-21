@@ -9,6 +9,9 @@ jest.mock('expo-device');
 describe('NotificationService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset Platform.OS to default
+    const platformWithOS = Platform as { OS: string };
+    platformWithOS.OS = 'android';
   });
 
   describe('NotificationServiceImpl', () => {
@@ -29,8 +32,8 @@ describe('NotificationService', () => {
 
       it('should return true on Android (no runtime permission needed)', async () => {
         (Device.isDevice as unknown as jest.Mock).mockReturnValue(true);
-        // Note: Platform.OS is not easily mockable in tests, so we rely on Android being the default
-        // when Device.isDevice is true and we don't call requestPermissionsAsync
+        const platformWithOS = Platform as { OS: string };
+        platformWithOS.OS = 'android';
 
         const result = await service.requestPermission();
 
@@ -41,32 +44,46 @@ describe('NotificationService', () => {
 
       it('should request iOS permission when permissions granted', async () => {
         (Device.isDevice as unknown as jest.Mock).mockReturnValue(true);
+        const platformWithOS = Platform as { OS: string };
+        platformWithOS.OS = 'ios';
         (Notifications.requestPermissionsAsync as jest.Mock).mockResolvedValue({
           status: 'granted',
         });
 
-        // Manually test iOS logic by calling requestPermissionsAsync
-        (Notifications.requestPermissionsAsync as jest.Mock).mockClear();
-        (Notifications.requestPermissionsAsync as jest.Mock).mockResolvedValue({
-          status: 'granted',
+        const result = await service.requestPermission();
+
+        expect(result).toBe(true);
+        expect(Notifications.requestPermissionsAsync).toHaveBeenCalledWith({
+          ios: {
+            allowAlert: true,
+            allowBadge: true,
+            allowSound: false,
+          },
         });
-
-        await service.requestPermission();
-
-        // At least call the service and verify it handles responses
-        if (Platform.OS === 'ios') {
-          expect(Notifications.requestPermissionsAsync).toHaveBeenCalled();
-        }
       });
 
-      it('should handle permission grant/denial', async () => {
+      it('should return false on iOS when permissions denied', async () => {
+        (Device.isDevice as unknown as jest.Mock).mockReturnValue(true);
+        const platformWithOS = Platform as { OS: string };
+        platformWithOS.OS = 'ios';
         (Notifications.requestPermissionsAsync as jest.Mock).mockResolvedValue({
-          status: 'granted',
+          status: 'denied',
         });
 
-        const result = await Notifications.requestPermissionsAsync();
+        const result = await service.requestPermission();
 
-        expect(result.status).toBe('granted');
+        expect(result).toBe(false);
+        expect(Notifications.requestPermissionsAsync).toHaveBeenCalled();
+      });
+
+      it('should handle iOS permission request errors', async () => {
+        (Device.isDevice as unknown as jest.Mock).mockReturnValue(true);
+        const platformWithOS = Platform as { OS: string };
+        platformWithOS.OS = 'ios';
+        const error = new Error('Permission request failed');
+        (Notifications.requestPermissionsAsync as jest.Mock).mockRejectedValue(error);
+
+        await expect(service.requestPermission()).rejects.toThrow('Permission request failed');
       });
     });
 
@@ -97,6 +114,16 @@ describe('NotificationService', () => {
 
         await expect(service.showPersistentNotification()).rejects.toThrow('Schedule failed');
       });
+
+      it('should return notification ID as string', async () => {
+        const notificationId = 'unique-id-12345';
+        (Notifications.scheduleNotificationAsync as jest.Mock).mockResolvedValue(notificationId);
+
+        const result = await service.showPersistentNotification();
+
+        expect(typeof result).toBe('string');
+        expect(result).toBe(notificationId);
+      });
     });
 
     describe('dismissNotification', () => {
@@ -111,7 +138,7 @@ describe('NotificationService', () => {
       it('should handle dismiss errors gracefully', async () => {
         const notificationId = 'test-id';
         const error = new Error('Dismiss failed');
-        (Notifications.dismissNotificationAsync as jest.Mock).mockRejectedValue(error);
+        (Notifications.dismissNotificationAsync as jest.Mock).mockRejectedValueOnce(error);
 
         await expect(service.dismissNotification(notificationId)).rejects.toThrow('Dismiss failed');
       });
@@ -122,6 +149,13 @@ describe('NotificationService', () => {
         await service.dismissAllNotifications();
 
         expect(Notifications.dismissAllNotificationsAsync).toHaveBeenCalled();
+      });
+
+      it('should handle dismissAllNotifications errors', async () => {
+        const error = new Error('Dismiss all failed');
+        (Notifications.dismissAllNotificationsAsync as jest.Mock).mockRejectedValue(error);
+
+        await expect(service.dismissAllNotifications()).rejects.toThrow('Dismiss all failed');
       });
     });
   });
@@ -162,6 +196,11 @@ describe('NotificationService', () => {
 
       expect(service).toBe(mockService);
       expect(service).not.toBeInstanceOf(NotificationServiceImpl);
+    });
+
+    it('should return NotificationServiceImpl when no service provided and not cached', () => {
+      const service = createNotificationService();
+      expect(service).toBeInstanceOf(NotificationServiceImpl);
     });
   });
 });
