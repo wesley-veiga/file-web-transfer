@@ -17,11 +17,13 @@ module.exports = {
     },
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(expo|expo-router|expo-splash-screen|expo-font|react-native|@react-native|react-native-screens|react-native-gesture-handler|react-native-reanimated|react-native-web|react-native-safe-area-context)/)',
+    'node_modules/(?!(expo|expo-router|expo-splash-screen|expo-font|expo-notifications|expo-modules-core|expo-device|react-native|@react-native|react-native-screens|react-native-gesture-handler|react-native-reanimated|react-native-web|react-native-safe-area-context)/)',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@/assets/(.*)$': '<rootDir>/assets/$1',
+    '^expo-notifications$': '<rootDir>/__mocks__/expo-notifications.ts',
+    '^expo-device$': '<rootDir>/__mocks__/expo-device.ts',
     '\\.(css|less|scss|sass)$': '<rootDir>/__mocks__/styleMock.js',
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
