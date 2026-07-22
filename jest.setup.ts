@@ -65,6 +65,10 @@ jest.mock('react-native', () => {
       OS: 'web',
       select: (obj: any) => obj.web || obj.default,
     },
+    AppState: {
+      currentState: 'active',
+      addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+    },
     LogBox: {
       ignoreLogs: jest.fn(),
       ignoreAllLogs: jest.fn(),
