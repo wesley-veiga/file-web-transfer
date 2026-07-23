@@ -79,7 +79,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   UI dos estados `idle/starting/running/error` (HU-01, HU-02): botão iniciar/parar, spinner, URL + QR Code + sessionId, mensagens por `ServerErrorCode`, confirmação ao parar com transferências ativas. Estado `idle` sem rede exibe a ação "Criar rede" (fluxo completo na T-208).
   *Pronto quando:* critérios de aceite "Tela Home / Servidor" da spec todos atendidos, com testes de componente por estado.
 
-- [ ] **T-205 · Notificação persistente / ciclo de vida** ⬅ T-204
+- [x] **T-205 · Notificação persistente / ciclo de vida** ⬅ T-204
   Notificação enquanto `running`; encerrar app → para servidor e libera porta (e desliga hotspot criado pelo app, se houver).
   *Pronto quando:* comportamento verificado em Android e iOS.
 
