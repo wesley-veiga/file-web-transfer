@@ -1,15 +1,25 @@
 import { useCallback } from 'react';
 import { useServerStore } from '../store/serverStore';
 import { createServerService } from '../services/serverServiceFactory';
+import { createHotspotService } from '../services/hotspotServiceFactory';
 import { ServerServiceError } from '../services/serverService';
+import { HotspotServiceError } from '../services/hotspotService';
 import type { NetworkMode, ServerErrorCode, ServerError as ServerErrorType } from '../types';
 import type { HttpModule } from '../services/httpModule';
+import type { NativeHotspotModule } from '../services/nativeHotspot';
 
 /**
- * Mapeia erros técnicos (ServerServiceError, Error genérico) para ServerError tipado com mensagem traduzida.
+ * Mapeia erros técnicos (ServerServiceError, HotspotServiceError, Error genérico) para ServerError tipado com mensagem traduzida.
  */
 function mapErrorToServerError(error: unknown): ServerErrorType {
   if (error instanceof ServerServiceError) {
+    return {
+      code: error.code,
+      message: getErrorMessage(error.code),
+    };
+  }
+
+  if (error instanceof HotspotServiceError) {
     return {
       code: error.code,
       message: getErrorMessage(error.code),
@@ -75,7 +85,7 @@ function getErrorMessage(code: ServerErrorCode): string {
  * await act(() => start('wifi'));
  * ```
  */
-export function useServer(httpModule?: HttpModule) {
+export function useServer(httpModule?: HttpModule, nativeModule?: NativeHotspotModule) {
   const store = useServerStore();
 
   const start = useCallback(
@@ -84,6 +94,14 @@ export function useServer(httpModule?: HttpModule) {
       store.startRequested();
 
       try {
+        // Se modo hotspot, criar hotspot primeiro
+        let hotspotInfo = null;
+        if (networkMode === 'hotspot') {
+          const hotspotService = createHotspotService(nativeModule);
+          const hotspotResult = await hotspotService.createHotspot();
+          hotspotInfo = hotspotResult.hotspotInfo;
+        }
+
         // Criar serviço (com injeção opcional para testes)
         const serverService = createServerService(httpModule);
 
@@ -97,6 +115,7 @@ export function useServer(httpModule?: HttpModule) {
           port: result.port,
           url: result.url,
           sessionId: result.sessionId,
+          hotspot: hotspotInfo,
           startedAt: Date.now(),
         });
       } catch (error) {
@@ -109,7 +128,7 @@ export function useServer(httpModule?: HttpModule) {
         throw error;
       }
     },
-    [store, httpModule],
+    [store, httpModule, nativeModule],
   );
 
   const stop = useCallback(async (): Promise<void> => {
@@ -123,6 +142,13 @@ export function useServer(httpModule?: HttpModule) {
       // Parar servidor
       await serverService.stop();
 
+      // Se modo hotspot, desligar hotspot também
+      const currentNetworkMode = store.serverInfo.networkMode;
+      if (currentNetworkMode === 'hotspot') {
+        const hotspotService = createHotspotService(nativeModule);
+        await hotspotService.stopHotspot();
+      }
+
       // Transição: stopping → idle
       store.stopped();
     } catch (error) {
@@ -134,7 +160,7 @@ export function useServer(httpModule?: HttpModule) {
 
       throw error;
     }
-  }, [store, httpModule]);
+  }, [store, httpModule, nativeModule]);
 
   const reset = useCallback(() => {
     store.reset();
