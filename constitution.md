@@ -2,9 +2,9 @@
 
 **Aplicativo mobile de transferência de arquivos entre celulares via rede local**
 
-- **Versão:** 1.1.0
+- **Versão:** 2.0.0
 - **Ratificada em:** 2026-07-16
-- **Última emenda:** 2026-07-16 (Android 14+, modo rede própria/offline, fluxo de branches)
+- **Última emenda:** 2026-08-27 (remoção do modo rede própria/offline — MAJOR: redefinição incompatível da Decisão fundadora "funciona sem internet")
 
 ---
 
@@ -18,10 +18,9 @@ O servidor embarcado É um **servidor HTTP** que serve uma página web de upload
 
 ### Decisão fundadora: funciona sem internet
 
-O app NUNCA depende de internet. Há dois modos de conectividade, ambos obrigatórios:
+O app NUNCA depende de internet. O único modo de conectividade é a **rede Wi-Fi existente**: host e convidado precisam já estar conectados à mesma rede local — o servidor sobe nela.
 
-1. **Mesma rede Wi-Fi:** host e convidado já conectados à mesma rede local — o servidor sobe nela.
-2. **Rede própria (sem nenhuma rede disponível):** o host DEVE conseguir **abrir a própria rede local** pelo app para o convidado se conectar. No Android 14+, via **Local Only Hotspot** (rede criada pelo sistema, sem internet, com SSID/senha exibidos como QR Code Wi-Fi). No iOS, onde a criação programática não é permitida, o app guia a ativação manual do Hotspot Pessoal e detecta a interface ativa automaticamente.
+> **Emenda 2026-08-27:** o modo "rede própria" (o app cria sua própria rede via Local Only Hotspot no Android / orientação de Hotspot Pessoal no iOS) foi **removido** por decisão de produto — despriorizado por complexidade/risco frente ao valor entregue. O app não tenta mais criar rede; sem Wi-Fi disponível, apenas orienta o usuário a conectar-se a uma. Ver `docs/adr/002-rede-propria.md` (status: Rejeitada) e T-209 em `tarefas.md`.
 
 ---
 
@@ -30,8 +29,8 @@ O app NUNCA depende de internet. Há dois modos de conectividade, ambos obrigat�
 ### Princípio I — Simplicidade Radical na Experiência
 
 - A jornada principal DEVE ser completável em no máximo 2 toques: abrir o app → tocar no botão de iniciar servidor.
-- Sem rede disponível NUNCA existe beco sem saída: a ação principal vira "Criar rede" (1 toque adicional) e a jornada segue — o app nunca exibe apenas "sem conexão" sem oferecer o caminho.
-- O app DEVE exibir o endereço de acesso de forma legível **e** como QR Code assim que o servidor iniciar; no modo rede própria, exibir primeiro o QR Code Wi-Fi (entrar na rede) e depois o QR Code do link (acessar).
+- Sem rede disponível, o app orienta claramente o usuário a conectar-se a uma rede Wi-Fi — o botão de iniciar servidor fica desabilitado até haver conectividade.
+- O app DEVE exibir o endereço de acesso de forma legível **e** como QR Code assim que o servidor iniciar.
 - O dispositivo receptor NUNCA precisa de app instalado: a interface web DEVE funcionar em qualquer navegador moderno sem plugins.
 - Funcionalidades que compliquem a jornada principal (contas, login, nuvem) são proibidas sem emenda constitucional.
 
@@ -117,8 +116,7 @@ Regras de dependência (aplicadas por lint, ex.: `eslint-plugin-boundaries`):
 | Estado global | **Zustand** | Leve, testável sem provider; estado de servidor/transferências |
 | Servidor HTTP embarcado | `react-native-http-bridge-refurbished` ou **TcpSocket + implementação própria** | Avaliar na fase de spec; requisito: suportar upload multipart de arquivos grandes (streaming) |
 | Filesystem | `expo-file-system` | Sandbox do app + acesso à galeria via `expo-media-library` |
-| Rede/IP local | `expo-network` | Obter IP na rede Wi-Fi ou na interface do hotspot |
-| Rede própria (offline) | **Local Only Hotspot** (módulo nativo Android via config plugin Expo) | Criar rede sem internet no Android 14+; permissão `NEARBY_WIFI_DEVICES`; avaliar lib existente vs. módulo próprio no spike |
+| Rede/IP local | `expo-network` | Obter IP na rede Wi-Fi atual |
 | QR Code | `react-native-qrcode-svg` | Exibição do link de acesso |
 | Validação runtime | **Zod** | Contratos da API HTTP |
 | Testes | **Jest** + **React Native Testing Library** | Princípio III |
@@ -131,8 +129,8 @@ Trocar qualquer item desta tabela exige emenda constitucional (ver Governança).
 
 ## 4. Restrições e Requisitos Não Funcionais
 
-- **Plataformas:** **Android 14 (API 34) ou superior** — `minSdkVersion = 34` — e iOS (mínimo definido pelo Expo SDK vigente). Nenhuma feature pode ser exclusiva de uma plataforma sem justificativa documentada. *Exceção registrada:* criação programática de rede própria é exclusiva do Android (o iOS não permite; o fluxo iOS guia a ativação manual do Hotspot Pessoal).
-- **Rede:** operação 100% independente de internet. Com rede Wi-Fi disponível, os dispositivos usam essa rede; **sem nenhuma rede, o host DEVE conseguir abrir a própria rede local** (Android: Local Only Hotspot; iOS: Hotspot Pessoal com orientação do app) e servir através dela.
+- **Plataformas:** **Android 14 (API 34) ou superior** — `minSdkVersion = 34` — e iOS (mínimo definido pelo Expo SDK vigente). Nenhuma feature pode ser exclusiva de uma plataforma sem justificativa documentada.
+- **Rede:** operação 100% independente de internet. O servidor sobe na rede Wi-Fi à qual o host já está conectado; sem rede disponível, o app orienta o usuário a conectar-se antes de tentar novamente (não há criação de rede própria pelo app).
 - **Arquivos:** qualquer tipo/extensão; transferências grandes (≥ 1 GB) DEVEM usar streaming — nunca carregar o arquivo inteiro em memória.
 - **Interface web:** autocontida (HTML/CSS/JS empacotados no app, sem CDN), responsiva, com barra de progresso de upload/download e suporte a múltiplos arquivos.
 - **Desempenho:** servidor DEVE iniciar em < 2 s; UI nunca bloqueia durante transferências (trabalho fora da JS thread principal quando possível).

@@ -120,7 +120,7 @@ describe('serverServiceFactory', () => {
       const service2 = createServerService(module2);
 
       await service1.start('wifi');
-      await service2.start('hotspot');
+      await service2.start('wifi');
 
       expect(module1.start).toHaveBeenCalled();
       expect(module2.start).toHaveBeenCalled();

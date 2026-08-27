@@ -2,9 +2,9 @@
  * Handlers test suite for ServerHomeScreen component (T-204)
  *
  * Tests button press handlers that execute real logic:
- * - handleStartPress: starts server with 'wifi' or 'hotspot'
+ * - handleStartPress: starts server with 'wifi'
  * - handleStopPress: shows Alert and stops server
- * - handleRetryPress: retries with network mode based on connectivity
+ * - handleRetryPress: retries the server start
  */
 
 import React from 'react';
@@ -25,7 +25,7 @@ jest.mock('../../hooks/useServer', () => ({
 }));
 const mockUseServer = useServer as jest.MockedFunction<
   (httpModule?: HttpModule) => {
-    start: (networkMode: 'wifi' | 'hotspot') => Promise<void>;
+    start: (networkMode: 'wifi') => Promise<void>;
     stop: () => Promise<void>;
     reset: () => void;
   }
@@ -59,7 +59,6 @@ describe('ServerHomeScreen handlers (T-204)', () => {
       serverInfo: {
         status: 'idle',
         networkMode: null,
-        hotspot: null,
         ip: null,
         port: null,
         url: null,
@@ -98,7 +97,6 @@ describe('ServerHomeScreen handlers (T-204)', () => {
         serverInfo: {
           status: 'running',
           networkMode: 'wifi',
-          hotspot: null,
           ip: '192.168.1.10',
           port: 8080,
           url: 'http://192.168.1.10:8080',
@@ -146,7 +144,6 @@ describe('ServerHomeScreen handlers (T-204)', () => {
         serverInfo: {
           status: 'error',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -161,12 +158,11 @@ describe('ServerHomeScreen handlers (T-204)', () => {
       expect(mockStartFn).toHaveBeenCalledWith('wifi');
     });
 
-    it('chama start("hotspot") quando não há rede', async () => {
+    it('chama start("wifi") mesmo sem rede (usuário deve conectar-se antes)', async () => {
       useServerStore.setState({
         serverInfo: {
           status: 'error',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -178,7 +174,7 @@ describe('ServerHomeScreen handlers (T-204)', () => {
       mockUseNetworkStatus.mockReturnValue({ isConnected: false, ssid: null });
       const { getByText } = await render(<ServerHomeScreen />);
       fireEvent.press(getByText('Tentar novamente').parent!);
-      expect(mockStartFn).toHaveBeenCalledWith('hotspot');
+      expect(mockStartFn).toHaveBeenCalledWith('wifi');
     });
 
     it('loga erro quando start rejeita', async () => {
@@ -186,7 +182,6 @@ describe('ServerHomeScreen handlers (T-204)', () => {
         serverInfo: {
           status: 'error',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,

@@ -13,7 +13,6 @@ import type { NotificationService } from '../services/notificationService';
  * - Mostrar notificação persistente quando servidor está em estado `running`
  * - Parar o servidor quando o app sai de foreground
  * - Descartar notificação quando servidor para
- * - Desligar hotspot (se aplicável) quando servidor para
  *
  * Deve ser usado no layout raiz da app para funcionar durante toda a vida da aplicação.
  *

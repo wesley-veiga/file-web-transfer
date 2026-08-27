@@ -1,9 +1,22 @@
 # ADR-002: Rede Própria no Android 14+ via Local Only Hotspot
 
-**Data:** 2026-07-18  
-**Status:** PROPOSTA — _Validação empírica em Android 14 físico pendente_  
-**Contexto:** T-206 — Spike: Local Only Hotspot no Android 14+  
+**Data:** 2026-07-18
+**Status:** REJEITADA (2026-08-27) — _feature despriorizada e removida por decisão de produto; ver §8_
+**Contexto:** T-206 — Spike: Local Only Hotspot no Android 14+
 **Autor:** Agente Implementador
+
+---
+
+## 8. Emenda — Rejeição (2026-08-27)
+
+O modo "rede própria" foi **despriorizado e removido** do escopo do produto: o app passa a suportar exclusivamente conexão via IP de rede Wi-Fi local existente (host e convidado já na mesma rede). Justificativa: complexidade e risco técnico (módulo nativo nunca validado em dispositivo real — ver Seção 5) frente ao valor entregue; a "2º maior risco do projeto" (T-206) deixa de existir.
+
+Consequências:
+- `HotspotService`, `hotspotServiceFactory`, `nativeHotspot` e a integração em `useServer`/`ServerHomeScreen` (implementados em T-207) foram **revertidos** em T-209.
+- HU-08 removida de `transferir.md` (rev. 1.2); Decisão fundadora "funciona sem internet" da constituição emendada (v2.0.0) para refletir modo único Wi-Fi.
+- T-206, T-207 e T-208 permanecem em `tarefas.md` como histórico, marcadas como removidas; T-209 registra a reversão.
+
+Este ADR permanece como registro histórico da pesquisa (Seções 1–7) — não é mais a direção adotada.
 
 ---
 
