@@ -68,9 +68,10 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Tipos `ServerInfo`/`ServerStatus`/`ServerError` + store Zustand com transições válidas (`idle → starting → running → stopping → idle`; `error` de qualquer estado). Sem I/O real — o serviço HTTP é injetado.
   *Pronto quando:* todas as transições (válidas e inválidas) testadas.
 
-- [ ] **T-202 · Spike: escolha da lib de servidor HTTP** ⬅ T-001
+- [x] **T-202 · Spike: escolha da lib de servidor HTTP** ⬅ T-001
   Avaliar `react-native-http-bridge-refurbished` vs. implementação sobre TCP socket. Critério decisivo: upload multipart ≥ 1 GB com streaming, Android e iOS. Registrar decisão em `docs/adr/001-servidor-http.md`.
   *Pronto quando:* ADR escrito com prova de conceito medida. **(timebox: 1 dia)**
+  **Decisão final (2026-08-27):** `react-native-http-bridge-refurbished` escolhida; PoC empírica dispensada por decisão de produto (sem infra de dispositivo físico) — ver ADR-001 §8.
 
 - [x] **T-203 · Serviço do servidor HTTP** ⬅ T-201, T-202
   `ServerService` (start/stop, porta 8080 com fallback, IP via `expo-network` — rede Wi-Fi **ou** interface do hotspot, campo `networkMode`) atrás de interface injetável.
