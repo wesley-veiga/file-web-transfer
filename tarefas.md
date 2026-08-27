@@ -87,7 +87,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Prova de conceito da criação de rede própria: módulo nativo/config plugin Expo para `startLocalOnlyHotspot`, permissão `NEARBY_WIFI_DEVICES`, obtenção de SSID/senha geradas pelo sistema, IP da interface criada. Avaliar lib pronta vs. módulo próprio. Registrar em `docs/adr/002-rede-propria.md`.
   *Pronto quando:* ADR escrito; PoC cria a rede em um Android 14 real e outro dispositivo conecta. **(timebox: 1 dia — 2º maior risco do projeto)**
 
-- [ ] **T-207 · Serviço de rede própria (`HotspotService`)** ⬅ T-206, T-201
+- [x] **T-207 · Serviço de rede própria (`HotspotService`)** ⬅ T-206, T-201
   Serviço injetável: criar/desligar hotspot (Android), montar `HotspotInfo` com `wifiQrPayload`, detecção de Hotspot Pessoal ativo no iOS (gateway `172.20.10.1`); erros `HOTSPOT_UNSUPPORTED`, `HOTSPOT_FAILED`, `PERMISSION_DENIED`; integração com a máquina de estados (`networkMode`).
   *Pronto quando:* testes com mock do módulo nativo cobrindo criação, desligamento junto com o servidor, cada erro e a detecção iOS.
 
