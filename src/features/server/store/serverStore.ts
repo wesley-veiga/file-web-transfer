@@ -29,7 +29,6 @@ function getInitialServerInfo(): ServerInfo {
   return {
     status: 'idle',
     networkMode: null,
-    hotspot: null,
     ip: null,
     port: null,
     url: null,
@@ -139,7 +138,6 @@ export const useServerStore = create<ServerStore>((set, get) => ({
           ...state.serverInfo,
           status: to,
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,

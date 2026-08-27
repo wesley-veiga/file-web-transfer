@@ -1,6 +1,7 @@
 # Tarefas — Transferir Arquivos
 
 **Derivado de:** [transferir.md](transferir.md) · **Regido por:** [constitution.md](constitution.md)
+**Revisão 1.2 (2026-08-27):** modo rede própria despriorizado e removido — T-206/T-207/T-208 marcadas como removidas (ver ADR-002, status Rejeitada); nova T-209 reverte a implementação de T-207; T-701 ajustada (cenário hotspot removido do roteiro).
 **Revisão 1.1 (2026-07-16):** validado contra as novas regras — Android 14+ (T-001 ajustada), modo rede própria HU-08 (novas T-206/T-207/T-208), governança de repositório (nova T-006), cenário hotspot no teste de fogo (T-701 ajustada).
 
 Cada tarefa é uma fatia pequena e entregável, com dependências explícitas e critério de pronto próprio. O fluxo de execução de **cada tarefa** usa os três agentes (em `.claude/agents/`):
@@ -74,26 +75,30 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 - [x] **T-203 · Serviço do servidor HTTP** ⬅ T-201, T-202
   `ServerService` (start/stop, porta 8080 com fallback, IP via `expo-network` — rede Wi-Fi **ou** interface do hotspot, campo `networkMode`) atrás de interface injetável.
   *Pronto quando:* testes com mock do módulo nativo cobrindo sucesso nos dois modos, `NO_NETWORK`, `PORT_UNAVAILABLE`.
+  **Nota (rev. 1.2):** `networkMode` passou a ter valor único `'wifi'` após T-209 — descrição acima é histórica.
 
 - [x] **T-204 · Tela Home/Servidor** ⬅ T-203, T-005, T-104
   UI dos estados `idle/starting/running/error` (HU-01, HU-02): botão iniciar/parar, spinner, URL + QR Code + sessionId, mensagens por `ServerErrorCode`, confirmação ao parar com transferências ativas. Estado `idle` sem rede exibe a ação "Criar rede" (fluxo completo na T-208).
   *Pronto quando:* critérios de aceite "Tela Home / Servidor" da spec todos atendidos, com testes de componente por estado.
+  **Nota (rev. 1.2):** ação "Criar rede" removida por T-209 (T-208 cancelada) — descrição acima é histórica.
 
 - [x] **T-205 · Notificação persistente / ciclo de vida** ⬅ T-204
   Notificação enquanto `running`; encerrar app → para servidor e libera porta (e desliga hotspot criado pelo app, se houver).
+  **Nota (rev. 1.2):** cláusula de hotspot sem efeito após T-209 — descrição acima é histórica.
   *Pronto quando:* comportamento verificado em Android e iOS.
 
-- [ ] **T-206 · Spike: Local Only Hotspot no Android 14+** ⬅ T-001
-  Prova de conceito da criação de rede própria: módulo nativo/config plugin Expo para `startLocalOnlyHotspot`, permissão `NEARBY_WIFI_DEVICES`, obtenção de SSID/senha geradas pelo sistema, IP da interface criada. Avaliar lib pronta vs. módulo próprio. Registrar em `docs/adr/002-rede-propria.md`.
-  *Pronto quando:* ADR escrito; PoC cria a rede em um Android 14 real e outro dispositivo conecta. **(timebox: 1 dia — 2º maior risco do projeto)**
+- [ ] ~~T-206 · Spike: Local Only Hotspot no Android 14+~~ ⬅ T-001
+  **Removida (rev. 1.2):** modo rede própria despriorizado — ver ADR-002 (status: Rejeitada) e T-209.
 
-- [x] **T-207 · Serviço de rede própria (`HotspotService`)** ⬅ T-206, T-201
-  Serviço injetável: criar/desligar hotspot (Android), montar `HotspotInfo` com `wifiQrPayload`, detecção de Hotspot Pessoal ativo no iOS (gateway `172.20.10.1`); erros `HOTSPOT_UNSUPPORTED`, `HOTSPOT_FAILED`, `PERMISSION_DENIED`; integração com a máquina de estados (`networkMode`).
-  *Pronto quando:* testes com mock do módulo nativo cobrindo criação, desligamento junto com o servidor, cada erro e a detecção iOS.
+- [ ] ~~T-207 · Serviço de rede própria (`HotspotService`)~~ ⬅ T-206, T-201
+  **Removida (rev. 1.2):** implementação revertida por T-209 — ver ADR-002 (status: Rejeitada). Havia sido marcada `[x]` (PR #27/#28); reversão registrada abaixo.
 
-- [ ] **T-208 · Fluxo "Criar rede" na Home** ⬅ T-207, T-204
-  UI da HU-08: ação "Criar rede" no `idle` sem rede, pedido de permissão com explicação prévia, jornada em duas etapas (QR Wi-Fi → QR do link), passo a passo iOS, mensagens de erro com fallback.
-  *Pronto quando:* critérios de aceite "Modo Rede Própria — HU-08" todos atendidos, com testes de componente por estado.
+- [ ] ~~T-208 · Fluxo "Criar rede" na Home~~ ⬅ T-207, T-204
+  **Removida (rev. 1.2):** UI da HU-08 não será implementada — HU-08 removida de `transferir.md`. Ver ADR-002 (status: Rejeitada) e T-209.
+
+- [ ] **T-209 · Remover Modo Rede Própria (reverte `HotspotService`)** ⬅ T-207
+  Reverte a implementação de T-207: remove `HotspotService`, `hotspotServiceFactory`, `nativeHotspot`, o campo `hotspot`/tipo `HotspotInfo` de `ServerInfo`, os códigos de erro `HOTSPOT_UNSUPPORTED`/`HOTSPOT_FAILED` e a ação "Criar rede" (`onCreateNetworkPress`) da Home. `NetworkMode` passa a ter um único valor (`'wifi'`). Produto passa a suportar apenas conexão via IP de rede Wi-Fi local existente.
+  *Pronto quando:* nenhuma referência a hotspot/rede própria resta em código, testes ou specs; estado `idle` sem rede exibe apenas orientação para conectar-se a uma rede Wi-Fi (sem CTA de criar rede); `tsc --noEmit`, `lint` e suíte de testes verdes com cobertura mantida.
 
 ## Fase 3 — Feature: Arquivos (`features/files`)
 
@@ -158,7 +163,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 ## Fase 7 — Integração e Endurecimento
 
 - [ ] **T-701 · Teste de fogo E2E manual** ⬅ todas as anteriores
-  Roteiro: Android host ↔ iOS convidado e vice-versa; arquivo ≥ 1 GB nas duas direções sem crash de memória; parar servidor no meio da transferência → `cancelled` correto; nomes com acento/emoji; **cenário offline: host Android 14 sem nenhuma rede cria rede própria, convidado conecta via QR Wi-Fi e completa upload + download**.
+  Roteiro: Android host ↔ iOS convidado e vice-versa; arquivo ≥ 1 GB nas duas direções sem crash de memória; parar servidor no meio da transferência → `cancelled` correto; nomes com acento/emoji.
   *Pronto quando:* roteiro executado e registrado em `docs/testes-manuais.md`.
 
 - [ ] **T-702 · Auditoria de conformidade final** ⬅ T-701
@@ -173,9 +178,9 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 Fase 0: T-001 → T-002 → T-003 → T-004 → T-006
                  └─ T-005 [P]
 Fase 1: T-101 · T-102 · T-103 · T-104   (todas em paralelo)
-Fase 2: T-201 → T-203 → T-204 → T-205
+Fase 2: T-201 → T-203 → T-204 → T-205 → T-209
         T-202 (spike servidor, começar cedo — maior risco)
-        T-206 (spike hotspot)  → T-207 → T-208
+        ~~T-206 → T-207 → T-208~~ (removidas, rev. 1.2 — ver ADR-002)
 Fase 3: T-301 → T-302 · T-303
 Fase 4: T-401 → T-402 · T-403 · T-404
 Fase 5: T-501 → T-502 · T-503
@@ -183,4 +188,4 @@ Fase 6: T-601 → T-602 → T-603
 Fase 7: T-701 → T-702
 ```
 
-> **Maiores riscos:** T-202 (streaming da lib de servidor) e T-206 (Local Only Hotspot no Android 14+). Executar os dois spikes antes de investir nas Fases 3–6.
+> **Maior risco:** T-202 (streaming da lib de servidor) — decisão finalizada (ver ADR-001). T-206 removida (rev. 1.2, ver ADR-002).

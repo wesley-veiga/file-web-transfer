@@ -9,7 +9,6 @@ import type { HttpModule } from '../services/httpModule';
 
 interface ServerHomeScreenProps {
   httpModule?: HttpModule;
-  onCreateNetworkPress?: () => void;
 }
 
 /**
@@ -17,12 +16,12 @@ interface ServerHomeScreenProps {
  *
  * Estados suportados:
  * - idle com rede: botão "Iniciar servidor"
- * - idle sem rede: botão "Criar rede"
+ * - idle sem rede: orientação para conectar-se a uma rede Wi-Fi
  * - starting: spinner de carregamento
  * - running: URL, QR Code, sessionId e botão "Parar"
  * - error: mensagem de erro e botão "Tentar novamente"
  */
-export function ServerHomeScreen({ httpModule, onCreateNetworkPress }: ServerHomeScreenProps) {
+export function ServerHomeScreen({ httpModule }: ServerHomeScreenProps) {
   const { start, stop } = useServer(httpModule);
   const serverInfo = useServerStore((state) => state.serverInfo);
   const networkStatus = useNetworkStatus();
@@ -58,7 +57,7 @@ export function ServerHomeScreen({ httpModule, onCreateNetworkPress }: ServerHom
 
   const handleRetryPress = async () => {
     try {
-      await start(hasNetwork ? 'wifi' : 'hotspot');
+      await start('wifi');
     } catch (error) {
       console.error('[ServerHomeScreen] Erro ao tentar novamente:', error);
     }
@@ -108,15 +107,15 @@ export function ServerHomeScreen({ httpModule, onCreateNetworkPress }: ServerHom
                   Nenhuma rede disponível
                 </Text>
                 <Text className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                  Crie uma rede própria para compartilhar arquivos sem conexão Wi-Fi.
+                  Conecte-se a uma rede Wi-Fi para compartilhar arquivos.
                 </Text>
               </Card>
 
               <Button
-                label="Criar rede"
-                variant="success"
+                label="Iniciar servidor"
+                variant="primary"
                 size="lg"
-                onPress={onCreateNetworkPress}
+                disabled
                 className="w-full"
               />
             </View>

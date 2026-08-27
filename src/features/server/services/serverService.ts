@@ -18,7 +18,7 @@ export interface ServerStartResult {
  * Serviço injetável de servidor HTTP.
  *
  * Responsabilidades:
- * - Obter IP local (Wi-Fi ou hotspot)
+ * - Obter IP local (Wi-Fi)
  * - Tentar portas livre começando de 8080 (fallback incremental)
  * - Iniciar/parar o servidor HTTP
  * - Gerar sessionId
@@ -30,7 +30,7 @@ export interface ServerService {
   /**
    * Inicia o servidor HTTP.
    *
-   * @param networkMode Define qual interface usar ('wifi' ou 'hotspot')
+   * @param networkMode Interface de rede a usar (único valor suportado: 'wifi')
    * @returns Informações do servidor iniciado
    * @throws ServerError com code específico (NO_NETWORK, PORT_UNAVAILABLE, etc.)
    */
@@ -117,12 +117,7 @@ export class ServerServiceImpl implements ServerService {
   }
 
   /**
-   * Obtém o IP local dependendo do modo de rede.
-   * - 'wifi': IP da rede Wi-Fi atual
-   * - 'hotspot': IP da interface do hotspot (normalmente 192.168.1.x ou 10.0.0.x)
-   *
-   * Para hotspot, o método é o mesmo (retorna o IP local ativo).
-   * A diferença é semântica: o `serverStore` rastreia qual rede está sendo usada.
+   * Obtém o IP da rede Wi-Fi atual.
    */
   private async getLocalIp(networkMode: NetworkMode): Promise<string | null> {
     try {

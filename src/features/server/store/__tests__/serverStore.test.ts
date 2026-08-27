@@ -82,7 +82,6 @@ describe('useServerStore', () => {
       serverInfo: {
         status: 'idle',
         networkMode: null,
-        hotspot: null,
         ip: null,
         port: null,
         url: null,
@@ -102,7 +101,6 @@ describe('useServerStore', () => {
     it('should have all optional fields as null', () => {
       const { serverInfo } = useServerStore.getState();
       expect(serverInfo.networkMode).toBeNull();
-      expect(serverInfo.hotspot).toBeNull();
       expect(serverInfo.ip).toBeNull();
       expect(serverInfo.port).toBeNull();
       expect(serverInfo.url).toBeNull();
@@ -184,8 +182,8 @@ describe('useServerStore', () => {
     it('should transition from running to error', () => {
       const { startRequested, started, failed } = useServerStore.getState();
       const error: ServerError = {
-        code: 'HOTSPOT_FAILED',
-        message: 'Failed to start hotspot',
+        code: 'PORT_UNAVAILABLE',
+        message: 'Port unavailable',
       };
 
       startRequested();
@@ -259,7 +257,7 @@ describe('useServerStore', () => {
         port: 3000,
         url: 'http://192.168.0.50:3000',
         sessionId: 'banana-99',
-        networkMode: 'hotspot',
+        networkMode: 'wifi',
         startedAt: 1234567890,
       });
 
@@ -269,7 +267,7 @@ describe('useServerStore', () => {
       expect(info.port).toBe(3000);
       expect(info.url).toBe('http://192.168.0.50:3000');
       expect(info.sessionId).toBe('banana-99');
-      expect(info.networkMode).toBe('hotspot');
+      expect(info.networkMode).toBe('wifi');
       expect(info.startedAt).toBe(1234567890);
     });
 
@@ -360,11 +358,6 @@ describe('useServerStore', () => {
         sessionId: 'test-123',
         networkMode: 'wifi',
         startedAt: Date.now(),
-        hotspot: {
-          ssid: 'Test Network',
-          password: 'password123',
-          wifiQrPayload: 'WIFI:S:Test Network;T:WPA;P:password123;;',
-        },
       });
 
       stopRequested();
@@ -378,7 +371,6 @@ describe('useServerStore', () => {
       expect(info.sessionId).toBeNull();
       expect(info.networkMode).toBeNull();
       expect(info.startedAt).toBeNull();
-      expect(info.hotspot).toBeNull();
       expect(info.error).toBeNull();
     });
   });
@@ -387,8 +379,8 @@ describe('useServerStore', () => {
     it('should reset from error state to idle', () => {
       const { reset } = useServerStore.getState();
       const error: ServerError = {
-        code: 'HOTSPOT_FAILED',
-        message: 'Failed to start hotspot',
+        code: 'PORT_UNAVAILABLE',
+        message: 'Port unavailable',
       };
 
       useServerStore.setState((state) => ({
@@ -416,7 +408,7 @@ describe('useServerStore', () => {
         port: 9000,
         url: 'http://192.168.1.50:9000',
         sessionId: 'admin-reset',
-        networkMode: 'hotspot',
+        networkMode: 'wifi',
         startedAt: Date.now(),
       });
 
@@ -556,31 +548,6 @@ describe('useServerStore', () => {
       const info = useServerStore.getState().serverInfo;
       expect(info.status).toBe('error');
       expect(info.error).toEqual(error); // Error state preserved
-    });
-
-    it('should handle hotspot info in started action', () => {
-      const { startRequested, started } = useServerStore.getState();
-      const hotspotInfo = {
-        ssid: 'MyHotspot',
-        password: 'secure123',
-        wifiQrPayload: 'WIFI:S:MyHotspot;T:WPA;P:secure123;;',
-      };
-
-      startRequested();
-      started({
-        ip: '192.168.137.1',
-        port: 8080,
-        url: 'http://192.168.137.1:8080',
-        sessionId: 'hotspot-test',
-        networkMode: 'hotspot',
-        hotspot: hotspotInfo,
-        startedAt: Date.now(),
-      });
-
-      const info = useServerStore.getState().serverInfo;
-      expect(info.status).toBe('running');
-      expect(info.hotspot).toEqual(hotspotInfo);
-      expect(info.networkMode).toBe('hotspot');
     });
   });
 });

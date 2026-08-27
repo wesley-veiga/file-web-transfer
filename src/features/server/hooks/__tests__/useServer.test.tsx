@@ -1,11 +1,9 @@
-import { Platform } from 'react-native';
 import * as Network from 'expo-network';
 import { renderHook, act } from '@testing-library/react-native';
 import { useServer } from '../useServer';
 import { useServerStore } from '../../store/serverStore';
 import { ServerServiceError } from '../../services/serverService';
 import type { HttpModule } from '../../services/httpModule';
-import type { NativeHotspotModule } from '../../services/nativeHotspot';
 import type { ServerErrorCode } from '../../types';
 
 jest.mock('expo-network');
@@ -15,8 +13,6 @@ jest.mock('../../../../shared/lib', () => ({
 
 describe('useServer hook', () => {
   let mockHttpModule: jest.Mocked<HttpModule>;
-  let mockNativeModule: jest.Mocked<NativeHotspotModule>;
-  let originalPlatformOS: string;
 
   const createMockHttpModule = (): jest.Mocked<HttpModule> => ({
     start: jest.fn(),
@@ -26,18 +22,11 @@ describe('useServer hook', () => {
     isRunning: jest.fn(() => false),
   });
 
-  const createMockNativeModule = (): jest.Mocked<NativeHotspotModule> => ({
-    startLocalOnlyHotspot: jest.fn(),
-    stopLocalOnlyHotspot: jest.fn(),
-    getHotspotConfig: jest.fn(),
-  });
-
   const resetStore = () => {
     useServerStore.setState({
       serverInfo: {
         status: 'idle',
         networkMode: null,
-        hotspot: null,
         ip: null,
         port: null,
         url: null,
@@ -53,40 +42,16 @@ describe('useServer hook', () => {
     jest.restoreAllMocks();
     resetStore();
     mockHttpModule = createMockHttpModule();
-    mockNativeModule = createMockNativeModule();
-
-    // Mock Platform.OS to 'android' for hotspot tests
-    originalPlatformOS = Platform.OS;
-    Object.defineProperty(Platform, 'OS', {
-      configurable: true,
-      get: () => 'android',
-    });
 
     jest.mocked(Network).getNetworkStateAsync = jest.fn().mockResolvedValue({
       isConnected: true,
     });
     jest.mocked(Network).getIpAddressAsync = jest.fn().mockResolvedValue('192.168.1.42');
-
-    // Setup default hotspot mock
-    mockNativeModule.startLocalOnlyHotspot.mockResolvedValue({
-      ssid: 'TestHotspot',
-      password: 'testpass123',
-      ip: '192.168.43.1',
-      gateway: '192.168.43.1',
-    });
-    mockNativeModule.stopLocalOnlyHotspot.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
     jest.restoreAllMocks();
-    // Restore Platform.OS
-    if (originalPlatformOS !== undefined) {
-      Object.defineProperty(Platform, 'OS', {
-        configurable: true,
-        get: () => originalPlatformOS,
-      });
-    }
   });
 
   // Render hook once and use result throughout tests
@@ -130,13 +95,7 @@ describe('useServer hook', () => {
   });
 
   it('deve mapear todos os ServerErrorCodes', async () => {
-    const codes: ServerErrorCode[] = [
-      'PORT_UNAVAILABLE',
-      'PERMISSION_DENIED',
-      'HOTSPOT_UNSUPPORTED',
-      'HOTSPOT_FAILED',
-      'UNKNOWN',
-    ];
+    const codes: ServerErrorCode[] = ['PORT_UNAVAILABLE', 'PERMISSION_DENIED', 'UNKNOWN'];
 
     for (const code of codes) {
       resetStore();
@@ -181,8 +140,8 @@ describe('useServer hook', () => {
     expect(useServerStore.getState().serverInfo.status).toBe('idle');
   });
 
-  it('deve permitir múltiplos ciclos com diferentes modos', async () => {
-    const { result } = await renderHook(() => useServer(mockHttpModule, mockNativeModule));
+  it('deve permitir múltiplos ciclos de start/stop', async () => {
+    const { result } = await renderHook(() => useServer(mockHttpModule));
 
     expect(result.current).toBeDefined();
 
@@ -194,24 +153,21 @@ describe('useServer hook', () => {
     await act(async () => {
       await result.current.stop();
     });
+    expect(useServerStore.getState().serverInfo.status).toBe('idle');
 
     mockHttpModule.start.mockClear();
-    mockNativeModule.startLocalOnlyHotspot.mockClear();
 
     await act(async () => {
-      await result.current.start('hotspot');
+      await result.current.start('wifi');
     });
     const state = useServerStore.getState();
-    expect(state.serverInfo.networkMode).toBe('hotspot');
-    expect(state.serverInfo.hotspot).toBeDefined();
-    expect(state.serverInfo.hotspot?.ssid).toBe('TestHotspot');
-    expect(mockNativeModule.startLocalOnlyHotspot).toHaveBeenCalled();
+    expect(state.serverInfo.networkMode).toBe('wifi');
+    expect(state.serverInfo.status).toBe('running');
 
     await act(async () => {
       await result.current.stop();
     });
     expect(useServerStore.getState().serverInfo.status).toBe('idle');
-    expect(mockNativeModule.stopLocalOnlyHotspot).toHaveBeenCalled();
   });
 
   it('deve recuperar de erro via reset', async () => {

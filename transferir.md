@@ -2,7 +2,7 @@
 
 **Feature:** Servidor de arquivos local + transferência via interface web
 **Documento pai:** [constitution.md](constitution.md)
-**Versão:** 1.1.0 · **Data:** 2026-07-16 · *(rev. 1.1: Android 14+, modo rede própria HU-08)*
+**Versão:** 1.2.0 · **Data:** 2026-08-27 · *(rev. 1.2: remoção do modo rede própria — HU-08 removida, conectividade restrita a Wi-Fi local existente; rev. 1.1: Android 14+, modo rede própria HU-08)*
 **Features envolvidas:** `features/server`, `features/transfer`, `features/files`, `web-ui/`
 
 ---
@@ -17,12 +17,9 @@ O recurso transforma o celular (host) em um servidor HTTP na rede local. Com um 
 
 No app, o host acompanha em tempo real as transferências em andamento, o histórico da sessão e pode selecionar quais arquivos do dispositivo ficam disponíveis para download. Nenhum dado sai da rede local (Princípio VI).
 
-**Conectividade — dois modos, nenhum depende de internet:**
+**Conectividade — via rede Wi-Fi local existente, sem depender de internet:**
 
-| Modo | Quando | Como |
-|---|---|---|
-| **Wi-Fi** | Host já conectado a uma rede | Servidor sobe no IP da rede atual |
-| **Rede própria** | Host sem nenhuma rede | O app **cria a rede**: no Android 14+ inicia um Local Only Hotspot e exibe SSID/senha como QR Code Wi-Fi para o convidado entrar; no iOS orienta a ativação manual do Hotspot Pessoal e detecta a interface ativa (HU-08) |
+O servidor sobe no IP da rede Wi-Fi à qual o host já está conectado. Sem rede disponível, o app orienta o usuário a conectar-se a uma rede Wi-Fi antes de tentar novamente — o app não cria rede própria (modo removido, ver ADR-002).
 
 ### Fora de escopo (v1)
 
@@ -43,7 +40,7 @@ No app, o host acompanha em tempo real as transferências em andamento, o histó
 **Comportamento esperado:**
 - Ao tocar em "Iniciar servidor", o app obtém o IP local, sobe o servidor HTTP em porta livre (padrão `8080`, fallback incremental) e muda o estado para `running` em menos de 2 s.
 - A tela passa a exibir: endereço completo, QR Code do link e identificador da sessão (ex.: `maçã-42`, legível por humanos).
-- Sem nenhuma rede disponível, o fluxo não termina em beco sem saída: a ação principal vira **"Criar rede"** (HU-08); assim que a rede própria estiver ativa, o servidor sobe normalmente na interface dela.
+- Sem nenhuma rede disponível, o app exibe mensagem orientando o usuário a conectar-se a uma rede Wi-Fi; o botão "Iniciar servidor" fica desabilitado até haver conectividade.
 
 ### HU-02 — Parar servidor
 
@@ -101,16 +98,7 @@ No app, o host acompanha em tempo real as transferências em andamento, o histó
 - Ao concluir um recebimento, o arquivo aparece na aba "Recebidos" com ação "Abrir" / "Compartilhar" (share sheet do SO).
 - Histórico persiste apenas durante a sessão do servidor (zerado ao iniciar novo servidor).
 
-### HU-08 — Abrir rede própria quando não há rede (host)
-
-> **Como** usuário host sem acesso a nenhuma rede Wi-Fi, **quero** que o app crie uma rede local a partir do meu celular, **para** que o convidado se conecte a ela e a transferência aconteça mesmo sem internet.
-
-**Comportamento esperado:**
-- Ao detectar ausência de rede (`expo-network`), a tela Home exibe **"Criar rede"** como ação principal (no lugar de um botão desabilitado).
-- **Android 14+:** o app inicia um **Local Only Hotspot** (permissão `NEARBY_WIFI_DEVICES`; pedida com explicação prévia do motivo). Ao ativar, exibe o SSID e a senha gerados pelo sistema **e** um **QR Code Wi-Fi** (formato `WIFI:S:<ssid>;T:WPA;P:<senha>;;`) que o convidado escaneia com a câmera para entrar na rede. A jornada tem duas etapas visualmente claras: **1) Conectar à rede** (QR Wi-Fi) → **2) Acessar o link** (QR HTTP), com indicador de qual etapa o convidado está.
-- **iOS:** criação programática não é permitida pelo sistema; o app exibe passo a passo para ativar o **Hotspot Pessoal** nas Configurações e detecta automaticamente quando a interface do hotspot fica ativa (gateway `172.20.10.1`), iniciando o servidor nela sem toque adicional.
-- **Erros:** `HOTSPOT_UNSUPPORTED` (hardware/SO não permite) e `HOTSPOT_FAILED` (falha ao iniciar) exibem mensagens específicas + fallback sugerido ("conecte os dois dispositivos à mesma rede Wi-Fi"). Permissão negada → `PERMISSION_DENIED` com atalho para as configurações do app.
-- Parar o servidor DEVE desligar junto o hotspot criado pelo app (Android); nunca deixar a rede aberta órfã.
+> **HU-08 removida (rev. 1.2, 2026-08-27):** a história "Abrir rede própria quando não há rede" foi removida — o app não cria mais rede própria (Local Only Hotspot/Hotspot Pessoal). Ver ADR-002 (status: Rejeitada) e T-209 em `tarefas.md`.
 
 ---
 
@@ -125,23 +113,13 @@ Tipos de domínio em `src/features/*/types/` — fonte única de verdade entre a
  *  idle → starting → running → stopping → idle  (error a partir de qualquer estado) */
 export type ServerStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'error';
 
-/** Como o host está conectado à rede que serve os convidados */
-export type NetworkMode = 'wifi' | 'hotspot';
-
-/** Dados da rede própria criada pelo app (Android, Local Only Hotspot) */
-export interface HotspotInfo {
-  ssid: string;
-  password: string;
-  /** Conteúdo do QR Code Wi-Fi: "WIFI:S:<ssid>;T:WPA;P:<senha>;;" */
-  wifiQrPayload: string;
-}
+/** Como o host está conectado à rede que serve os convidados. Único modo suportado: Wi-Fi existente (rede própria removida, ver ADR-002). */
+export type NetworkMode = 'wifi';
 
 export interface ServerInfo {
   status: ServerStatus;
   /** null enquanto idle/error */
   networkMode: NetworkMode | null;
-  /** Preenchido apenas quando networkMode === 'hotspot' no Android */
-  hotspot: HotspotInfo | null;
   /** IP na rede local, ex.: "192.168.0.12". null enquanto idle/error */
   ip: string | null;
   port: number | null;
@@ -154,11 +132,9 @@ export interface ServerInfo {
 }
 
 export type ServerErrorCode =
-  | 'NO_NETWORK'           // sem rede e sem conseguir criar uma
+  | 'NO_NETWORK'           // sem rede Wi-Fi disponível
   | 'PORT_UNAVAILABLE'     // nenhuma porta livre no range
-  | 'PERMISSION_DENIED'    // permissão de rede/armazenamento/NEARBY_WIFI_DEVICES negada
-  | 'HOTSPOT_UNSUPPORTED'  // dispositivo/SO não permite criar rede própria
-  | 'HOTSPOT_FAILED'       // falha ao iniciar o Local Only Hotspot
+  | 'PERMISSION_DENIED'    // permissão de rede/armazenamento negada
   | 'UNKNOWN';
 
 export interface ServerError {
@@ -310,21 +286,12 @@ A web-ui consulta a cada 3 s para atualizar a lista de arquivos.
 ### Tela Home / Servidor (app host)
 
 - [ ] **Estado `idle` com rede:** botão "Iniciar servidor" habilitado, exibindo o nome da rede atual (SSID).
-- [ ] **Estado `idle` sem rede:** ação principal vira "Criar rede" (HU-08) — nunca existe estado sem caminho para avançar.
+- [ ] **Estado `idle` sem rede:** mensagem orienta a conectar-se a uma rede Wi-Fi; botão "Iniciar servidor" fica desabilitado até haver rede disponível.
 - [ ] **Estado `starting` (loading):** botão mostra spinner e fica desabilitado; nenhum toque duplo inicia dois servidores (idempotência).
 - [ ] **Estado `running`:** exibe URL, QR Code e `sessionId` em até 2 s após o toque; botão vira "Parar servidor".
 - [ ] **Estado `error`:** mensagem específica por `ServerErrorCode` (nunca erro genérico quando o código é conhecido) + ação "Tentar novamente".
 - [ ] **Parar com transferências ativas:** diálogo de confirmação; ao confirmar, transferências marcadas como `cancelled` no histórico.
 - [ ] **App em background:** notificação persistente enquanto `running`; encerrar o app para o servidor e libera a porta.
-
-### Modo Rede Própria — HU-08 (app host)
-
-- [ ] **Android — criação:** tocar em "Criar rede" pede `NEARBY_WIFI_DEVICES` com explicação prévia; hotspot ativo com SSID/senha + QR Code Wi-Fi exibidos em até 5 s.
-- [ ] **Android — duas etapas:** jornada "1) Conectar à rede → 2) Acessar o link" com as duas etapas e os dois QR Codes claramente distintos.
-- [ ] **Android — permissão negada:** mensagem específica + atalho para as configurações do app; nunca erro genérico.
-- [ ] **Android — encerramento:** parar o servidor desliga o hotspot criado pelo app; nenhuma rede órfã permanece ativa.
-- [ ] **iOS:** passo a passo do Hotspot Pessoal; ao detectar a interface ativa, servidor inicia automaticamente sem toque adicional.
-- [ ] **Erros:** `HOTSPOT_UNSUPPORTED` e `HOTSPOT_FAILED` com mensagens próprias + fallback sugerido (mesma rede Wi-Fi).
 
 ### Tela Transferências (app host)
 

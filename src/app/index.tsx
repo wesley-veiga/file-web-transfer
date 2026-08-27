@@ -14,9 +14,5 @@ export default function HomeScreen() {
     hideSplash();
   }, []);
 
-  const handleCreateNetworkPress = () => {
-    // TODO(#208): Implementar fluxo de criação de rede
-  };
-
-  return <ServerHomeScreen onCreateNetworkPress={handleCreateNetworkPress} />;
+  return <ServerHomeScreen />;
 }

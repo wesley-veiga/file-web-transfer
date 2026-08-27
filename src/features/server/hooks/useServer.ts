@@ -1,25 +1,15 @@
 import { useCallback } from 'react';
 import { useServerStore } from '../store/serverStore';
 import { createServerService } from '../services/serverServiceFactory';
-import { createHotspotService } from '../services/hotspotServiceFactory';
 import { ServerServiceError } from '../services/serverService';
-import { HotspotServiceError } from '../services/hotspotService';
 import type { NetworkMode, ServerErrorCode, ServerError as ServerErrorType } from '../types';
 import type { HttpModule } from '../services/httpModule';
-import type { NativeHotspotModule } from '../services/nativeHotspot';
 
 /**
- * Mapeia erros técnicos (ServerServiceError, HotspotServiceError, Error genérico) para ServerError tipado com mensagem traduzida.
+ * Mapeia erros técnicos (ServerServiceError, Error genérico) para ServerError tipado com mensagem traduzida.
  */
 function mapErrorToServerError(error: unknown): ServerErrorType {
   if (error instanceof ServerServiceError) {
-    return {
-      code: error.code,
-      message: getErrorMessage(error.code),
-    };
-  }
-
-  if (error instanceof HotspotServiceError) {
     return {
       code: error.code,
       message: getErrorMessage(error.code),
@@ -45,11 +35,9 @@ function mapErrorToServerError(error: unknown): ServerErrorType {
  */
 function getErrorMessage(code: ServerErrorCode): string {
   const messages: Record<ServerErrorCode, string> = {
-    NO_NETWORK: 'Nenhuma rede disponível. Conecte a uma rede Wi-Fi ou crie uma rede própria.',
+    NO_NETWORK: 'Nenhuma rede disponível. Conecte-se a uma rede Wi-Fi.',
     PORT_UNAVAILABLE: 'A porta padrão está indisponível. Tente outra conexão ou reinicie o app.',
     PERMISSION_DENIED: 'Permissão negada. Verifique as configurações de rede do dispositivo.',
-    HOTSPOT_UNSUPPORTED: 'Seu dispositivo não suporta criar uma rede própria.',
-    HOTSPOT_FAILED: 'Falha ao criar rede própria. Tente novamente.',
     UNKNOWN: 'Erro desconhecido ao gerenciar servidor.',
   };
 
@@ -85,7 +73,7 @@ function getErrorMessage(code: ServerErrorCode): string {
  * await act(() => start('wifi'));
  * ```
  */
-export function useServer(httpModule?: HttpModule, nativeModule?: NativeHotspotModule) {
+export function useServer(httpModule?: HttpModule) {
   const store = useServerStore();
 
   const start = useCallback(
@@ -94,14 +82,6 @@ export function useServer(httpModule?: HttpModule, nativeModule?: NativeHotspotM
       store.startRequested();
 
       try {
-        // Se modo hotspot, criar hotspot primeiro
-        let hotspotInfo = null;
-        if (networkMode === 'hotspot') {
-          const hotspotService = createHotspotService(nativeModule);
-          const hotspotResult = await hotspotService.createHotspot();
-          hotspotInfo = hotspotResult.hotspotInfo;
-        }
-
         // Criar serviço (com injeção opcional para testes)
         const serverService = createServerService(httpModule);
 
@@ -115,7 +95,6 @@ export function useServer(httpModule?: HttpModule, nativeModule?: NativeHotspotM
           port: result.port,
           url: result.url,
           sessionId: result.sessionId,
-          hotspot: hotspotInfo,
           startedAt: Date.now(),
         });
       } catch (error) {
@@ -128,7 +107,7 @@ export function useServer(httpModule?: HttpModule, nativeModule?: NativeHotspotM
         throw error;
       }
     },
-    [store, httpModule, nativeModule],
+    [store, httpModule],
   );
 
   const stop = useCallback(async (): Promise<void> => {
@@ -142,13 +121,6 @@ export function useServer(httpModule?: HttpModule, nativeModule?: NativeHotspotM
       // Parar servidor
       await serverService.stop();
 
-      // Se modo hotspot, desligar hotspot também
-      const currentNetworkMode = store.serverInfo.networkMode;
-      if (currentNetworkMode === 'hotspot') {
-        const hotspotService = createHotspotService(nativeModule);
-        await hotspotService.stopHotspot();
-      }
-
       // Transição: stopping → idle
       store.stopped();
     } catch (error) {
@@ -160,7 +132,7 @@ export function useServer(httpModule?: HttpModule, nativeModule?: NativeHotspotM
 
       throw error;
     }
-  }, [store, httpModule, nativeModule]);
+  }, [store, httpModule]);
 
   const reset = useCallback(() => {
     store.reset();

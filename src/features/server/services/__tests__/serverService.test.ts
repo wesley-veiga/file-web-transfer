@@ -54,19 +54,6 @@ describe('ServerService', () => {
       });
     });
 
-    it('deve iniciar servidor em modo hotspot com sucesso', async () => {
-      const result = await serverService.start('hotspot');
-
-      expect(mockHttpModule.start).toHaveBeenCalledWith(8080);
-      expect(result).toEqual({
-        ip: '192.168.1.42',
-        port: 8080,
-        url: 'http://192.168.1.42:8080',
-        sessionId: 'test-session-123',
-        networkMode: 'hotspot',
-      });
-    });
-
     it('deve lançar NO_NETWORK quando não há rede disponível', async () => {
       (Network.getNetworkStateAsync as jest.Mock).mockResolvedValue({
         isConnected: false,
@@ -241,11 +228,6 @@ describe('ServerService', () => {
     it('deve passar networkMode corretamente no resultado', async () => {
       const resultWifi = await serverService.start('wifi');
       expect(resultWifi.networkMode).toBe('wifi');
-
-      mockHttpModule.start.mockClear();
-
-      const resultHotspot = await serverService.start('hotspot');
-      expect(resultHotspot.networkMode).toBe('hotspot');
     });
   });
 

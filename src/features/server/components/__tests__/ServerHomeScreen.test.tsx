@@ -23,7 +23,7 @@ jest.mock('../../hooks/useServer', () => ({
 }));
 const mockUseServer = useServer as jest.MockedFunction<
   (httpModule?: HttpModule) => {
-    start: (networkMode: 'wifi' | 'hotspot') => Promise<void>;
+    start: (networkMode: 'wifi') => Promise<void>;
     stop: () => Promise<void>;
     reset: () => void;
   }
@@ -58,7 +58,6 @@ describe('ServerHomeScreen (T-204)', () => {
       serverInfo: {
         status: 'idle',
         networkMode: null,
-        hotspot: null,
         ip: null,
         port: null,
         url: null,
@@ -72,11 +71,6 @@ describe('ServerHomeScreen (T-204)', () => {
   describe('Component rendering basics', () => {
     it('renders without crashing', () => {
       expect(() => render(<ServerHomeScreen />)).not.toThrow();
-    });
-
-    it('renders with onCreateNetworkPress prop', () => {
-      const mockHandler = jest.fn();
-      expect(() => render(<ServerHomeScreen onCreateNetworkPress={mockHandler} />)).not.toThrow();
     });
 
     it('renders with httpModule prop', () => {
@@ -93,10 +87,6 @@ describe('ServerHomeScreen (T-204)', () => {
     it('renders with undefined httpModule', () => {
       expect(() => render(<ServerHomeScreen httpModule={undefined} />)).not.toThrow();
     });
-
-    it('renders with undefined onCreateNetworkPress', () => {
-      expect(() => render(<ServerHomeScreen onCreateNetworkPress={undefined} />)).not.toThrow();
-    });
   });
 
   describe('State: idle + network available', () => {
@@ -109,7 +99,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'idle',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -140,7 +129,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'idle',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -162,7 +150,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'starting',
           networkMode: 'wifi',
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -187,7 +174,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'running',
           networkMode: 'wifi',
-          hotspot: null,
           ip: '192.168.1.10',
           port: 8080,
           url: testUrl,
@@ -213,7 +199,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'error',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -242,7 +227,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'stopping',
           networkMode: 'wifi',
-          hotspot: null,
           ip: '192.168.1.10',
           port: 8080,
           url: 'http://192.168.1.10:8080',
@@ -264,7 +248,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'error',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -285,7 +268,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'error',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -306,7 +288,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'error',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -322,41 +303,19 @@ describe('ServerHomeScreen (T-204)', () => {
       expect(() => render(<ServerHomeScreen />)).not.toThrow();
     });
 
-    it('handles HOTSPOT_UNSUPPORTED error', () => {
+    it('handles UNKNOWN error', () => {
       useServerStore.setState({
         serverInfo: {
           status: 'error',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
           sessionId: null,
           startedAt: null,
           error: {
-            code: 'HOTSPOT_UNSUPPORTED',
-            message: 'Dispositivo não suporta hotspot.',
-          },
-        },
-      });
-
-      expect(() => render(<ServerHomeScreen />)).not.toThrow();
-    });
-
-    it('handles HOTSPOT_FAILED error', () => {
-      useServerStore.setState({
-        serverInfo: {
-          status: 'error',
-          networkMode: null,
-          hotspot: null,
-          ip: null,
-          port: null,
-          url: null,
-          sessionId: null,
-          startedAt: null,
-          error: {
-            code: 'HOTSPOT_FAILED',
-            message: 'Falha ao criar hotspot.',
+            code: 'UNKNOWN',
+            message: 'Erro desconhecido.',
           },
         },
       });
@@ -377,11 +336,6 @@ describe('ServerHomeScreen (T-204)', () => {
 
       expect(() => render(<ServerHomeScreen httpModule={mockHttpModule} />)).not.toThrow();
     });
-
-    it('works with onCreateNetworkPress callback', () => {
-      const callback = jest.fn();
-      expect(() => render(<ServerHomeScreen onCreateNetworkPress={callback} />)).not.toThrow();
-    });
   });
 
   describe('State transitions', () => {
@@ -394,7 +348,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'starting',
           networkMode: 'wifi',
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -411,7 +364,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'running',
           networkMode: 'wifi',
-          hotspot: null,
           ip: '192.168.1.10',
           port: 8080,
           url: 'http://192.168.1.10:8080',
@@ -429,7 +381,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'running',
           networkMode: 'wifi',
-          hotspot: null,
           ip: '192.168.1.10',
           port: 8080,
           url: 'http://192.168.1.10:8080',
@@ -445,7 +396,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'stopping',
           networkMode: 'wifi',
-          hotspot: null,
           ip: '192.168.1.10',
           port: 8080,
           url: 'http://192.168.1.10:8080',
@@ -465,7 +415,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'error',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -497,7 +446,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'running',
           networkMode: 'wifi',
-          hotspot: null,
           ip: '192.168.1.100',
           port: 9999,
           url: 'http://192.168.1.100:9999',
@@ -515,7 +463,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'running',
           networkMode: 'wifi',
-          hotspot: null,
           ip: '192.168.1.10',
           port: 8080,
           url: 'http://192.168.1.10:8080',
@@ -533,7 +480,6 @@ describe('ServerHomeScreen (T-204)', () => {
         serverInfo: {
           status: 'error',
           networkMode: null,
-          hotspot: null,
           ip: null,
           port: null,
           url: null,
@@ -576,7 +522,6 @@ describe('ServerHomeScreen (T-204)', () => {
           serverInfo: {
             status: state.status,
             networkMode: state.status === 'running' ? 'wifi' : null,
-            hotspot: null,
             ip: state.status === 'running' ? '192.168.1.10' : null,
             port: state.status === 'running' ? 8080 : null,
             url: state.status === 'running' ? 'http://192.168.1.10:8080' : null,
