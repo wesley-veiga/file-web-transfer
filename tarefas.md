@@ -97,7 +97,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 - [ ] ~~T-208 · Fluxo "Criar rede" na Home~~ ⬅ T-207, T-204
   **Removida (rev. 1.2):** UI da HU-08 não será implementada — HU-08 removida de `transferir.md`. Ver ADR-002 (status: Rejeitada) e T-209.
 
-- [ ] **T-209 · Remover Modo Rede Própria (reverte `HotspotService`)** ⬅ T-207
+- [x] **T-209 · Remover Modo Rede Própria (reverte `HotspotService`)** ⬅ T-207
   Reverte a implementação de T-207: remove `HotspotService`, `hotspotServiceFactory`, `nativeHotspot`, o campo `hotspot`/tipo `HotspotInfo` de `ServerInfo`, os códigos de erro `HOTSPOT_UNSUPPORTED`/`HOTSPOT_FAILED` e a ação "Criar rede" (`onCreateNetworkPress`) da Home. `NetworkMode` passa a ter um único valor (`'wifi'`). Produto passa a suportar apenas conexão via IP de rede Wi-Fi local existente.
   *Pronto quando:* nenhuma referência a hotspot/rede própria resta em código, testes ou specs; estado `idle` sem rede exibe apenas orientação para conectar-se a uma rede Wi-Fi (sem CTA de criar rede); `tsc --noEmit`, `lint` e suíte de testes verdes com cobertura mantida.
 
