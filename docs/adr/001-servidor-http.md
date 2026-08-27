@@ -1,6 +1,6 @@
 # ADR 001 — Escolha da Biblioteca de Servidor HTTP Embarcado
 
-**Status:** Proposed (validação empírica pendente)
+**Status:** Accepted — decisão final registrada em 2026-08-27 (ver §8); validação empírica em dispositivo real não foi realizada e não bloqueia a decisão
 **Data:** 2026-07-18
 **Autores:** Transfer Files Project
 
@@ -244,3 +244,4 @@ Se Alternativa A revelar problema crítico (stream corrompe, memory leak, incomp
 ## 8. Histórico de Emendas
 
 - **2026-07-18 (v1.0):** ADR inicial, pesquisa de mesa, validação pendente explícita
+- **2026-08-27 (v1.1):** Decisão final registrada: **`react-native-http-bridge-refurbished`** é a biblioteca escolhida para o servidor HTTP embarcado (T-203 já a usa por trás da interface `HttpModule`). A PoC comparativa medida (Seção 6) foi **deliberadamente dispensada** — decisão de produto, não técnica: o projeto não conta com infraestrutura de dispositivo físico para rodar a PoC de 1 GB descrita neste documento, e o risco de manutenção da lib (Seção 4.1) foi aceito conscientemente dado que a implementação já roda atrás de uma interface injetável (`HttpModule`), permitindo troca futura sem tocar a lógica de negócio caso a lib pare de funcionar. Status muda de "Proposed" para **"Accepted"**.
