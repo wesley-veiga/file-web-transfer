@@ -136,27 +136,13 @@ export function registerEventsRoute(apiRouter: ApiRouter, tracker: FilesChangedA
   const handleGetEvents: ApiHandler = async (
     _request: HttpServerRequest,
     _params: Record<string, string>,
-    query: Record<string, string>,
+    _query: Record<string, string>,
   ): Promise<HttpServerResponse> => {
     try {
-      // Extrair query parameter 'since'
-      // (não validamos, pois sempre retornamos 200 com filesChangedAt atual
-      //  — é responsabilidade da web-ui comparar com seu since anterior)
-      const sinceStr = query['since'];
-      if (sinceStr !== undefined) {
-        const parsed = Number(sinceStr);
-        // Se sinceStr for um número válido, validamos apenas isso.
-        // Se for inválido, web-ui sempre compara com 0 na próxima vez.
-        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
-          // Validação ok, mas não usamos since no handler
-          // (sempre retornamos filesChangedAt atual)
-        }
-      }
-
-      // Obter o timestamp da última mudança
+      // `since` é lido pela web-ui só para decidir se refaz GET /api/files — o
+      // servidor não precisa comparar nada, sempre retorna o filesChangedAt atual.
       const filesChangedAt = tracker.get();
 
-      // Retornar resposta
       return createSuccessResponse(200, { filesChangedAt });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
