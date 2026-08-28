@@ -6,6 +6,7 @@ import type {
   HttpServerRequestHandler,
   HttpServerResponse,
 } from '../httpModule';
+import { sessionInfoSchema, apiErrorSchema } from '../../../../shared/types/api';
 
 /** Acesso ao método privado `createErrorResponse` só para exercitar o branch de fallback. */
 type ApiRouterInternals = {
@@ -80,7 +81,7 @@ describe('ApiRouter', () => {
       expect(body.maxUploadBytes).toBe(4294967296);
     });
 
-    it('deve validar o SessionInfo contra o schema', async () => {
+    it('deve produzir um payload que valida contra sessionInfoSchema (teste de contrato)', async () => {
       const request: HttpServerRequest = {
         method: 'GET',
         path: '/api/session',
@@ -89,14 +90,10 @@ describe('ApiRouter', () => {
 
       const response = await registeredHandler!(request);
 
-      // A resposta deve ser válida
       const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
-      expect(body).toHaveProperty('sessionId');
-      expect(body).toHaveProperty('appVersion');
-      expect(body).toHaveProperty('maxUploadBytes');
-      expect(typeof body.sessionId).toBe('string');
-      expect(typeof body.appVersion).toBe('string');
-      expect(typeof body.maxUploadBytes).toBe('number');
+      const parsed = sessionInfoSchema.safeParse(body);
+
+      expect(parsed.success).toBe(true);
     });
   });
 
@@ -120,6 +117,9 @@ describe('ApiRouter', () => {
       const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
       expect(body.error.code).toBe('NOT_FOUND');
       expect(body.error.message).toBeDefined();
+
+      const parsed = apiErrorSchema.safeParse(body);
+      expect(parsed.success).toBe(true);
     });
 
     it('deve retornar 404 para método não suportado na rota', async () => {
@@ -156,6 +156,9 @@ describe('ApiRouter', () => {
       expect(body.error).toHaveProperty('message');
       expect(typeof body.error.code).toBe('string');
       expect(typeof body.error.message).toBe('string');
+
+      const parsed = apiErrorSchema.safeParse(body);
+      expect(parsed.success).toBe(true);
     });
 
     it('deve retornar Content-Type correto em erros', async () => {
@@ -209,6 +212,9 @@ describe('ApiRouter', () => {
       expect(response.headers?.['Content-Type']).toBe('application/json; charset=utf-8');
       const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
       expect(body.error.code).toBe('INTERNAL_ERROR');
+
+      const parsed = apiErrorSchema.safeParse(body);
+      expect(parsed.success).toBe(true);
     });
 
     it('exceção não tratada no handler → 500 via catch de handleRequest', async () => {
@@ -229,6 +235,9 @@ describe('ApiRouter', () => {
         const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
         expect(body.error.code).toBe('INTERNAL_ERROR');
         expect(body.error.message).toContain('boom');
+
+        const parsed = apiErrorSchema.safeParse(body);
+        expect(parsed.success).toBe(true);
       } finally {
         stringifySpy.mockRestore();
       }
@@ -244,6 +253,9 @@ describe('ApiRouter', () => {
       const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
       expect(body.error.code).toBe('INTERNAL_ERROR');
       expect(body.error.message).toBe('Erro ao serializar erro');
+
+      const parsed = apiErrorSchema.safeParse(body);
+      expect(parsed.success).toBe(true);
     });
 
     it('exceção que não é instância de Error usa mensagem padrão "Erro desconhecido"', async () => {
