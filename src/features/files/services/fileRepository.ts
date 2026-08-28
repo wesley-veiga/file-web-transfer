@@ -11,7 +11,7 @@
  * - Mapear FileEntry → FileEntryDto (nunca expor localUri)
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import * as Crypto from 'expo-crypto';
 import type * as FileSystem from 'expo-file-system';
 
 import { sanitizeFileName, resolveDuplicateName } from '../../../shared/lib';
@@ -132,7 +132,7 @@ export class FileRepositoryImpl implements FileRepository {
     const finalName = resolveDuplicateName(sanitized, existingFiles);
 
     // Gerar id e criar FileEntry
-    const id = uuidv4();
+    const id = Crypto.randomUUID();
     const localUri = targetDir.replace(/\/$/, '') + '/' + finalName;
     const sizeBytes = Buffer.byteLength(content, 'utf8');
     const createdAt = Date.now();

@@ -7,6 +7,8 @@
  * - Remoção de arquivo
  * - Mapeamento para DTO (sem localUri)
  * - Fluxo de metadados
+ *
+ * O mock de `expo-crypto` é carregado automaticamente pelo Jest durante os testes.
  */
 
 import { createFileRepository } from '../services';
