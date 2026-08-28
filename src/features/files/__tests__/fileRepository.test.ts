@@ -47,13 +47,30 @@ describe('FileRepository', () => {
   describe('save', () => {
     beforeEach(() => {
       // Configurar mocks padrão para um fluxo feliz
-      (mockFs.getInfoAsync as jest.Mock).mockResolvedValue({
-        exists: false,
-        isDirectory: false,
+      // Rastrear conteúdo escrito para retornar size correto
+      const writtenFiles = new Map<string, string>();
+
+      (mockFs.getInfoAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        // Se arquivo foi escrito, retornar size; senão, não existe
+        if (writtenFiles.has(uri)) {
+          const content = writtenFiles.get(uri) || '';
+          return {
+            exists: true,
+            isDirectory: false,
+            size: Buffer.byteLength(content, 'utf8'),
+          };
+        }
+        return { exists: false, isDirectory: false };
       });
+
+      (mockFs.writeAsStringAsync as jest.Mock).mockImplementation(
+        async (uri: string, content: string) => {
+          writtenFiles.set(uri, content);
+        },
+      );
+
       (mockFs.readDirectoryAsync as jest.Mock).mockResolvedValue([]);
       (mockFs.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
-      (mockFs.writeAsStringAsync as jest.Mock).mockResolvedValue(undefined);
       (mockFs.readAsStringAsync as jest.Mock).mockResolvedValue('[]');
     });
 

@@ -153,11 +153,27 @@ export class FileRepositoryImpl implements FileRepository {
     // Sanitizar nome e resolver duplicata
     const finalName = await this.resolveFinalName(targetDir, desiredName);
 
-    // Gerar id e criar FileEntry
+    // Gerar id
     const id = Crypto.randomUUID();
     const localUri = targetDir.replace(/\/$/, '') + '/' + finalName;
-    const sizeBytes = Buffer.byteLength(content, 'utf8');
     const createdAt = Date.now();
+
+    // Escrever conteúdo do arquivo
+    await this.fsModule.writeAsStringAsync(localUri, content);
+
+    // Obter tamanho real do arquivo escrito (não usar Buffer.byteLength, que não existe em React Native)
+    let sizeBytes = 0;
+    try {
+      const fileInfo = await this.fsModule.getInfoAsync(localUri);
+      // `FileInfo` é uma union discriminada por `exists`; quando true, `size` já vem
+      // narrowed pelo TypeScript, sem necessidade de cast.
+      if (fileInfo.exists) {
+        sizeBytes = fileInfo.size;
+      }
+    } catch {
+      // Se getInfoAsync falhar, usar 0 como fallback (arquivo foi escrito, mas não conseguimos ler o tamanho)
+      sizeBytes = 0;
+    }
 
     const entry: FileEntry = {
       id,
@@ -168,9 +184,6 @@ export class FileRepositoryImpl implements FileRepository {
       origin,
       createdAt,
     };
-
-    // Escrever conteúdo do arquivo
-    await this.fsModule.writeAsStringAsync(localUri, content);
 
     // Carregar metadados existentes, adicionar entrada, salvar
     const metadata = await this.loadMetadata(targetDir);

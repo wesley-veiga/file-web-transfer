@@ -98,7 +98,7 @@ export function SharedFilesScreen({
 
           {/* Lista de arquivos ou estado vazio */}
           {files.length === 0 ? (
-            <Card className="bg-background-secondary-light dark:bg-background-secondary-dark items-center justify-center py-12">
+            <Card className="bg-surface-light dark:bg-surface-dark items-center justify-center py-12">
               <Text className="text-base font-semibold text-text-light dark:text-text-dark mb-2 text-center">
                 Nenhum arquivo compartilhado
               </Text>
@@ -112,9 +112,7 @@ export function SharedFilesScreen({
               keyExtractor={(item) => item.id}
               scrollEnabled={false}
               renderItem={({ item, index }) => (
-                <Card
-                  className={`mb-3 flex-row items-center justify-between ${index === files.length - 1 ? '' : ''}`}
-                >
+                <Card className="mb-3 flex-row items-center justify-between">
                   <View className="flex-1">
                     <Text
                       className="text-base font-medium text-text-light dark:text-text-dark"
