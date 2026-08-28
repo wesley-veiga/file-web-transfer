@@ -279,30 +279,25 @@ describe('ApiRouter', () => {
       }
     });
 
-    it('registerRoute sobrescreve o handler quando o mesmo path/método é registrado de novo', async () => {
-      const internals = router as unknown as {
-        registerRoute: (method: string, path: string, handler: ApiHandlerForTest) => void;
-      };
-
-      internals.registerRoute('GET', '/api/session', () =>
+    it('addRoute registra uma nova rota no roteador', async () => {
+      router.addRoute('GET', '/api/custom', (_request, _params, _query) =>
         Promise.resolve({
           statusCode: 200,
           headers: { 'Content-Type': 'application/json; charset=utf-8' },
-          body: JSON.stringify({ overridden: true }),
+          body: JSON.stringify({ custom: true }),
         }),
       );
       router.register(mockHttpModule);
 
       const response = await registeredHandler!({
         method: 'GET',
-        path: '/api/session',
+        path: '/api/custom',
         headers: {},
       });
 
+      expect(response.statusCode).toBe(200);
       const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
-      expect(body).toEqual({ overridden: true });
+      expect(body).toEqual({ custom: true });
     });
   });
 });
-
-type ApiHandlerForTest = () => Promise<HttpServerResponse>;
