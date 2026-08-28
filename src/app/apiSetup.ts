@@ -207,7 +207,7 @@ export function registerUploadRoute(
     parser: ReturnType<typeof createMultipartStreamParser>;
     writeHandle: Awaited<ReturnType<typeof fileRepository.beginStreamedWrite>> | null;
     totalBytes: number;
-    lastError: { code: string; message: string } | null;
+    lastError: { statusCode: number; code: string; message: string } | null;
   }
 
   // Map para rastrear uploads em andamento por identificador único (chunk.requestId)
@@ -256,7 +256,11 @@ export function registerUploadRoute(
       if (chunk.isLast) {
         activeUploads.delete(uploadId);
       }
-      return createErrorResponse(400, state.lastError.code, state.lastError.message);
+      return createErrorResponse(
+        state.lastError.statusCode,
+        state.lastError.code,
+        state.lastError.message,
+      );
     }
 
     try {
@@ -277,7 +281,7 @@ export function registerUploadRoute(
               const message = error instanceof Error ? error.message : 'Erro desconhecido';
               // Se o erro menciona que o nome é vazio após sanitização, é 422
               if (message.includes('INVALID_FILENAME')) {
-                state.lastError = { code: 'INVALID_FILENAME', message };
+                state.lastError = { statusCode: 422, code: 'INVALID_FILENAME', message };
                 return createErrorResponse(422, 'INVALID_FILENAME', 'Nome de arquivo inválido');
               }
               throw error;
@@ -288,6 +292,7 @@ export function registerUploadRoute(
           case 'fileData': {
             if (!state.writeHandle) {
               state.lastError = {
+                statusCode: 400,
                 code: 'INVALID_MULTIPART',
                 message: 'Arquivo data sem fileStart',
               };
@@ -302,6 +307,7 @@ export function registerUploadRoute(
               // Abortar escrita
               await state.writeHandle.abort();
               state.lastError = {
+                statusCode: 413,
                 code: 'FILE_TOO_LARGE',
                 message: 'Arquivo excede tamanho máximo permitido',
               };
@@ -321,6 +327,7 @@ export function registerUploadRoute(
               ) {
                 await state.writeHandle.abort();
                 state.lastError = {
+                  statusCode: 507,
                   code: 'INSUFFICIENT_STORAGE',
                   message: 'Sem espaço no dispositivo',
                 };
@@ -345,6 +352,7 @@ export function registerUploadRoute(
               await state.writeHandle.abort();
             }
             state.lastError = {
+              statusCode: 400,
               code: 'INVALID_MULTIPART',
               message: 'Corpo multipart malformado',
             };

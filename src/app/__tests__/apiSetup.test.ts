@@ -1,10 +1,15 @@
 import { registerFileRoutes, registerUploadRoute } from '../apiSetup';
 import type { ApiRouter, ApiHandler } from '../../features/server/services/apiRouter';
-import type { HttpModule, HttpUploadChunk } from '../../features/server/services/httpModule';
+import type {
+  HttpModule,
+  HttpUploadChunk,
+  HttpServerRequest,
+  HttpServerResponse,
+} from '../../features/server/services/httpModule';
 import type { FileRepository } from '../../features/files/services/fileRepository';
 import type { FileEntry } from '../../features/files/types';
 import { fileEntryDtoSchema, apiErrorSchema } from '../../shared/types/api';
-import { createMockFileRepository } from '../../__mocks__/testHelpers';
+import { createMockFileRepository, createMockHttpModule } from '../../__mocks__/testHelpers';
 
 describe('apiSetup — registerFileRoutes', () => {
   let mockApiRouter: jest.Mocked<ApiRouter>;
@@ -703,9 +708,7 @@ describe('apiSetup — registerUploadRoute', () => {
   let mockFileRepository: jest.Mocked<FileRepository>;
 
   beforeEach(() => {
-    mockHttpModule = {
-      addUploadListener: jest.fn(),
-    };
+    mockHttpModule = createMockHttpModule();
 
     mockFileRepository = createMockFileRepository();
   });
@@ -725,15 +728,15 @@ describe('apiSetup — registerUploadRoute', () => {
     it('retorna 201 com FileEntryDto válido ao completar upload', async () => {
       const maxUploadBytes = 1000000;
 
-      let capturedHandler:
-        | ((
-            chunk: HttpUploadChunk,
-            request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
-        | null = null;
+      let capturedHandler: (
+        chunk: HttpUploadChunk,
+        request: Omit<HttpServerRequest, 'body'>,
+      ) => Promise<HttpServerResponse> = () => {
+        throw new Error('Handler não foi registrado');
+      };
 
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as typeof capturedHandler;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -785,7 +788,6 @@ describe('apiSetup — registerUploadRoute', () => {
         headers: { 'content-type': 'multipart/form-data; boundary=----WebKitFormBoundary' },
       };
 
-      if (!capturedHandler) throw new Error('Handler não foi registrado');
       const response = await capturedHandler(chunk, request);
 
       expect(response).toBeDefined();
@@ -806,10 +808,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -852,7 +857,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -870,10 +875,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -916,7 +924,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -943,10 +951,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -957,7 +968,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data' }, // Sem boundary
@@ -975,10 +986,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -996,7 +1010,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1014,10 +1028,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1036,7 +1053,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1056,10 +1073,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1068,6 +1088,7 @@ describe('apiSetup — registerUploadRoute', () => {
         id: '550e8400-e29b-41d4-a716-446655440021',
         finalName: 'large.txt',
         writeChunk: jest.fn().mockResolvedValue(undefined),
+        finish: jest.fn(),
         abort: jest.fn().mockResolvedValue(undefined),
       };
 
@@ -1086,7 +1107,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1107,10 +1128,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1119,6 +1143,7 @@ describe('apiSetup — registerUploadRoute', () => {
         id: '550e8400-e29b-41d4-a716-446655440021',
         finalName: 'file.txt',
         writeChunk: jest.fn().mockResolvedValue(undefined),
+        finish: jest.fn(),
         abort: jest.fn().mockResolvedValue(undefined),
       };
 
@@ -1133,7 +1158,7 @@ describe('apiSetup — registerUploadRoute', () => {
         `\r\n` +
         `Part1 data here\r\n`;
 
-      const response1 = await capturedHandler(
+      const response1 = await capturedHandler!(
         { requestId: 'req-1', data: chunk1, isLast: false },
         {
           method: 'POST',
@@ -1147,7 +1172,7 @@ describe('apiSetup — registerUploadRoute', () => {
       // Segundo chunk: mais conteúdo que ultrapassa o limite
       const chunk2 = `Part2 data here and then much more data that will exceed the limit------boundary--\r\n`;
 
-      const response2 = await capturedHandler(
+      const response2 = await capturedHandler!(
         { requestId: 'req-1', data: chunk2, isLast: true },
         {
           method: 'POST',
@@ -1169,10 +1194,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1194,7 +1222,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1214,10 +1242,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1226,6 +1257,7 @@ describe('apiSetup — registerUploadRoute', () => {
         id: '550e8400-e29b-41d4-a716-446655440021',
         finalName: 'file.txt',
         writeChunk: jest.fn().mockRejectedValue(new Error('No space left on device (ENOSPC)')),
+        finish: jest.fn(),
         abort: jest.fn().mockResolvedValue(undefined),
       };
 
@@ -1244,7 +1276,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1265,10 +1297,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1277,6 +1312,7 @@ describe('apiSetup — registerUploadRoute', () => {
         id: '550e8400-e29b-41d4-a716-446655440021',
         finalName: 'file.txt',
         writeChunk: jest.fn().mockRejectedValue(new Error('Storage quota exceeded')),
+        finish: jest.fn(),
         abort: jest.fn().mockResolvedValue(undefined),
       };
 
@@ -1295,7 +1331,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1315,10 +1351,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1385,7 +1424,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: false,
       };
 
-      await capturedHandler(chunk1a, {
+      await capturedHandler!(chunk1a, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1402,7 +1441,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: false,
       };
 
-      await capturedHandler(chunk2a, {
+      await capturedHandler!(chunk2a, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1415,7 +1454,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response1 = await capturedHandler(chunk1b, {
+      const response1 = await capturedHandler!(chunk1b, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1428,7 +1467,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response2 = await capturedHandler(chunk2b, {
+      const response2 = await capturedHandler!(chunk2b, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1452,10 +1491,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1467,6 +1509,7 @@ describe('apiSetup — registerUploadRoute', () => {
         id: uuid1,
         finalName: 'file1.txt',
         writeChunk: jest.fn().mockRejectedValue(new Error('No space left on device')),
+        finish: jest.fn(),
         abort: jest.fn().mockResolvedValue(undefined),
       };
 
@@ -1514,7 +1557,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response1 = await capturedHandler(chunk1, {
+      const response1 = await capturedHandler!(chunk1, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1532,7 +1575,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response2 = await capturedHandler(chunk2, {
+      const response2 = await capturedHandler!(chunk2, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1554,10 +1597,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1603,7 +1649,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1630,10 +1676,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1645,7 +1694,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response400 = await capturedHandler(chunk400, {
+      const response400 = await capturedHandler!(chunk400, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data' }, // Sem boundary
@@ -1665,10 +1714,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1690,7 +1742,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1708,10 +1760,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1733,7 +1788,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1749,10 +1804,13 @@ describe('apiSetup — registerUploadRoute', () => {
         | ((
             chunk: HttpUploadChunk,
             request: Omit<HttpServerRequest, 'body'>,
-          ) => Promise<HttpServerResponse | void>)
+          ) => Promise<HttpServerResponse>)
         | null = null;
       mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
-        capturedHandler = handler;
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
       });
 
       registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
@@ -1798,7 +1856,7 @@ describe('apiSetup — registerUploadRoute', () => {
         isLast: true,
       };
 
-      const response = await capturedHandler(chunk, {
+      const response = await capturedHandler!(chunk, {
         method: 'POST',
         path: '/api/upload',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
@@ -1807,6 +1865,177 @@ describe('apiSetup — registerUploadRoute', () => {
       expect(response.statusCode).toBe(201);
       const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
       expect(body.file.name).toBe('relatório-ação-é.txt');
+    });
+  });
+
+  describe('branches de erro adicionais (cobertura)', () => {
+    it('reenvia o mesmo erro para chunks subsequentes após o upload já ter falhado, e limpa o estado no isLast', async () => {
+      const maxUploadBytes = 1000000;
+
+      let capturedHandler:
+        | ((
+            chunk: HttpUploadChunk,
+            request: Omit<HttpServerRequest, 'body'>,
+          ) => Promise<HttpServerResponse>)
+        | null = null;
+      mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
+      });
+
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+
+      mockFileRepository.beginStreamedWrite.mockRejectedValue(
+        new Error('Nome sanitizado vazio (INVALID_FILENAME)'),
+      );
+
+      const request = {
+        method: 'POST',
+        path: '/api/upload',
+        headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
+      };
+
+      // Primeiro chunk: gera o erro 422 (fileStart falha)
+      const chunk1: HttpUploadChunk = {
+        requestId: 'req-retry',
+        data:
+          `------boundary\r\n` +
+          `Content-Disposition: form-data; name="file"; filename=".."\r\n` +
+          `\r\n` +
+          `conteudo`,
+        isLast: false,
+      };
+      const response1 = await capturedHandler!(chunk1, request);
+      expect(response1.statusCode).toBe(422);
+
+      // Segundo chunk (não-último): deve repetir o MESMO erro, sem tentar processar de novo
+      const chunk2: HttpUploadChunk = {
+        requestId: 'req-retry',
+        data: ' mais dados',
+        isLast: false,
+      };
+      const response2 = await capturedHandler!(chunk2, request);
+      expect(response2.statusCode).toBe(422);
+      const body2 = JSON.parse(typeof response2.body === 'string' ? response2.body : '');
+      expect(body2.error.code).toBe('INVALID_FILENAME');
+
+      // Chunk final: mesmo erro, e o estado do upload é removido do Map interno
+      const chunk3: HttpUploadChunk = {
+        requestId: 'req-retry',
+        data: '',
+        isLast: true,
+      };
+      const response3 = await capturedHandler!(chunk3, request);
+      expect(response3.statusCode).toBe(422);
+    });
+
+    it('propaga (500) um erro de beginStreamedWrite que não é sobre nome inválido', async () => {
+      const maxUploadBytes = 1000000;
+
+      let capturedHandler:
+        | ((
+            chunk: HttpUploadChunk,
+            request: Omit<HttpServerRequest, 'body'>,
+          ) => Promise<HttpServerResponse>)
+        | null = null;
+      mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
+      });
+
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+
+      mockFileRepository.beginStreamedWrite.mockRejectedValue(
+        new Error('Erro inesperado de disco'),
+      );
+
+      const chunk: HttpUploadChunk = {
+        requestId: 'req-unexpected',
+        data:
+          `------boundary\r\n` +
+          `Content-Disposition: form-data; name="file"; filename="a.txt"\r\n` +
+          `\r\n` +
+          `dados\r\n` +
+          `------boundary--\r\n`,
+        isLast: true,
+      };
+
+      const response = await capturedHandler!(chunk, {
+        method: 'POST',
+        path: '/api/upload',
+        headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
+      });
+
+      expect(response.statusCode).toBe(500);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+    });
+
+    it('aborta a escrita quando o corpo termina sem boundary de fechamento (malformed no finish, com writeHandle já criado)', async () => {
+      const maxUploadBytes = 1000000;
+
+      let capturedHandler:
+        | ((
+            chunk: HttpUploadChunk,
+            request: Omit<HttpServerRequest, 'body'>,
+          ) => Promise<HttpServerResponse>)
+        | null = null;
+      mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
+        capturedHandler = handler as (
+          chunk: HttpUploadChunk,
+          request: Omit<HttpServerRequest, 'body'>,
+        ) => Promise<HttpServerResponse>;
+      });
+
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+
+      const mockWriteHandle = {
+        id: '550e8400-e29b-41d4-a716-446655440099',
+        finalName: 'a.txt',
+        writeChunk: jest.fn().mockResolvedValue(undefined),
+        finish: jest.fn(),
+        abort: jest.fn().mockResolvedValue(undefined),
+      };
+      mockFileRepository.beginStreamedWrite.mockResolvedValue(mockWriteHandle);
+
+      const request = {
+        method: 'POST',
+        path: '/api/upload',
+        headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
+      };
+
+      // Primeiro chunk: inicia o arquivo normalmente (fileStart bem-sucedido)
+      const chunk1: HttpUploadChunk = {
+        requestId: 'req-malformed-mid',
+        data:
+          `------boundary\r\n` +
+          `Content-Disposition: form-data; name="file"; filename="a.txt"\r\n` +
+          `\r\n` +
+          `dados parciais`,
+        isLast: false,
+      };
+      await capturedHandler!(chunk1, request);
+      expect(mockWriteHandle.abort).not.toHaveBeenCalled();
+
+      // Segundo chunk é o ÚLTIMO, mas nunca traz o boundary de fechamento —
+      // parser.finish() detecta isso (ainda "dentro" do corpo do arquivo sem
+      // ter visto o boundary final) e emite 'malformed'; como o writeHandle já
+      // existe (fileStart já processado), o handler deve abortar a escrita.
+      const chunk2: HttpUploadChunk = {
+        requestId: 'req-malformed-mid',
+        data: ' mais dados sem boundary de fechamento',
+        isLast: true,
+      };
+      const response2 = await capturedHandler!(chunk2, request);
+
+      expect(mockWriteHandle.abort).toHaveBeenCalled();
+      expect(response2.statusCode).toBe(400);
+      const body2 = JSON.parse(typeof response2.body === 'string' ? response2.body : '');
+      expect(body2.error.code).toBe('INVALID_MULTIPART');
     });
   });
 });

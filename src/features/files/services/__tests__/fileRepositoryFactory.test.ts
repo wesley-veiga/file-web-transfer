@@ -62,6 +62,29 @@ describe('fileRepositoryFactory - comprehensive coverage', () => {
     });
   });
 
+  it('appendToFileAsync do módulo padrão usa a API File real sem lançar', async () => {
+    // Exercita a implementação REAL de createDefaultFileSystemModule() (não um mock
+    // FileSystemModule injetado) para garantir que appendToFileAsync realmente chama
+    // `new File(uri).write(content, { append: true })` ponta a ponta, sem cair em
+    // nenhum caminho de reflection/fallback (removidos no fix a927d6f).
+    //
+    // Nota: jest.isolateModules é síncrono — só a criação do repo acontece dentro
+    // dele; o trabalho assíncrono (writeChunk) roda fora, com a referência já
+    // capturada (o registro de módulos isolado só afeta requires FUTUROS, não
+    // invalida os objetos já resolvidos).
+    let repo: ReturnType<typeof createFileRepository>;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createFileRepository: isolatedCreate } = require('../fileRepositoryFactory');
+      repo = isolatedCreate();
+    });
+
+    const handle = await repo!.beginStreamedWrite('upload.txt', 'text/plain', 'received');
+
+    await expect(handle.writeChunk('hello ')).resolves.toBeUndefined();
+    await expect(handle.writeChunk('world')).resolves.toBeUndefined();
+  });
+
   describe('appendToFileAsync - new File API (SDK 57+)', () => {
     it('should use File.write() with append:true to append content to file', async () => {
       const mockFs = createMockFileSystemModule();

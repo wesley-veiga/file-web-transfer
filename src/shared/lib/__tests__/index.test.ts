@@ -1,4 +1,9 @@
-import { sanitizeFileName, resolveDuplicateName, generateSessionId } from '../index';
+import {
+  sanitizeFileName,
+  resolveDuplicateName,
+  generateSessionId,
+  createMultipartStreamParser,
+} from '../index';
 
 describe('shared/lib — barrel exports', () => {
   it('should export sanitizeFileName from barrel', () => {
@@ -43,5 +48,16 @@ describe('shared/lib — barrel exports', () => {
     // Ambos devem ser válidos
     expect(id1).toMatch(/^[a-záàâãéèêíïóôõöúçñ]+-\d{2}$/);
     expect(id2).toMatch(/^[a-záàâãéèêíïóôõöúçñ]+-\d{2}$/);
+  });
+
+  it('should export createMultipartStreamParser from barrel', () => {
+    expect(createMultipartStreamParser).toBeDefined();
+    expect(typeof createMultipartStreamParser).toBe('function');
+  });
+
+  it('should call createMultipartStreamParser via barrel correctly', () => {
+    const parser = createMultipartStreamParser('boundary');
+    expect(typeof parser.feed).toBe('function');
+    expect(typeof parser.finish).toBe('function');
   });
 });
