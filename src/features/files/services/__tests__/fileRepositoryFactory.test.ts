@@ -3,8 +3,6 @@
  * Focuses on branches that are hard to cover in the main fileRepository.test.ts
  */
 
-import * as FileSystem from 'expo-file-system';
-
 import { setFileSystemModule, createFileRepository } from '../fileRepositoryFactory';
 import type { FileSystemModule } from '../fileRepository';
 
@@ -62,31 +60,24 @@ describe('fileRepositoryFactory - comprehensive coverage', () => {
   });
 
   it('should use fallback documentDirectory when FileSystem.documentDirectory is undefined', () => {
-    // This test specifically covers line 44's falsy branch in createDefaultFileSystemModule
-    // When expo-file-system does not export documentDirectory, the || fallback is used
-    // Store the original value to restore it after the test
-    const fileSystemModule = FileSystem as Record<string, unknown>;
-    const originalDocDir = fileSystemModule.documentDirectory;
+    // This test specifically covers line 44's falsy branch in createDefaultFileSystemModule.
+    // `jest.isolateModules` gives fileRepositoryFactory a fresh module registry (so
+    // `realFileSystemModule` starts null again, forcing createDefaultFileSystemModule() to
+    // run) — but expo-file-system must be required from *inside* the same isolated registry,
+    // otherwise mutating the outer-scope import has no effect on what the isolated factory
+    // actually imports (they'd be two different module instances).
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const isolatedFileSystem = require('expo-file-system') as Record<string, unknown>;
+      delete isolatedFileSystem.documentDirectory;
 
-    try {
-      // Temporarily remove documentDirectory to force the fallback branch
-      delete fileSystemModule.documentDirectory;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createFileRepository: isolatedCreate } = require('../fileRepositoryFactory');
 
-      // Isolate modules to get a fresh copy of fileRepositoryFactory without prior state
-      jest.isolateModules(() => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { createFileRepository: isolatedCreate } = require('../fileRepositoryFactory');
+      // This should call createDefaultFileSystemModule() which will use the fallback
+      const repo = isolatedCreate();
 
-        // This should call createDefaultFileSystemModule() which will use the fallback
-        const repo = isolatedCreate();
-
-        expect(repo).toBeDefined();
-      });
-    } finally {
-      // Restore the original documentDirectory
-      if (originalDocDir !== undefined) {
-        fileSystemModule.documentDirectory = originalDocDir;
-      }
-    }
+      expect(repo).toBeDefined();
+    });
   });
 });
