@@ -4,3 +4,6 @@ export type { HttpModule, HttpServerRequest, HttpServerResponse } from './httpMo
 export { createServerService, setHttpModule } from './serverServiceFactory';
 export type { NotificationService } from './notificationService';
 export { NotificationServiceImpl, createNotificationService } from './notificationService';
+export type { ApiRouter, ApiRouterConfig } from './apiRouter';
+export { ApiRouterImpl } from './apiRouter';
+export { createApiRouter } from './apiRouterFactory';
