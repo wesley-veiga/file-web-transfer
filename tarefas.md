@@ -107,7 +107,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   `FileRepository` sobre `expo-file-system`: salvar em `received/`, listar, remover, mapear `FileEntry → FileEntryDto` (nunca expor `localUri`).
   *Pronto quando:* testes com mock de filesystem; teste garante que DTO não contém `localUri`.
 
-- [ ] **T-302 · Compartilhar arquivos do host** ⬅ T-301, T-005
+- [x] **T-302 · Compartilhar arquivos do host** ⬅ T-301, T-005
   Document picker, lista "Compartilhados" com remoção (HU-06); store da feature.
   *Pronto quando:* critérios de aceite "Tela Arquivos Compartilhados" atendidos (exceto o item de 3 s, que depende de T-503).
 
