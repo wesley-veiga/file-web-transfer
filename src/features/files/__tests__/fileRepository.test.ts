@@ -22,6 +22,7 @@ import { fileEntryDtoSchema } from '../../../shared/types/api';
 import { createFileRepository, setFileSystemModule } from '../services';
 import type { FileSystemModule, FileRepository } from '../services';
 import type { FileEntry } from '../types';
+import { createMockFileSystemModule } from '../../../__mocks__/testHelpers';
 
 describe('FileRepository', () => {
   let repository: FileRepository;
@@ -29,17 +30,8 @@ describe('FileRepository', () => {
 
   beforeEach(() => {
     // Criar mock do módulo FileSystem
-    mockFs = {
-      documentDirectory: 'file:///mock-docs/',
-      getInfoAsync: jest.fn(),
-      readDirectoryAsync: jest.fn(),
-      makeDirectoryAsync: jest.fn(),
-      writeAsStringAsync: jest.fn(),
-      readAsStringAsync: jest.fn(),
-      deleteAsync: jest.fn(),
-      copyAsync: jest.fn(),
-      moveAsync: jest.fn(),
-    };
+    mockFs = createMockFileSystemModule();
+    mockFs.documentDirectory = 'file:///mock-docs/';
 
     repository = createFileRepository(mockFs);
   });
@@ -803,17 +795,8 @@ describe('FileRepository', () => {
     it('deve usar fallback quando documentDirectory é falsy (null, undefined, etc)', () => {
       // Este teste força a execução da branch do || em createDefaultFileSystemModule
       // Criamos um módulo sem documentDirectory para simular expo-file-system sem esse valor
-      const partialFs: jest.Mocked<FileSystemModule> = {
-        documentDirectory: undefined,
-        getInfoAsync: jest.fn(),
-        readDirectoryAsync: jest.fn(),
-        makeDirectoryAsync: jest.fn(),
-        writeAsStringAsync: jest.fn(),
-        readAsStringAsync: jest.fn(),
-        deleteAsync: jest.fn(),
-        copyAsync: jest.fn(),
-        moveAsync: jest.fn(),
-      };
+      const partialFs = createMockFileSystemModule();
+      partialFs.documentDirectory = undefined;
 
       const repo = createFileRepository(partialFs);
 
@@ -824,17 +807,8 @@ describe('FileRepository', () => {
 
   describe('factory - createFileRepository e setFileSystemModule', () => {
     it('deve usar módulo injetado quando fornecido', () => {
-      const customFs: jest.Mocked<FileSystemModule> = {
-        documentDirectory: 'file:///custom/',
-        getInfoAsync: jest.fn(),
-        readDirectoryAsync: jest.fn(),
-        makeDirectoryAsync: jest.fn(),
-        writeAsStringAsync: jest.fn(),
-        readAsStringAsync: jest.fn(),
-        deleteAsync: jest.fn(),
-        copyAsync: jest.fn(),
-        moveAsync: jest.fn(),
-      };
+      const customFs = createMockFileSystemModule();
+      customFs.documentDirectory = 'file:///custom/';
 
       const repo = createFileRepository(customFs);
 
@@ -842,17 +816,8 @@ describe('FileRepository', () => {
     });
 
     it('deve usar módulo setado via setFileSystemModule quando nenhum é injetado', () => {
-      const prodFs: jest.Mocked<FileSystemModule> = {
-        documentDirectory: 'file:///prod/',
-        getInfoAsync: jest.fn(),
-        readDirectoryAsync: jest.fn(),
-        makeDirectoryAsync: jest.fn(),
-        writeAsStringAsync: jest.fn(),
-        readAsStringAsync: jest.fn(),
-        deleteAsync: jest.fn(),
-        copyAsync: jest.fn(),
-        moveAsync: jest.fn(),
-      };
+      const prodFs = createMockFileSystemModule();
+      prodFs.documentDirectory = 'file:///prod/';
 
       setFileSystemModule(prodFs);
       const repo = createFileRepository();
@@ -861,29 +826,11 @@ describe('FileRepository', () => {
     });
 
     it('deve preferir módulo injetado sobre setado', () => {
-      const globalFs: jest.Mocked<FileSystemModule> = {
-        documentDirectory: 'file:///global/',
-        getInfoAsync: jest.fn(),
-        readDirectoryAsync: jest.fn(),
-        makeDirectoryAsync: jest.fn(),
-        writeAsStringAsync: jest.fn(),
-        readAsStringAsync: jest.fn(),
-        deleteAsync: jest.fn(),
-        copyAsync: jest.fn(),
-        moveAsync: jest.fn(),
-      };
+      const globalFs = createMockFileSystemModule();
+      globalFs.documentDirectory = 'file:///global/';
 
-      const injectFs: jest.Mocked<FileSystemModule> = {
-        documentDirectory: 'file:///injected/',
-        getInfoAsync: jest.fn(),
-        readDirectoryAsync: jest.fn(),
-        makeDirectoryAsync: jest.fn(),
-        writeAsStringAsync: jest.fn(),
-        readAsStringAsync: jest.fn(),
-        deleteAsync: jest.fn(),
-        copyAsync: jest.fn(),
-        moveAsync: jest.fn(),
-      };
+      const injectFs = createMockFileSystemModule();
+      injectFs.documentDirectory = 'file:///injected/';
 
       setFileSystemModule(globalFs);
       const repo = createFileRepository(injectFs);
@@ -895,17 +842,8 @@ describe('FileRepository', () => {
     it('deve usar default documentDirectory se FileSystem não fornecer um', () => {
       // Teste que cobre a branch do || na linha 44
       // Criar um módulo com documentDirectory vazio/undefined
-      const emptyFsModule: jest.Mocked<FileSystemModule> = {
-        documentDirectory: undefined,
-        getInfoAsync: jest.fn(),
-        readDirectoryAsync: jest.fn(),
-        makeDirectoryAsync: jest.fn(),
-        writeAsStringAsync: jest.fn(),
-        readAsStringAsync: jest.fn(),
-        deleteAsync: jest.fn(),
-        copyAsync: jest.fn(),
-        moveAsync: jest.fn(),
-      };
+      const emptyFsModule = createMockFileSystemModule();
+      emptyFsModule.documentDirectory = undefined;
 
       const repo = createFileRepository(emptyFsModule);
 
@@ -915,17 +853,8 @@ describe('FileRepository', () => {
     it('deve usar fallback documentDirectory quando expo-file-system não fornece um', () => {
       // Criar um módulo que simula expo-file-system sem documentDirectory
       // Isso força a branch do || na linha 44 de createDefaultFileSystemModule
-      const minimalFs: jest.Mocked<FileSystemModule> = {
-        documentDirectory: undefined,
-        getInfoAsync: jest.fn(),
-        readDirectoryAsync: jest.fn(),
-        makeDirectoryAsync: jest.fn(),
-        writeAsStringAsync: jest.fn(),
-        readAsStringAsync: jest.fn(),
-        deleteAsync: jest.fn(),
-        copyAsync: jest.fn(),
-        moveAsync: jest.fn(),
-      };
+      const minimalFs = createMockFileSystemModule();
+      minimalFs.documentDirectory = undefined;
 
       const repo = createFileRepository(minimalFs);
 

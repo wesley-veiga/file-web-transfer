@@ -1,6 +1,6 @@
 import * as Network from 'expo-network';
 import { ServerServiceImpl, ServerServiceError } from '../serverService';
-import type { HttpModule } from '../httpModule';
+import { createMockHttpModule } from '../../../../__mocks__/testHelpers';
 
 // Mock expo-network
 jest.mock('expo-network');
@@ -12,19 +12,13 @@ jest.mock('../../../../shared/lib', () => ({
 
 describe('ServerService', () => {
   let serverService: ServerServiceImpl;
-  let mockHttpModule: jest.Mocked<HttpModule>;
+  let mockHttpModule: jest.Mocked<ReturnType<typeof createMockHttpModule>>;
 
   beforeEach(() => {
     jest.clearAllMocks();
 
     // Criar mock do HttpModule
-    mockHttpModule = {
-      start: jest.fn(),
-      stop: jest.fn(),
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      isRunning: jest.fn(() => false),
-    };
+    mockHttpModule = createMockHttpModule();
 
     serverService = new ServerServiceImpl(mockHttpModule);
 

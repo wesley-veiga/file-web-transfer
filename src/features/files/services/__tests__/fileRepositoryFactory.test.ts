@@ -4,22 +4,13 @@
  */
 
 import { setFileSystemModule, createFileRepository } from '../fileRepositoryFactory';
-import type { FileSystemModule } from '../fileRepository';
+import { createMockFileSystemModule } from '../../../../__mocks__/testHelpers';
 
 describe('fileRepositoryFactory - comprehensive coverage', () => {
   it('should create repository with injected FileSystemModule with documentDirectory', () => {
     // This covers the truthy branch of line 44: fsAny.documentDirectory || 'file:///document/'
-    const mockFs: jest.Mocked<FileSystemModule> = {
-      documentDirectory: 'file:///test-dir/',
-      getInfoAsync: jest.fn(),
-      readDirectoryAsync: jest.fn(),
-      makeDirectoryAsync: jest.fn(),
-      writeAsStringAsync: jest.fn(),
-      readAsStringAsync: jest.fn(),
-      deleteAsync: jest.fn(),
-      copyAsync: jest.fn(),
-      moveAsync: jest.fn(),
-    };
+    const mockFs = createMockFileSystemModule();
+    mockFs.documentDirectory = 'file:///test-dir/';
 
     const repo = createFileRepository(mockFs);
 
@@ -29,17 +20,8 @@ describe('fileRepositoryFactory - comprehensive coverage', () => {
   it('should create repository with injected FileSystemModule without documentDirectory', () => {
     // This covers the falsy branch of line 44: fsAny.documentDirectory || 'file:///document/'
     // When documentDirectory is undefined, the || operator should return the fallback
-    const mockFs: jest.Mocked<FileSystemModule> = {
-      documentDirectory: undefined,
-      getInfoAsync: jest.fn(),
-      readDirectoryAsync: jest.fn(),
-      makeDirectoryAsync: jest.fn(),
-      writeAsStringAsync: jest.fn(),
-      readAsStringAsync: jest.fn(),
-      deleteAsync: jest.fn(),
-      copyAsync: jest.fn(),
-      moveAsync: jest.fn(),
-    };
+    const mockFs = createMockFileSystemModule();
+    mockFs.documentDirectory = undefined;
 
     const repo = createFileRepository(mockFs);
 
@@ -47,17 +29,8 @@ describe('fileRepositoryFactory - comprehensive coverage', () => {
   });
 
   it('should use setFileSystemModule when no module is injected', () => {
-    const mockFs: jest.Mocked<FileSystemModule> = {
-      documentDirectory: 'file:///global/',
-      getInfoAsync: jest.fn(),
-      readDirectoryAsync: jest.fn(),
-      makeDirectoryAsync: jest.fn(),
-      writeAsStringAsync: jest.fn(),
-      readAsStringAsync: jest.fn(),
-      deleteAsync: jest.fn(),
-      copyAsync: jest.fn(),
-      moveAsync: jest.fn(),
-    };
+    const mockFs = createMockFileSystemModule();
+    mockFs.documentDirectory = 'file:///global/';
 
     setFileSystemModule(mockFs);
     const repo = createFileRepository();

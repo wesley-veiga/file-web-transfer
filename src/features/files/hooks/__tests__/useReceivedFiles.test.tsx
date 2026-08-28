@@ -14,18 +14,14 @@ import { useReceivedFilesStore } from '../../store/receivedFilesStore';
 import type { FileRepository } from '../../services/fileRepository';
 import type { SharingModule } from '../../services/sharingService';
 import type { FileEntry } from '../../types';
+import { createMockFileRepository as createMockFileRepositoryHelper } from '../../../../__mocks__/testHelpers';
 
 describe('useReceivedFiles hook', () => {
   let mockFileRepository: jest.Mocked<FileRepository>;
   let mockSharingModule: jest.Mocked<SharingModule>;
 
-  const createMockFileRepository = (): jest.Mocked<FileRepository> => ({
-    save: jest.fn(),
-    saveFromUri: jest.fn(),
-    list: jest.fn(),
-    remove: jest.fn(),
-    toDto: jest.fn(),
-  });
+  const createMockFileRepository = (): jest.Mocked<FileRepository> =>
+    createMockFileRepositoryHelper();
 
   const createMockSharingModule = (): jest.Mocked<SharingModule> => ({
     openAsync: jest.fn(),

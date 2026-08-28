@@ -3,6 +3,7 @@ import type { ApiRouter, ApiHandler } from '../../features/server/services/apiRo
 import type { FileRepository } from '../../features/files/services/fileRepository';
 import type { FileEntry } from '../../features/files/types';
 import { fileEntryDtoSchema, apiErrorSchema } from '../../shared/types/api';
+import { createMockFileRepository } from '../../__mocks__/testHelpers';
 
 describe('apiSetup — registerFileRoutes', () => {
   let mockApiRouter: jest.Mocked<ApiRouter>;
@@ -16,19 +17,7 @@ describe('apiSetup — registerFileRoutes', () => {
       addRoute: jest.fn(),
     };
 
-    mockFileRepository = {
-      save: jest.fn(),
-      saveFromUri: jest.fn(),
-      list: jest.fn(),
-      remove: jest.fn(),
-      toDto: jest.fn((entry: FileEntry) => ({
-        id: entry.id,
-        name: entry.name,
-        sizeBytes: entry.sizeBytes,
-        mimeType: entry.mimeType,
-        createdAt: entry.createdAt,
-      })),
-    };
+    mockFileRepository = createMockFileRepository();
 
     mockFsModule = {
       readAsStringAsync: jest.fn(),

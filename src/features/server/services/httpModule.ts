@@ -25,6 +25,33 @@ export interface HttpServerResponse {
 export type HttpServerRequestHandler = (request: HttpServerRequest) => Promise<HttpServerResponse>;
 
 /**
+ * Um pedaço do corpo de um upload em andamento (streaming).
+ *
+ * Usado para processar uploads em chunks sem bufferizar o corpo inteiro em memória.
+ * O módulo nativo processa o request chunk-by-chunk; a camada JS recebe eventos via `HttpUploadChunkHandler`.
+ */
+export interface HttpUploadChunk {
+  /** Bytes do chunk (string — o módulo nativo real entrega como base64 ou binary-safe string). */
+  data: string;
+  /** true apenas no último chunk do corpo. */
+  isLast: boolean;
+}
+
+/**
+ * Handler invocado uma vez por chunk recebido durante um upload em streaming.
+ *
+ * Deve retornar a HttpServerResponse final quando `chunk.isLast === true`;
+ * nos chunks intermediários, o retorno é ignorado (pode ser void/undefined).
+ *
+ * Esta é a interface crítica que permite processar uploads de arquivo grande
+ * sem bufferizar o corpo inteiro em memória.
+ */
+export type HttpUploadChunkHandler = (
+  chunk: HttpUploadChunk,
+  request: Omit<HttpServerRequest, 'body'>,
+) => Promise<HttpServerResponse | void>;
+
+/**
  * Contrato de baixo nível para o módulo HTTP nativo injetável.
  *
  * O `ServerService` inicia o servidor chamando `start()`, registra handlers via `addListener`,
@@ -54,6 +81,23 @@ export interface HttpModule {
    * Remove um listener registrado.
    */
   removeListener: (path: string) => void;
+
+  /**
+   * Registra um listener para uploads em streaming.
+   * Invocado uma vez por chunk recebido; o handler recebe eventos incremental.
+   *
+   * Usado para rotas POST que processam uploads multipart sem bufferizar
+   * o corpo inteiro em memória.
+   *
+   * @param path - Caminho para registrar (ex.: '/api/upload')
+   * @param handler - Handler que recebe chunks incremental
+   */
+  addUploadListener: (path: string, handler: HttpUploadChunkHandler) => void;
+
+  /**
+   * Remove um listener de upload registrado.
+   */
+  removeUploadListener: (path: string) => void;
 
   /**
    * Verifica se o servidor está rodando.

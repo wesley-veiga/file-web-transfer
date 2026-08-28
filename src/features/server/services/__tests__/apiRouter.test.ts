@@ -1,12 +1,12 @@
 import { ApiRouterImpl } from '../apiRouter';
 import type { ApiRouterConfig } from '../apiRouter';
 import type {
-  HttpModule,
   HttpServerRequest,
   HttpServerRequestHandler,
   HttpServerResponse,
 } from '../httpModule';
 import { sessionInfoSchema, apiErrorSchema } from '../../../../shared/types/api';
+import { createMockHttpModule } from '../../../../__mocks__/testHelpers';
 
 /** Acesso ao método privado `createErrorResponse` só para exercitar o branch de fallback. */
 type ApiRouterInternals = {
@@ -15,7 +15,7 @@ type ApiRouterInternals = {
 
 describe('ApiRouter', () => {
   let router: ApiRouterImpl;
-  let mockHttpModule: HttpModule;
+  let mockHttpModule: jest.Mocked<ReturnType<typeof createMockHttpModule>>;
   let registeredHandler: HttpServerRequestHandler | null = null;
 
   beforeEach(() => {
@@ -27,17 +27,14 @@ describe('ApiRouter', () => {
     router = new ApiRouterImpl(config);
 
     // Mock do HttpModule
-    mockHttpModule = {
-      start: jest.fn(),
-      stop: jest.fn(),
-      isRunning: jest.fn(),
-      addListener: jest.fn((path: string, handler: HttpServerRequestHandler) => {
+    mockHttpModule = createMockHttpModule();
+    mockHttpModule.addListener.mockImplementation(
+      (path: string, handler: HttpServerRequestHandler) => {
         if (path === '/api') {
           registeredHandler = handler;
         }
-      }),
-      removeListener: jest.fn(),
-    };
+      },
+    );
   });
 
   describe('register', () => {
