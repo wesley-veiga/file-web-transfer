@@ -55,5 +55,7 @@ function createDefaultFileSystemModule(): FileSystemModule {
     writeAsStringAsync: fsLegacy.writeAsStringAsync,
     readAsStringAsync: fsLegacy.readAsStringAsync,
     deleteAsync: fsLegacy.deleteAsync,
+    copyAsync: fsLegacy.copyAsync,
+    moveAsync: fsLegacy.moveAsync,
   };
 }

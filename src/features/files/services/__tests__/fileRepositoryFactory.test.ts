@@ -17,6 +17,8 @@ describe('fileRepositoryFactory - comprehensive coverage', () => {
       writeAsStringAsync: jest.fn(),
       readAsStringAsync: jest.fn(),
       deleteAsync: jest.fn(),
+      copyAsync: jest.fn(),
+      moveAsync: jest.fn(),
     };
 
     const repo = createFileRepository(mockFs);
@@ -35,6 +37,8 @@ describe('fileRepositoryFactory - comprehensive coverage', () => {
       writeAsStringAsync: jest.fn(),
       readAsStringAsync: jest.fn(),
       deleteAsync: jest.fn(),
+      copyAsync: jest.fn(),
+      moveAsync: jest.fn(),
     };
 
     const repo = createFileRepository(mockFs);
@@ -51,6 +55,8 @@ describe('fileRepositoryFactory - comprehensive coverage', () => {
       writeAsStringAsync: jest.fn(),
       readAsStringAsync: jest.fn(),
       deleteAsync: jest.fn(),
+      copyAsync: jest.fn(),
+      moveAsync: jest.fn(),
     };
 
     setFileSystemModule(mockFs);

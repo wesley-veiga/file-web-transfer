@@ -37,6 +37,8 @@ describe('FileRepository', () => {
       writeAsStringAsync: jest.fn(),
       readAsStringAsync: jest.fn(),
       deleteAsync: jest.fn(),
+      copyAsync: jest.fn(),
+      moveAsync: jest.fn(),
     };
 
     repository = createFileRepository(mockFs);
@@ -45,13 +47,30 @@ describe('FileRepository', () => {
   describe('save', () => {
     beforeEach(() => {
       // Configurar mocks padrão para um fluxo feliz
-      (mockFs.getInfoAsync as jest.Mock).mockResolvedValue({
-        exists: false,
-        isDirectory: false,
+      // Rastrear conteúdo escrito para retornar size correto
+      const writtenFiles = new Map<string, string>();
+
+      (mockFs.getInfoAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        // Se arquivo foi escrito, retornar size; senão, não existe
+        if (writtenFiles.has(uri)) {
+          const content = writtenFiles.get(uri) || '';
+          return {
+            exists: true,
+            isDirectory: false,
+            size: Buffer.byteLength(content, 'utf8'),
+          };
+        }
+        return { exists: false, isDirectory: false };
       });
+
+      (mockFs.writeAsStringAsync as jest.Mock).mockImplementation(
+        async (uri: string, content: string) => {
+          writtenFiles.set(uri, content);
+        },
+      );
+
       (mockFs.readDirectoryAsync as jest.Mock).mockResolvedValue([]);
       (mockFs.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
-      (mockFs.writeAsStringAsync as jest.Mock).mockResolvedValue(undefined);
       (mockFs.readAsStringAsync as jest.Mock).mockResolvedValue('[]');
     });
 
@@ -348,13 +367,30 @@ describe('FileRepository', () => {
 
   describe('save - casos extremos e segurança', () => {
     beforeEach(() => {
-      (mockFs.getInfoAsync as jest.Mock).mockResolvedValue({
-        exists: false,
-        isDirectory: false,
+      // Rastrear conteúdo escrito para retornar size correto
+      const writtenFiles = new Map<string, string>();
+
+      (mockFs.getInfoAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        // Se arquivo foi escrito, retornar size; senão, não existe
+        if (writtenFiles.has(uri)) {
+          const content = writtenFiles.get(uri) || '';
+          return {
+            exists: true,
+            isDirectory: false,
+            size: Buffer.byteLength(content, 'utf8'),
+          };
+        }
+        return { exists: false, isDirectory: false };
       });
+
+      (mockFs.writeAsStringAsync as jest.Mock).mockImplementation(
+        async (uri: string, content: string) => {
+          writtenFiles.set(uri, content);
+        },
+      );
+
       (mockFs.readDirectoryAsync as jest.Mock).mockResolvedValue([]);
       (mockFs.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
-      (mockFs.writeAsStringAsync as jest.Mock).mockResolvedValue(undefined);
       (mockFs.readAsStringAsync as jest.Mock).mockResolvedValue('[]');
     });
 
@@ -775,6 +811,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       const repo = createFileRepository(partialFs);
@@ -794,6 +832,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       const repo = createFileRepository(customFs);
@@ -810,6 +850,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       setFileSystemModule(prodFs);
@@ -827,6 +869,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       const injectFs: jest.Mocked<FileSystemModule> = {
@@ -837,6 +881,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       setFileSystemModule(globalFs);
@@ -857,6 +903,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       const repo = createFileRepository(emptyFsModule);
@@ -875,6 +923,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       const repo = createFileRepository(minimalFs);
@@ -953,6 +1003,309 @@ describe('FileRepository', () => {
       });
 
       expect(dto).not.toHaveProperty('localUri');
+    });
+  });
+
+  describe('saveFromUri', () => {
+    beforeEach(() => {
+      // Configurar mocks padrão para um fluxo feliz
+      (mockFs.getInfoAsync as jest.Mock).mockResolvedValue({
+        exists: true,
+        isDirectory: true,
+      });
+      (mockFs.copyAsync as jest.Mock).mockResolvedValue(undefined);
+      (mockFs.readDirectoryAsync as jest.Mock).mockResolvedValue([]);
+      (mockFs.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
+      (mockFs.writeAsStringAsync as jest.Mock).mockResolvedValue(undefined);
+      (mockFs.readAsStringAsync as jest.Mock).mockResolvedValue('[]');
+    });
+
+    it('deve copiar arquivo do sourceUri para o destino', async () => {
+      const entry = await repository.saveFromUri(
+        'file:///tmp/selected.pdf',
+        'documento.pdf',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      expect(entry).toBeDefined();
+      expect(entry.name).toBe('documento.pdf');
+      expect(entry.sizeBytes).toBe(1024);
+      expect(mockFs.copyAsync).toHaveBeenCalledWith({
+        from: 'file:///tmp/selected.pdf',
+        to: expect.stringContaining('/shared/documento.pdf'),
+      });
+    });
+
+    it('deve usar sizeBytes fornecido (não ler do arquivo)', async () => {
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.bin',
+        'dados.bin',
+        'application/octet-stream',
+        5000,
+        'received',
+      );
+
+      expect(entry.sizeBytes).toBe(5000);
+    });
+
+    it('deve sanitizar nome do arquivo', async () => {
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        '../../etc/passwd',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      // sanitizeFileName remove ../ e pega apenas o basename
+      expect(entry.name).toBe('passwd');
+      expect(entry.localUri).toContain('/shared/passwd');
+    });
+
+    it('deve resolver nome duplicado com sufixo (n)', async () => {
+      // Simular que 'documento.pdf' já existe
+      (mockFs.readDirectoryAsync as jest.Mock).mockResolvedValue(['documento.pdf']);
+      (mockFs.readAsStringAsync as jest.Mock).mockResolvedValue(
+        JSON.stringify([
+          {
+            id: 'existing-id',
+            name: 'documento.pdf',
+            sizeBytes: 100,
+            mimeType: 'application/pdf',
+            localUri: 'file:///mock-docs/shared/documento.pdf',
+            createdAt: Date.now(),
+          },
+        ]),
+      );
+
+      const entry = await repository.saveFromUri(
+        'file:///tmp/documento.pdf',
+        'documento.pdf',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      expect(entry.name).toBe('documento (1).pdf');
+      expect(entry.localUri).toContain('/shared/documento (1).pdf');
+    });
+
+    it('deve usar origin="shared" para escrever em shared/', async () => {
+      await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        'arquivo.pdf',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      expect(mockFs.copyAsync).toHaveBeenCalledWith({
+        from: 'file:///tmp/file.pdf',
+        to: expect.stringContaining('/shared/'),
+      });
+    });
+
+    it('deve usar origin="received" para escrever em received/', async () => {
+      await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        'arquivo.pdf',
+        'application/pdf',
+        1024,
+        'received',
+      );
+
+      expect(mockFs.copyAsync).toHaveBeenCalledWith({
+        from: 'file:///tmp/file.pdf',
+        to: expect.stringContaining('/received/'),
+      });
+    });
+
+    it('deve gerar UUID único para cada arquivo', async () => {
+      const entry1 = await repository.saveFromUri(
+        'file:///tmp/file1.pdf',
+        'file1.pdf',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      const entry2 = await repository.saveFromUri(
+        'file:///tmp/file2.pdf',
+        'file2.pdf',
+        'application/pdf',
+        2048,
+        'shared',
+      );
+
+      expect(entry1.id).not.toBe(entry2.id);
+      expect(() => z.string().uuid().parse(entry1.id)).not.toThrow();
+      expect(() => z.string().uuid().parse(entry2.id)).not.toThrow();
+    });
+
+    it('deve preservar timestamp correto', async () => {
+      const beforeSave = Date.now();
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        'timed.pdf',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+      const afterSave = Date.now();
+
+      expect(entry.createdAt).toBeGreaterThanOrEqual(beforeSave);
+      expect(entry.createdAt).toBeLessThanOrEqual(afterSave);
+    });
+
+    it('deve salvar metadados após copiar arquivo', async () => {
+      await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        'doc.pdf',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      // Verificar que saveMetadata foi chamado (via writeAsStringAsync do .meta.json)
+      const calls = (mockFs.writeAsStringAsync as jest.Mock).mock.calls;
+      const metaCall = calls.find((c) => c[0].includes('.meta.json'));
+      expect(metaCall).toBeDefined();
+
+      // Verificar que o conteúdo é um JSON válido
+      const metaContent = metaCall[1];
+      expect(() => JSON.parse(metaContent)).not.toThrow();
+
+      const metadata = JSON.parse(metaContent);
+      expect(Array.isArray(metadata)).toBe(true);
+      expect(metadata[0]).toHaveProperty('id');
+      expect(metadata[0]).toHaveProperty('name', 'doc.pdf');
+      expect(metadata[0]).toHaveProperty('sizeBytes', 1024);
+    });
+
+    it('deve rejeitar path traversal com múltiplos ../../../', async () => {
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        '../../../etc/passwd',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      expect(entry.name).toBe('passwd');
+      expect(entry.localUri).not.toContain('..');
+    });
+
+    it('deve rejeitar path traversal com backslash (estilo Windows)', async () => {
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        '..\\..\\windows\\system32',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      expect(entry.localUri).not.toContain('\\');
+    });
+
+    it('deve remover caracteres de controle do nome', async () => {
+      const nameWithControl = 'arquivo\x00\x01\x02.pdf';
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        nameWithControl,
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      expect(entry.name).not.toContain('\x00');
+      expect(entry.name).not.toContain('\x01');
+    });
+
+    it('deve truncar nome com mais de 255 caracteres preservando extensão', async () => {
+      const longName = 'a'.repeat(250) + '.pdf';
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        longName,
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      expect(entry.name.length).toBeLessThanOrEqual(255);
+      expect(entry.name).toContain('.pdf');
+    });
+
+    it('deve lidar com nome vazio após sanitização', async () => {
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        '\x00\x01',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      expect(entry.name).toBe('arquivo');
+    });
+
+    it('deve lidar com nome contendo apenas pontos', async () => {
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        '...',
+        'application/pdf',
+        1024,
+        'shared',
+      );
+
+      expect(entry.name).toBe('arquivo');
+    });
+
+    it('deve falhar se copyAsync falhar', async () => {
+      (mockFs.copyAsync as jest.Mock).mockRejectedValueOnce(new Error('Source not found'));
+
+      await expect(
+        repository.saveFromUri(
+          'file:///tmp/nonexistent.pdf',
+          'doc.pdf',
+          'application/pdf',
+          1024,
+          'shared',
+        ),
+      ).rejects.toThrow('Source not found');
+    });
+
+    it('deve produzir DTO que passa no schema Zod', async () => {
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        'document.pdf',
+        'application/pdf',
+        2048,
+        'shared',
+      );
+
+      const dto = repository.toDto(entry);
+
+      const validated = fileEntryDtoSchema.parse(dto);
+      expect(validated).toBeDefined();
+      expect(validated.id).toBe(entry.id);
+    });
+
+    it('deve nunca incluir localUri ou origin no DTO', async () => {
+      const entry = await repository.saveFromUri(
+        'file:///tmp/file.pdf',
+        'secret.pdf',
+        'application/pdf',
+        512,
+        'shared',
+      );
+
+      const dto = repository.toDto(entry);
+      const keys = Object.keys(dto);
+
+      expect(keys).not.toContain('localUri');
+      expect(keys).not.toContain('origin');
+      expect(keys).toEqual(['id', 'name', 'sizeBytes', 'mimeType', 'createdAt']);
     });
   });
 });
