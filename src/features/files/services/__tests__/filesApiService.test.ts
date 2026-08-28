@@ -2,24 +2,13 @@ import { listFilesForApi, getFileForDownload } from '../filesApiService';
 import type { FileRepository } from '../fileRepository';
 import type { FileEntry } from '../../types';
 import { fileEntryDtoSchema } from '../../../../shared/types/api';
+import { createMockFileRepository } from '../../../../__mocks__/testHelpers';
 
 describe('filesApiService', () => {
   let mockFileRepository: jest.Mocked<FileRepository>;
 
   beforeEach(() => {
-    mockFileRepository = {
-      save: jest.fn(),
-      saveFromUri: jest.fn(),
-      list: jest.fn(),
-      remove: jest.fn(),
-      toDto: jest.fn((entry: FileEntry) => ({
-        id: entry.id,
-        name: entry.name,
-        sizeBytes: entry.sizeBytes,
-        mimeType: entry.mimeType,
-        createdAt: entry.createdAt,
-      })),
-    };
+    mockFileRepository = createMockFileRepository();
   });
 
   describe('listFilesForApi', () => {

@@ -3,8 +3,8 @@ import { renderHook, act } from '@testing-library/react-native';
 import { useServer } from '../useServer';
 import { useServerStore } from '../../store/serverStore';
 import { ServerServiceError } from '../../services/serverService';
-import type { HttpModule } from '../../services/httpModule';
 import type { ServerErrorCode } from '../../types';
+import { createMockHttpModule as createMockHttpModuleHelper } from '../../../../__mocks__/testHelpers';
 
 jest.mock('expo-network');
 jest.mock('../../../../shared/lib', () => ({
@@ -12,15 +12,10 @@ jest.mock('../../../../shared/lib', () => ({
 }));
 
 describe('useServer hook', () => {
-  let mockHttpModule: jest.Mocked<HttpModule>;
+  let mockHttpModule: jest.Mocked<ReturnType<typeof createMockHttpModuleHelper>>;
 
-  const createMockHttpModule = (): jest.Mocked<HttpModule> => ({
-    start: jest.fn(),
-    stop: jest.fn(),
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-    isRunning: jest.fn(() => false),
-  });
+  const createMockHttpModule = (): jest.Mocked<ReturnType<typeof createMockHttpModuleHelper>> =>
+    createMockHttpModuleHelper();
 
   const resetStore = () => {
     useServerStore.setState({

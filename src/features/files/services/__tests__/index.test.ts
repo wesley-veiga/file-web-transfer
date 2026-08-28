@@ -7,11 +7,11 @@ import {
   FileRepositoryImpl,
   createFileRepository,
   setFileSystemModule,
-  type FileSystemModule,
   SharingServiceImpl,
   createSharingService,
   setSharingModule,
 } from '../index';
+import { createMockFileSystemModule } from '../../../../__mocks__/testHelpers';
 
 describe('services/index.ts exports', () => {
   it('should export FileRepositoryImpl', () => {
@@ -30,17 +30,8 @@ describe('services/index.ts exports', () => {
   });
 
   it('should create FileRepository instance via createFileRepository', () => {
-    const mockFs: jest.Mocked<FileSystemModule> = {
-      documentDirectory: 'file:///test/',
-      getInfoAsync: jest.fn(),
-      readDirectoryAsync: jest.fn(),
-      makeDirectoryAsync: jest.fn(),
-      writeAsStringAsync: jest.fn(),
-      readAsStringAsync: jest.fn(),
-      deleteAsync: jest.fn(),
-      copyAsync: jest.fn(),
-      moveAsync: jest.fn(),
-    };
+    const mockFs = createMockFileSystemModule();
+    mockFs.documentDirectory = 'file:///test/';
 
     const repo = createFileRepository(mockFs);
     expect(repo).toBeDefined();
@@ -48,17 +39,8 @@ describe('services/index.ts exports', () => {
   });
 
   it('should allow setting global FileSystemModule', () => {
-    const mockFs: jest.Mocked<FileSystemModule> = {
-      documentDirectory: 'file:///global/',
-      getInfoAsync: jest.fn(),
-      readDirectoryAsync: jest.fn(),
-      makeDirectoryAsync: jest.fn(),
-      writeAsStringAsync: jest.fn(),
-      readAsStringAsync: jest.fn(),
-      deleteAsync: jest.fn(),
-      copyAsync: jest.fn(),
-      moveAsync: jest.fn(),
-    };
+    const mockFs = createMockFileSystemModule();
+    mockFs.documentDirectory = 'file:///global/';
 
     setFileSystemModule(mockFs);
 
@@ -68,29 +50,11 @@ describe('services/index.ts exports', () => {
   });
 
   it('should use injected module over global module', () => {
-    const globalFs: jest.Mocked<FileSystemModule> = {
-      documentDirectory: 'file:///global/',
-      getInfoAsync: jest.fn(),
-      readDirectoryAsync: jest.fn(),
-      makeDirectoryAsync: jest.fn(),
-      writeAsStringAsync: jest.fn(),
-      readAsStringAsync: jest.fn(),
-      deleteAsync: jest.fn(),
-      copyAsync: jest.fn(),
-      moveAsync: jest.fn(),
-    };
+    const globalFs = createMockFileSystemModule();
+    globalFs.documentDirectory = 'file:///global/';
 
-    const injectedFs: jest.Mocked<FileSystemModule> = {
-      documentDirectory: 'file:///injected/',
-      getInfoAsync: jest.fn(),
-      readDirectoryAsync: jest.fn(),
-      makeDirectoryAsync: jest.fn(),
-      writeAsStringAsync: jest.fn(),
-      readAsStringAsync: jest.fn(),
-      deleteAsync: jest.fn(),
-      copyAsync: jest.fn(),
-      moveAsync: jest.fn(),
-    };
+    const injectedFs = createMockFileSystemModule();
+    injectedFs.documentDirectory = 'file:///injected/';
 
     setFileSystemModule(globalFs);
     const repo = createFileRepository(injectedFs);

@@ -1,6 +1,6 @@
 import * as Network from 'expo-network';
 import { createServerService, setHttpModule } from '../serverServiceFactory';
-import type { HttpModule } from '../httpModule';
+import { createMockHttpModule } from '../../../../__mocks__/testHelpers';
 
 // Mock expo-network
 jest.mock('expo-network');
@@ -11,18 +11,12 @@ jest.mock('../../../../shared/lib', () => ({
 }));
 
 describe('serverServiceFactory', () => {
-  let mockHttpModule: jest.Mocked<HttpModule>;
+  let mockHttpModule: jest.Mocked<ReturnType<typeof createMockHttpModule>>;
 
   beforeEach(() => {
     jest.clearAllMocks();
 
-    mockHttpModule = {
-      start: jest.fn(),
-      stop: jest.fn(),
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      isRunning: jest.fn(() => false),
-    };
+    mockHttpModule = createMockHttpModule();
 
     // Mock expo-network
     jest.mocked(Network).getNetworkStateAsync = jest.fn().mockResolvedValue({

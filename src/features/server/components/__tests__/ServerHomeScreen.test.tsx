@@ -9,9 +9,9 @@ import { render } from '@testing-library/react-native';
 import { ServerHomeScreen } from '../ServerHomeScreen';
 import { useServerStore } from '../../store/serverStore';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
-import type { HttpModule } from '../../services/httpModule';
-
 import { useServer } from '../../hooks/useServer';
+import type { HttpModule } from '../../services/httpModule';
+import { createMockHttpModule } from '../../../../__mocks__/testHelpers';
 
 // Mock useNetworkStatus
 jest.mock('../../hooks/useNetworkStatus');
@@ -74,13 +74,7 @@ describe('ServerHomeScreen (T-204)', () => {
     });
 
     it('renders with httpModule prop', () => {
-      const mockHttpModule: HttpModule = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockResolvedValue(undefined),
-        isRunning: jest.fn(() => false),
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-      };
+      const mockHttpModule = createMockHttpModule();
       expect(() => render(<ServerHomeScreen httpModule={mockHttpModule} />)).not.toThrow();
     });
 
@@ -326,13 +320,7 @@ describe('ServerHomeScreen (T-204)', () => {
 
   describe('Props handling', () => {
     it('works with httpModule prop', () => {
-      const mockHttpModule: HttpModule = {
-        start: jest.fn().mockResolvedValue(undefined),
-        stop: jest.fn().mockResolvedValue(undefined),
-        isRunning: jest.fn(() => false),
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-      };
+      const mockHttpModule = createMockHttpModule();
 
       expect(() => render(<ServerHomeScreen httpModule={mockHttpModule} />)).not.toThrow();
     });
