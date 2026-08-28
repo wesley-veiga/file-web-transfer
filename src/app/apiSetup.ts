@@ -20,6 +20,7 @@ import { listFilesForApi, getFileForDownload } from '../features/files/services/
 import type { FileRepository } from '../features/files/services/fileRepository';
 import type { FileOrigin } from '../features/files/types';
 import { fileEntryDtoSchema, apiErrorSchema } from '../shared/types/api';
+import { createMultipartStreamParser } from '../shared/lib/multipartStreamParser';
 
 /**
  * Registra as rotas de listagem e download de arquivos no ApiRouter.
@@ -198,10 +199,6 @@ export function registerUploadRoute(
   fileRepository: FileRepository,
   maxUploadBytes: number,
 ): void {
-  // Importações necessárias
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { createMultipartStreamParser } = require('../shared/lib/multipartStreamParser');
-
   /**
    * Estado de um upload em andamento.
    * Mantém parser, handle de escrita e bytes acumulados.
@@ -213,11 +210,8 @@ export function registerUploadRoute(
     lastError: { code: string; message: string } | null;
   }
 
-  // Map para rastrear uploads em andamento por identificador único
+  // Map para rastrear uploads em andamento por identificador único (chunk.requestId)
   const activeUploads = new Map<string, UploadState>();
-
-  // Counter para gerar IDs de upload únicos
-  let uploadIdCounter = 0;
 
   /**
    * Handler de upload em streaming.
@@ -227,17 +221,10 @@ export function registerUploadRoute(
     chunk: HttpUploadChunk,
     request: Omit<HttpServerRequest, 'body'>,
   ): Promise<HttpServerResponse | void> => {
-    // Gerar ID único para este upload (baseado em IP do cliente + contador)
-    const clientIp =
-      (request.headers['x-forwarded-for'] as string) ||
-      (request.headers['host'] as string) ||
-      'unknown';
-    const uploadId = `${clientIp}-${uploadIdCounter}`;
-
-    // Incrementar counter a cada novo upload
-    if (!activeUploads.has(uploadId)) {
-      uploadIdCounter += 1;
-    }
+    // Correlacionar chunks do mesmo upload via requestId (estável entre chunks,
+    // gerado pelo módulo nativo) — nunca inferir isso de IP/headers, que não
+    // distingue uploads concorrentes do mesmo cliente.
+    const uploadId = chunk.requestId;
 
     let state = activeUploads.get(uploadId);
 

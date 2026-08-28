@@ -31,6 +31,14 @@ export type HttpServerRequestHandler = (request: HttpServerRequest) => Promise<H
  * O módulo nativo processa o request chunk-by-chunk; a camada JS recebe eventos via `HttpUploadChunkHandler`.
  */
 export interface HttpUploadChunk {
+  /**
+   * Identificador único da requisição de upload, estável entre todos os
+   * chunks de um mesmo upload (gerado pelo módulo nativo, uma conexão =
+   * um requestId). Necessário para correlacionar chunks entre si — não é
+   * seguro inferir isso a partir de IP/headers, já que múltiplos uploads
+   * concorrentes podem vir do mesmo cliente.
+   */
+  requestId: string;
   /** Bytes do chunk (string — o módulo nativo real entrega como base64 ou binary-safe string). */
   data: string;
   /** true apenas no último chunk do corpo. */
