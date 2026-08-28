@@ -1,6 +1,16 @@
 import { ApiRouterImpl } from '../apiRouter';
 import type { ApiRouterConfig } from '../apiRouter';
-import type { HttpModule, HttpServerRequest, HttpServerRequestHandler } from '../httpModule';
+import type {
+  HttpModule,
+  HttpServerRequest,
+  HttpServerRequestHandler,
+  HttpServerResponse,
+} from '../httpModule';
+
+/** Acesso ao método privado `createErrorResponse` só para exercitar o branch de fallback. */
+type ApiRouterInternals = {
+  createErrorResponse: (statusCode: number, code: unknown, message: unknown) => HttpServerResponse;
+};
 
 describe('ApiRouter', () => {
   let router: ApiRouterImpl;
@@ -167,8 +177,6 @@ describe('ApiRouter', () => {
     });
 
     it('deve capturar erro não tratado e retornar 500', async () => {
-      // Criar um roteador com config que pode quebrar a validação
-      // (Este é um teste que verifica o tratamento robusto)
       const request: HttpServerRequest = {
         method: 'GET',
         path: '/api/session',
@@ -177,8 +185,112 @@ describe('ApiRouter', () => {
 
       const response = await registeredHandler!(request);
 
-      // Se tudo passar normal, deve ser 200
       expect(response.statusCode).toBe(200);
     });
   });
+
+  describe('branches de erro 500 (cobertura)', () => {
+    it('validação de SessionInfo falha (config inválido) → 500', async () => {
+      const invalidConfig: ApiRouterConfig = {
+        sessionId: 123 as unknown as string,
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+      };
+      const invalidRouter = new ApiRouterImpl(invalidConfig);
+      invalidRouter.register(mockHttpModule);
+
+      const response = await registeredHandler!({
+        method: 'GET',
+        path: '/api/session',
+        headers: {},
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.headers?.['Content-Type']).toBe('application/json; charset=utf-8');
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+    });
+
+    it('exceção não tratada no handler → 500 via catch de handleRequest', async () => {
+      router.register(mockHttpModule);
+      const stringifySpy = jest.spyOn(JSON, 'stringify').mockImplementationOnce(() => {
+        throw new Error('boom');
+      });
+
+      try {
+        const response = await registeredHandler!({
+          method: 'GET',
+          path: '/api/session',
+          headers: {},
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(response.headers?.['Content-Type']).toBe('application/json; charset=utf-8');
+        const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+        expect(body.error.code).toBe('INTERNAL_ERROR');
+        expect(body.error.message).toContain('boom');
+      } finally {
+        stringifySpy.mockRestore();
+      }
+    });
+
+    it('createErrorResponse cai no fallback quando o próprio envelope falha validação Zod', () => {
+      const internals = router as unknown as ApiRouterInternals;
+
+      const response = internals.createErrorResponse(400, 12345, null);
+
+      expect(response.statusCode).toBe(500);
+      expect(response.headers?.['Content-Type']).toBe('application/json; charset=utf-8');
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+      expect(body.error.message).toBe('Erro ao serializar erro');
+    });
+
+    it('exceção que não é instância de Error usa mensagem padrão "Erro desconhecido"', async () => {
+      router.register(mockHttpModule);
+      const stringifySpy = jest.spyOn(JSON, 'stringify').mockImplementationOnce(() => {
+        throw 'string não-Error';
+      });
+
+      try {
+        const response = await registeredHandler!({
+          method: 'GET',
+          path: '/api/session',
+          headers: {},
+        });
+
+        expect(response.statusCode).toBe(500);
+        const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+        expect(body.error.message).toBe('Erro desconhecido');
+      } finally {
+        stringifySpy.mockRestore();
+      }
+    });
+
+    it('registerRoute sobrescreve o handler quando o mesmo path/método é registrado de novo', async () => {
+      const internals = router as unknown as {
+        registerRoute: (method: string, path: string, handler: ApiHandlerForTest) => void;
+      };
+
+      internals.registerRoute('GET', '/api/session', () =>
+        Promise.resolve({
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ overridden: true }),
+        }),
+      );
+      router.register(mockHttpModule);
+
+      const response = await registeredHandler!({
+        method: 'GET',
+        path: '/api/session',
+        headers: {},
+      });
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body).toEqual({ overridden: true });
+    });
+  });
 });
+
+type ApiHandlerForTest = () => Promise<HttpServerResponse>;

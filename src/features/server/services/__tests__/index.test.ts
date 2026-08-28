@@ -9,6 +9,8 @@ import {
   createServerService,
   setHttpModule,
   ServerServiceImpl,
+  ApiRouterImpl,
+  createApiRouter,
 } from '../index';
 
 describe('services/index.ts exports', () => {
@@ -53,5 +55,24 @@ describe('services/index.ts exports', () => {
 
     const service = createNotificationService(mockService);
     expect(service).toBe(mockService);
+  });
+
+  it('should export ApiRouterImpl', () => {
+    expect(ApiRouterImpl).toBeDefined();
+    expect(typeof ApiRouterImpl).toBe('function');
+  });
+
+  it('should export createApiRouter', () => {
+    expect(createApiRouter).toBeDefined();
+    expect(typeof createApiRouter).toBe('function');
+  });
+
+  it('should create ApiRouter instance via createApiRouter', () => {
+    const router = createApiRouter({
+      sessionId: 'test-123',
+      appVersion: '1.0.0',
+      maxUploadBytes: 4294967296,
+    });
+    expect(router).toBeInstanceOf(ApiRouterImpl);
   });
 });
