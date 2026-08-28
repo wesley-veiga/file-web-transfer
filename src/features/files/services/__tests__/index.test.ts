@@ -35,6 +35,8 @@ describe('services/index.ts exports', () => {
       writeAsStringAsync: jest.fn(),
       readAsStringAsync: jest.fn(),
       deleteAsync: jest.fn(),
+      copyAsync: jest.fn(),
+      moveAsync: jest.fn(),
     };
 
     const repo = createFileRepository(mockFs);
@@ -51,6 +53,8 @@ describe('services/index.ts exports', () => {
       writeAsStringAsync: jest.fn(),
       readAsStringAsync: jest.fn(),
       deleteAsync: jest.fn(),
+      copyAsync: jest.fn(),
+      moveAsync: jest.fn(),
     };
 
     setFileSystemModule(mockFs);
@@ -69,6 +73,8 @@ describe('services/index.ts exports', () => {
       writeAsStringAsync: jest.fn(),
       readAsStringAsync: jest.fn(),
       deleteAsync: jest.fn(),
+      copyAsync: jest.fn(),
+      moveAsync: jest.fn(),
     };
 
     const injectedFs: jest.Mocked<FileSystemModule> = {
@@ -79,6 +85,8 @@ describe('services/index.ts exports', () => {
       writeAsStringAsync: jest.fn(),
       readAsStringAsync: jest.fn(),
       deleteAsync: jest.fn(),
+      copyAsync: jest.fn(),
+      moveAsync: jest.fn(),
     };
 
     setFileSystemModule(globalFs);

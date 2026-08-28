@@ -37,6 +37,8 @@ describe('FileRepository', () => {
       writeAsStringAsync: jest.fn(),
       readAsStringAsync: jest.fn(),
       deleteAsync: jest.fn(),
+      copyAsync: jest.fn(),
+      moveAsync: jest.fn(),
     };
 
     repository = createFileRepository(mockFs);
@@ -775,6 +777,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       const repo = createFileRepository(partialFs);
@@ -794,6 +798,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       const repo = createFileRepository(customFs);
@@ -810,6 +816,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       setFileSystemModule(prodFs);
@@ -827,6 +835,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       const injectFs: jest.Mocked<FileSystemModule> = {
@@ -837,6 +847,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       setFileSystemModule(globalFs);
@@ -857,6 +869,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       const repo = createFileRepository(emptyFsModule);
@@ -875,6 +889,8 @@ describe('FileRepository', () => {
         writeAsStringAsync: jest.fn(),
         readAsStringAsync: jest.fn(),
         deleteAsync: jest.fn(),
+        copyAsync: jest.fn(),
+        moveAsync: jest.fn(),
       };
 
       const repo = createFileRepository(minimalFs);

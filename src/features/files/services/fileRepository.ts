@@ -27,6 +27,8 @@ export interface FileSystemModule {
   writeAsStringAsync: typeof FileSystem.writeAsStringAsync;
   readAsStringAsync: typeof FileSystem.readAsStringAsync;
   deleteAsync: typeof FileSystem.deleteAsync;
+  copyAsync: typeof FileSystem.copyAsync;
+  moveAsync: typeof FileSystem.moveAsync;
 }
 
 /**
@@ -53,6 +55,30 @@ export interface FileRepository {
     content: string,
     desiredName: string,
     mimeType: string,
+    origin: FileOrigin,
+  ) => Promise<FileEntry>;
+
+  /**
+   * Salva um novo arquivo no repositório a partir de um URI local.
+   *
+   * Útil para arquivos selecionados via document picker ou galeria, já que
+   * esses retornam URIs locais (não conteúdo em memória).
+   *
+   * Aplica sanitização de nome e resolução de duplicata, assim como `save()`.
+   *
+   * @param sourceUri - URI local do arquivo a copiar (ex.: do document picker)
+   * @param desiredName - Nome desejado (será sanitizado)
+   * @param mimeType - MIME type (ex.: "application/pdf")
+   * @param sizeBytes - Tamanho do arquivo em bytes
+   * @param origin - Origem do arquivo
+   * @returns FileEntry criado com id, name final (após resolução), timestamp
+   * @throws Error se falhar ao criar diretório, copiar arquivo ou atualizar metadados
+   */
+  saveFromUri: (
+    sourceUri: string,
+    desiredName: string,
+    mimeType: string,
+    sizeBytes: number,
     origin: FileOrigin,
   ) => Promise<FileEntry>;
 
@@ -124,12 +150,8 @@ export class FileRepositoryImpl implements FileRepository {
     const targetDir = origin === 'received' ? this.receivedDir : this.sharedDir;
     await this.ensureDirectoryExists(targetDir);
 
-    // Sanitizar nome
-    const sanitized = sanitizeFileName(desiredName);
-
-    // Resolver duplicata
-    const existingFiles = await this.getExistingNames(targetDir);
-    const finalName = resolveDuplicateName(sanitized, existingFiles);
+    // Sanitizar nome e resolver duplicata
+    const finalName = await this.resolveFinalName(targetDir, desiredName);
 
     // Gerar id e criar FileEntry
     const id = Crypto.randomUUID();
@@ -149,6 +171,56 @@ export class FileRepositoryImpl implements FileRepository {
 
     // Escrever conteúdo do arquivo
     await this.fsModule.writeAsStringAsync(localUri, content);
+
+    // Carregar metadados existentes, adicionar entrada, salvar
+    const metadata = await this.loadMetadata(targetDir);
+    metadata.push({
+      id,
+      name: finalName,
+      sizeBytes,
+      mimeType,
+      localUri,
+      createdAt,
+    });
+    await this.saveMetadata(targetDir, metadata);
+
+    return entry;
+  }
+
+  async saveFromUri(
+    sourceUri: string,
+    desiredName: string,
+    mimeType: string,
+    sizeBytes: number,
+    origin: FileOrigin,
+  ): Promise<FileEntry> {
+    // Preparar diretório de destino
+    const targetDir = origin === 'received' ? this.receivedDir : this.sharedDir;
+    await this.ensureDirectoryExists(targetDir);
+
+    // Sanitizar nome e resolver duplicata
+    const finalName = await this.resolveFinalName(targetDir, desiredName);
+
+    // Gerar id e criar FileEntry
+    const id = Crypto.randomUUID();
+    const localUri = targetDir.replace(/\/$/, '') + '/' + finalName;
+    const createdAt = Date.now();
+
+    const entry: FileEntry = {
+      id,
+      name: finalName,
+      sizeBytes,
+      mimeType,
+      localUri,
+      origin,
+      createdAt,
+    };
+
+    // Copiar arquivo do sourceUri para o destino
+    await this.fsModule.copyAsync({
+      from: sourceUri,
+      to: localUri,
+    });
 
     // Carregar metadados existentes, adicionar entrada, salvar
     const metadata = await this.loadMetadata(targetDir);
@@ -212,6 +284,19 @@ export class FileRepositoryImpl implements FileRepository {
       mimeType: entry.mimeType,
       createdAt: entry.createdAt,
     };
+  }
+
+  /**
+   * Sanitiza o nome desejado e resolve duplicatas.
+   * Helper privado compartilhado por `save()` e `saveFromUri()`.
+   */
+  private async resolveFinalName(targetDir: string, desiredName: string): Promise<string> {
+    // Sanitizar nome
+    const sanitized = sanitizeFileName(desiredName);
+
+    // Resolver duplicata
+    const existingFiles = await this.getExistingNames(targetDir);
+    return resolveDuplicateName(sanitized, existingFiles);
   }
 
   /**
