@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import { useSharedFilesStore } from '../store/sharedFilesStore';
 import { createFileRepository } from '../services/fileRepositoryFactory';
@@ -30,8 +30,24 @@ interface UseSharedFilesOptions {
 }
 
 export function useSharedFiles(options?: UseSharedFilesOptions) {
-  const store = useSharedFilesStore();
-  const fileRepository = options?.fileRepository || createFileRepository(options?.fileSystemModule);
+  // Seletores individuais, não o store inteiro: `useSharedFilesStore()` sem seletor
+  // retorna um objeto novo a cada `set()` (Zustand recria o container no update), o que
+  // desestabilizaria os `useCallback` abaixo a cada mudança de estado. As *ações* do
+  // store, por outro lado, são definidas uma única vez em `create()` e nunca trocam de
+  // identidade — selecioná-las individualmente mantém os callbacks estáveis entre
+  // renders, o que é essencial para o `useEffect` de carregamento em
+  // `SharedFilesScreen` não entrar em loop infinito.
+  const files = useSharedFilesStore((state) => state.files);
+  const addFile = useSharedFilesStore((state) => state.addFile);
+  const removeFileFromStore = useSharedFilesStore((state) => state.removeFile);
+  const setFiles = useSharedFilesStore((state) => state.setFiles);
+
+  // `useMemo` evita recriar o repositório a cada render quando não injetado — mesma
+  // razão: sem isso, os callbacks abaixo trocariam de identidade a cada render.
+  const fileRepository = useMemo(
+    () => options?.fileRepository ?? createFileRepository(options?.fileSystemModule),
+    [options?.fileRepository, options?.fileSystemModule],
+  );
   const documentPickerModule = options?.documentPickerModule || DocumentPicker;
 
   /**
@@ -61,7 +77,7 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
           );
 
           // Adicionar ao store
-          store.addFile(entry);
+          addFile(entry);
         } catch (error) {
           console.error('[useSharedFiles] Erro ao salvar arquivo:', asset.name, error);
           // Continuar com próximo arquivo em caso de erro (não é fatal)
@@ -71,7 +87,7 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
       console.error('[useSharedFiles] Erro ao abrir document picker:', error);
       throw error;
     }
-  }, [fileRepository, documentPickerModule, store]);
+  }, [fileRepository, documentPickerModule, addFile]);
 
   /**
    * Remove um arquivo compartilhado pela id.
@@ -81,7 +97,7 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
     async (fileId: string): Promise<void> => {
       try {
         // Remover do store imediatamente (otimista)
-        store.removeFile(fileId);
+        removeFileFromStore(fileId);
 
         // Remover do repositório
         await fileRepository.remove(fileId);
@@ -92,7 +108,7 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
         throw error;
       }
     },
-    [store, fileRepository],
+    [removeFileFromStore, fileRepository],
   );
 
   /**
@@ -102,15 +118,15 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
   const loadSharedFiles = useCallback(async (): Promise<void> => {
     try {
       const entries = await fileRepository.list('shared');
-      store.setFiles(entries);
+      setFiles(entries);
     } catch (error) {
       console.error('[useSharedFiles] Erro ao carregar arquivos compartilhados:', error);
       throw error;
     }
-  }, [fileRepository, store]);
+  }, [fileRepository, setFiles]);
 
   return {
-    files: store.files,
+    files,
     pickAndShareFiles,
     removeFile,
     loadSharedFiles,

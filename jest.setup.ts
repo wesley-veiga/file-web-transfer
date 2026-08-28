@@ -46,6 +46,26 @@ jest.mock('react-native', () => {
     Text: ({ children, ...props }: any) => React.createElement('Text', props, children),
     Pressable: ({ children, ...props }: any) => React.createElement('Pressable', props, children),
     ScrollView: ({ children, ...props }: any) => React.createElement('ScrollView', props, children),
+    FlatList: ({ data, renderItem, keyExtractor, ListEmptyComponent, ...props }: any) =>
+      React.createElement(
+        'FlatList',
+        props,
+        Array.isArray(data)
+          ? data.map((item: any, index: number) =>
+              React.createElement(
+                React.Fragment,
+                { key: keyExtractor ? keyExtractor(item, index) : index },
+                renderItem({ item, index }),
+              ),
+            )
+          : ListEmptyComponent
+            ? React.createElement(
+                typeof ListEmptyComponent === 'function'
+                  ? ListEmptyComponent
+                  : () => ListEmptyComponent,
+              )
+            : null,
+      ),
     ActivityIndicator: ({ size, color }: any) =>
       React.createElement('ActivityIndicator', { size, color }),
     Alert: {

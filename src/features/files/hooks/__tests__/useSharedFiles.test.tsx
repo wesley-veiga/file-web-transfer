@@ -104,8 +104,9 @@ describe('useSharedFiles hook', () => {
       const asset = {
         uri: 'file:///tmp/selected.pdf',
         name: 'documento.pdf',
-        mimeType: 'application/pdf',
+        mimeType: 'application/pdf' as const,
         size: 1024,
+        lastModified: Date.now(),
       };
 
       jest.mocked(DocumentPicker.getDocumentAsync).mockResolvedValueOnce({
@@ -143,12 +144,14 @@ describe('useSharedFiles hook', () => {
           name: 'doc1.pdf',
           mimeType: 'application/pdf',
           size: 1024,
+          lastModified: Date.now(),
         },
         {
           uri: 'file:///tmp/doc2.pdf',
           name: 'doc2.pdf',
           mimeType: 'application/pdf',
           size: 2048,
+          lastModified: Date.now(),
         },
       ];
 
@@ -183,6 +186,7 @@ describe('useSharedFiles hook', () => {
         name: 'desconhecido',
         mimeType: undefined,
         size: 512,
+        lastModified: Date.now(),
       };
 
       jest.mocked(DocumentPicker.getDocumentAsync).mockResolvedValueOnce({
@@ -219,6 +223,7 @@ describe('useSharedFiles hook', () => {
         name: 'nosize.bin',
         mimeType: 'application/octet-stream',
         size: undefined,
+        lastModified: Date.now(),
       };
 
       jest.mocked(DocumentPicker.getDocumentAsync).mockResolvedValueOnce({
@@ -253,12 +258,14 @@ describe('useSharedFiles hook', () => {
           name: 'doc1.pdf',
           mimeType: 'application/pdf',
           size: 1024,
+          lastModified: Date.now(),
         },
         {
           uri: 'file:///tmp/doc2.pdf',
           name: 'doc2.pdf',
           mimeType: 'application/pdf',
           size: 2048,
+          lastModified: Date.now(),
         },
       ];
 
