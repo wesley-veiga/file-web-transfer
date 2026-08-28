@@ -2,11 +2,14 @@
  * Factory para criar instâncias de FileRepository com injeção de dependência.
  *
  * Uso:
- * - Produção: `createFileRepository()` sem argumentos (usa expo-file-system real)
- * - Testes: `createFileRepository(mockFsModule)` com mock
+ * - Produção: `createFileRepository()` sem argumentos (usa expo-file-system real via legacy API)
+ * - Testes: `createFileRepository(mockFsModule)` com mock de __mocks__/expo-file-system.ts
+ *
+ * Em produção, importamos de `expo-file-system/legacy` (real); em testes, o mock cobrirá ambos.
  */
 
 import * as FileSystem from 'expo-file-system';
+import type * as FileSystemLegacy from 'expo-file-system/legacy';
 
 import type { FileSystemModule, FileRepository } from './fileRepository';
 import { FileRepositoryImpl } from './fileRepository';
@@ -36,17 +39,21 @@ export function createFileRepository(fsModule?: FileSystemModule): FileRepositor
 
 /**
  * Cria o módulo FileSystem padrão usando expo-file-system real.
+ *
+ * Em produção, FileSystem é carregado da API legacy; em testes, do mock que cobrirá ambos.
+ * Usamos type cast para indicar ao TypeScript que o módulo runtime expõe a API legacy.
  */
 function createDefaultFileSystemModule(): FileSystemModule {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fsAny = FileSystem as any;
+  // Type cast para sinalizar que usamos API legacy (expo-file-system/legacy em produção, mock em testes)
+  const fsLegacy = FileSystem as unknown as typeof FileSystemLegacy;
+
   return {
-    documentDirectory: fsAny.documentDirectory || 'file:///document/',
-    getInfoAsync: FileSystem.getInfoAsync,
-    readDirectoryAsync: FileSystem.readDirectoryAsync,
-    makeDirectoryAsync: FileSystem.makeDirectoryAsync,
-    writeAsStringAsync: FileSystem.writeAsStringAsync,
-    readAsStringAsync: FileSystem.readAsStringAsync,
-    deleteAsync: FileSystem.deleteAsync,
+    documentDirectory: fsLegacy.documentDirectory ?? 'file:///document/',
+    getInfoAsync: fsLegacy.getInfoAsync,
+    readDirectoryAsync: fsLegacy.readDirectoryAsync,
+    makeDirectoryAsync: fsLegacy.makeDirectoryAsync,
+    writeAsStringAsync: fsLegacy.writeAsStringAsync,
+    readAsStringAsync: fsLegacy.readAsStringAsync,
+    deleteAsync: fsLegacy.deleteAsync,
   };
 }

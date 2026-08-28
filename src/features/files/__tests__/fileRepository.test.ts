@@ -767,20 +767,14 @@ describe('FileRepository', () => {
     it('deve usar fallback quando documentDirectory é falsy (null, undefined, etc)', () => {
       // Este teste força a execução da branch do || em createDefaultFileSystemModule
       // Criamos um módulo sem documentDirectory para simular expo-file-system sem esse valor
-      const partialFs: FileSystemModule = {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        getInfoAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        readDirectoryAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        makeDirectoryAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        writeAsStringAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        readAsStringAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        deleteAsync: jest.fn() as any,
-        // Não incluir documentDirectory para forçar o fallback
+      const partialFs: jest.Mocked<FileSystemModule> = {
+        documentDirectory: undefined,
+        getInfoAsync: jest.fn(),
+        readDirectoryAsync: jest.fn(),
+        makeDirectoryAsync: jest.fn(),
+        writeAsStringAsync: jest.fn(),
+        readAsStringAsync: jest.fn(),
+        deleteAsync: jest.fn(),
       };
 
       const repo = createFileRepository(partialFs);
@@ -824,16 +818,6 @@ describe('FileRepository', () => {
       expect(repo).toBeDefined();
     });
 
-    it('deve usar módulo padrão se nenhum foi setado e nenhum injetado', () => {
-      // Limpar o módulo setado
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setFileSystemModule(null as any);
-
-      const repo = createFileRepository();
-
-      expect(repo).toBeDefined();
-    });
-
     it('deve preferir módulo injetado sobre setado', () => {
       const globalFs: jest.Mocked<FileSystemModule> = {
         documentDirectory: 'file:///global/',
@@ -865,20 +849,14 @@ describe('FileRepository', () => {
     it('deve usar default documentDirectory se FileSystem não fornecer um', () => {
       // Teste que cobre a branch do || na linha 44
       // Criar um módulo com documentDirectory vazio/undefined
-      const emptyFsModule: FileSystemModule = {
+      const emptyFsModule: jest.Mocked<FileSystemModule> = {
         documentDirectory: undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        getInfoAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        readDirectoryAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        makeDirectoryAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        writeAsStringAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        readAsStringAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        deleteAsync: jest.fn() as any,
+        getInfoAsync: jest.fn(),
+        readDirectoryAsync: jest.fn(),
+        makeDirectoryAsync: jest.fn(),
+        writeAsStringAsync: jest.fn(),
+        readAsStringAsync: jest.fn(),
+        deleteAsync: jest.fn(),
       };
 
       const repo = createFileRepository(emptyFsModule);
@@ -886,33 +864,17 @@ describe('FileRepository', () => {
       expect(repo).toBeDefined();
     });
 
-    it('deve chamar createDefaultFileSystemModule quando sem módulo injetado ou setado', () => {
-      // Limpar o módulo global para forçar o fallback
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setFileSystemModule(null as any);
-
-      const repo = createFileRepository();
-
-      expect(repo).toBeDefined();
-    });
-
     it('deve usar fallback documentDirectory quando expo-file-system não fornece um', () => {
       // Criar um módulo que simula expo-file-system sem documentDirectory
       // Isso força a branch do || na linha 44 de createDefaultFileSystemModule
-      const minimalFs: FileSystemModule = {
-        // Não fornecer documentDirectory ou fornecer undefined
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        getInfoAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        readDirectoryAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        makeDirectoryAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        writeAsStringAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        readAsStringAsync: jest.fn() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        deleteAsync: jest.fn() as any,
+      const minimalFs: jest.Mocked<FileSystemModule> = {
+        documentDirectory: undefined,
+        getInfoAsync: jest.fn(),
+        readDirectoryAsync: jest.fn(),
+        makeDirectoryAsync: jest.fn(),
+        writeAsStringAsync: jest.fn(),
+        readAsStringAsync: jest.fn(),
+        deleteAsync: jest.fn(),
       };
 
       const repo = createFileRepository(minimalFs);

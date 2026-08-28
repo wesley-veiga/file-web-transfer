@@ -12,7 +12,7 @@
  */
 
 import * as Crypto from 'expo-crypto';
-import type * as FileSystem from 'expo-file-system';
+import type * as FileSystem from 'expo-file-system/legacy'; // Tipos apenas; runtime usará expo-file-system via injeção
 
 import { sanitizeFileName, resolveDuplicateName } from '../../../shared/lib';
 import type { FileEntryDto } from '../../../shared/types/api';
