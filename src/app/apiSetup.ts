@@ -14,6 +14,7 @@ import { listFilesForApi, getFileForDownload } from '../features/files/services/
 import type { FileRepository } from '../features/files/services/fileRepository';
 import type { FileOrigin } from '../features/files/types';
 import { fileEntryDtoSchema, apiErrorSchema } from '../shared/types/api';
+import type { FilesChangedAtTracker } from '../shared/lib/filesChangedAtTracker';
 
 /**
  * Registra as rotas de listagem e download de arquivos no ApiRouter.
@@ -120,6 +121,79 @@ export function registerFileRoutes(
   apiRouter.addRoute('GET', '/api/files', handleListFiles);
   apiRouter.addRoute('GET', '/api/files/:id/download', handleDownloadFile);
 }
+
+/**
+ * Registra a rota de eventos de polling para atualizações de arquivos.
+ *
+ * GET /api/events: retorna o timestamp da última mudança na lista de arquivos.
+ * Usado pela web-ui para fazer polling a cada 3s e saber se precisa refazer GET /api/files.
+ *
+ * @param apiRouter - Instância do ApiRouter a configurar
+ * @param tracker - Rastreador de mudanças de arquivos
+ */
+export function registerEventsRoute(apiRouter: ApiRouter, tracker: FilesChangedAtTracker): void {
+  // GET /api/events — Atualizações da sessão (polling)
+  const handleGetEvents: ApiHandler = async (
+    _request: HttpServerRequest,
+    _params: Record<string, string>,
+    query: Record<string, string>,
+  ): Promise<HttpServerResponse> => {
+    try {
+      // Extrair query parameter 'since'
+      // (não validamos, pois sempre retornamos 200 com filesChangedAt atual
+      //  — é responsabilidade da web-ui comparar com seu since anterior)
+      const sinceStr = query['since'];
+      if (sinceStr !== undefined) {
+        const parsed = Number(sinceStr);
+        // Se sinceStr for um número válido, validamos apenas isso.
+        // Se for inválido, web-ui sempre compara com 0 na próxima vez.
+        if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+          // Validação ok, mas não usamos since no handler
+          // (sempre retornamos filesChangedAt atual)
+        }
+      }
+
+      // Obter o timestamp da última mudança
+      const filesChangedAt = tracker.get();
+
+      // Retornar resposta
+      return createSuccessResponse(200, { filesChangedAt });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error('[EventsRoute] Erro em GET /api/events:', error);
+      return createErrorResponse(500, 'INTERNAL_ERROR', message);
+    }
+  };
+
+  // Registrar a rota no ApiRouter
+  apiRouter.addRoute('GET', '/api/events', handleGetEvents);
+}
+
+/**
+ * Registra a rota de upload em streaming para recebimento de arquivos.
+ *
+ * Esta função será implementada por T-403.
+ * Importante: ao concluir um upload com sucesso (201), deve chamar tracker.touch()
+ * para notificar que a lista de arquivos foi alterada.
+ *
+ * @param httpModule - Instância do HttpModule (usado para registro de streaming upload)
+ * @param fileRepository - Instância do FileRepository para armazenar arquivos
+ * @param maxUploadBytes - Tamanho máximo de upload em bytes
+ * @param tracker - Rastreador de mudanças (chamado ao concluir upload)
+ *
+ * Expected signature (T-403):
+ * ```
+ * export function registerUploadRoute(
+ *   httpModule: HttpModule,
+ *   fileRepository: FileRepository,
+ *   maxUploadBytes: number,
+ *   tracker: FilesChangedAtTracker,
+ * ): void
+ * ```
+ *
+ * When T-403 is implemented, it should call `tracker.touch()` right after
+ * returning a successful 201 response for a completed upload.
+ */
 
 /**
  * Cria uma resposta de sucesso (JSON).
