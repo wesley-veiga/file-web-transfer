@@ -121,7 +121,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Mini-roteador sobre a lib escolhida; resposta de erro sempre no envelope `apiErrorSchema`; `GET /api/session`.
   *Pronto quando:* testes de contrato do envelope e de `/api/session`.
 
-- [ ] **T-402 · `GET /api/files` + `GET /api/files/:id/download`** ⬅ T-401, T-301
+- [x] **T-402 · `GET /api/files` + `GET /api/files/:id/download`** ⬅ T-401, T-301
   Listagem (query `origin`) e download com streaming, `Content-Length`, `Content-Disposition` UTF-8, `404` para id removido.
   *Pronto quando:* testes de contrato incluindo nome com acentos e id inexistente.
 
