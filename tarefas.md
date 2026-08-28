@@ -103,7 +103,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 
 ## Fase 3 — Feature: Arquivos (`features/files`)
 
-- [ ] **T-301 · Repositório de arquivos** ⬅ T-102, T-103 **[P]**
+- [x] **T-301 · Repositório de arquivos** ⬅ T-102, T-103 **[P]**
   `FileRepository` sobre `expo-file-system`: salvar em `received/`, listar, remover, mapear `FileEntry → FileEntryDto` (nunca expor `localUri`).
   *Pronto quando:* testes com mock de filesystem; teste garante que DTO não contém `localUri`.
 
