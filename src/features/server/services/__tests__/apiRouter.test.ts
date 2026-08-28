@@ -299,5 +299,87 @@ describe('ApiRouter', () => {
       const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
       expect(body).toEqual({ custom: true });
     });
+
+    it('addRoute com pattern :id extrai o parâmetro de rota corretamente', async () => {
+      let receivedParams: Record<string, string> | null = null;
+      router.addRoute('GET', '/api/files/:id/download', (_request, params) => {
+        receivedParams = params;
+        return Promise.resolve({
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ ok: true }),
+        });
+      });
+      router.register(mockHttpModule);
+
+      await registeredHandler!({
+        method: 'GET',
+        path: '/api/files/abc-123/download',
+        headers: {},
+      });
+
+      expect(receivedParams).toEqual({ id: 'abc-123' });
+    });
+
+    it('addRoute extrai query string quando presente no path', async () => {
+      let receivedQuery: Record<string, string> | null = null;
+      router.addRoute('GET', '/api/files', (_request, _params, query) => {
+        receivedQuery = query;
+        return Promise.resolve({
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ ok: true }),
+        });
+      });
+      router.register(mockHttpModule);
+
+      await registeredHandler!({
+        method: 'GET',
+        path: '/api/files?origin=received&limit=10',
+        headers: {},
+      });
+
+      expect(receivedQuery).toEqual({ origin: 'received', limit: '10' });
+    });
+
+    it('addRoute sem query string no path resulta em query vazia', async () => {
+      let receivedQuery: Record<string, string> | null = null;
+      router.addRoute('GET', '/api/files', (_request, _params, query) => {
+        receivedQuery = query;
+        return Promise.resolve({
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ ok: true }),
+        });
+      });
+      router.register(mockHttpModule);
+
+      await registeredHandler!({
+        method: 'GET',
+        path: '/api/files',
+        headers: {},
+      });
+
+      expect(receivedQuery).toEqual({});
+    });
+
+    it('não bate quando o número de segmentos do path difere do pattern', async () => {
+      router.addRoute('GET', '/api/files/:id/download', () =>
+        Promise.resolve({
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ ok: true }),
+        }),
+      );
+      router.register(mockHttpModule);
+
+      const response = await registeredHandler!({
+        method: 'GET',
+        path: '/api/files/abc-123/download/extra',
+        headers: {},
+      });
+
+      expect(response.statusCode).toBe(404);
+    });
   });
 });
