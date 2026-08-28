@@ -117,7 +117,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 
 ## Fase 4 — API HTTP (rotas sobre o servidor)
 
-- [ ] **T-401 · Roteador + envelope de erro** ⬅ T-203
+- [x] **T-401 · Roteador + envelope de erro** ⬅ T-203
   Mini-roteador sobre a lib escolhida; resposta de erro sempre no envelope `apiErrorSchema`; `GET /api/session`.
   *Pronto quando:* testes de contrato do envelope e de `/api/session`.
 
