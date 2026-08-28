@@ -111,7 +111,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Document picker, lista "Compartilhados" com remoção (HU-06); store da feature.
   *Pronto quando:* critérios de aceite "Tela Arquivos Compartilhados" atendidos (exceto o item de 3 s, que depende de T-503).
 
-- [ ] **T-303 · Aba Recebidos + abrir/compartilhar** ⬅ T-301, T-005
+- [x] **T-303 · Aba Recebidos + abrir/compartilhar** ⬅ T-301, T-005
   Lista de recebidos com share sheet do SO (parte da HU-07).
   *Pronto quando:* abrir e compartilhar funcionam nos dois SOs.
 
