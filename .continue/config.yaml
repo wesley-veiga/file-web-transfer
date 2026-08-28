@@ -1,0 +1,25 @@
+name: Transfer Files
+version: 1.0.0
+schema: v1
+
+# Modelos disponíveis para chat/agent mode neste projeto.
+# "Bionic" é um servidor local compatível com a API da OpenAI (ex.: LM Studio),
+# escutando em http://localhost:1234/v1. Ajuste o campo `model` abaixo para o
+# identificador exato do modelo carregado no Bionic (aparece na própria UI do
+# servidor local ou em GET http://localhost:1234/v1/models).
+models:
+  - name: 'Qwen 2.5 Coder'
+    provider: lmstudio
+    apiBase: http://localhost:1234/v1
+    model: AUTODETECT # <- troque pelo id do modelo carregado no Bionic
+    roles:
+      - chat
+      - edit
+      - apply
+    capabilities:
+      - tool_use
+    defaultCompletionOptions:
+      contextLength: 32768
+
+# Regras e prompts em .continue/rules/ e .continue/prompts/ são carregados
+# automaticamente (ordem lexicográfica) — não precisam ser listados aqui.

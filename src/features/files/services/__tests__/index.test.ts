@@ -27,20 +27,14 @@ describe('services/index.ts exports', () => {
   });
 
   it('should create FileRepository instance via createFileRepository', () => {
-    const mockFs: FileSystemModule = {
+    const mockFs: jest.Mocked<FileSystemModule> = {
       documentDirectory: 'file:///test/',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      getInfoAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      readDirectoryAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      makeDirectoryAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      writeAsStringAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      readAsStringAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      deleteAsync: jest.fn() as any,
+      getInfoAsync: jest.fn(),
+      readDirectoryAsync: jest.fn(),
+      makeDirectoryAsync: jest.fn(),
+      writeAsStringAsync: jest.fn(),
+      readAsStringAsync: jest.fn(),
+      deleteAsync: jest.fn(),
     };
 
     const repo = createFileRepository(mockFs);
@@ -49,20 +43,14 @@ describe('services/index.ts exports', () => {
   });
 
   it('should allow setting global FileSystemModule', () => {
-    const mockFs: FileSystemModule = {
+    const mockFs: jest.Mocked<FileSystemModule> = {
       documentDirectory: 'file:///global/',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      getInfoAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      readDirectoryAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      makeDirectoryAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      writeAsStringAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      readAsStringAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      deleteAsync: jest.fn() as any,
+      getInfoAsync: jest.fn(),
+      readDirectoryAsync: jest.fn(),
+      makeDirectoryAsync: jest.fn(),
+      writeAsStringAsync: jest.fn(),
+      readAsStringAsync: jest.fn(),
+      deleteAsync: jest.fn(),
     };
 
     setFileSystemModule(mockFs);
@@ -73,36 +61,24 @@ describe('services/index.ts exports', () => {
   });
 
   it('should use injected module over global module', () => {
-    const globalFs: FileSystemModule = {
+    const globalFs: jest.Mocked<FileSystemModule> = {
       documentDirectory: 'file:///global/',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      getInfoAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      readDirectoryAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      makeDirectoryAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      writeAsStringAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      readAsStringAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      deleteAsync: jest.fn() as any,
+      getInfoAsync: jest.fn(),
+      readDirectoryAsync: jest.fn(),
+      makeDirectoryAsync: jest.fn(),
+      writeAsStringAsync: jest.fn(),
+      readAsStringAsync: jest.fn(),
+      deleteAsync: jest.fn(),
     };
 
-    const injectedFs: FileSystemModule = {
+    const injectedFs: jest.Mocked<FileSystemModule> = {
       documentDirectory: 'file:///injected/',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      getInfoAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      readDirectoryAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      makeDirectoryAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      writeAsStringAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      readAsStringAsync: jest.fn() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      deleteAsync: jest.fn() as any,
+      getInfoAsync: jest.fn(),
+      readDirectoryAsync: jest.fn(),
+      makeDirectoryAsync: jest.fn(),
+      writeAsStringAsync: jest.fn(),
+      readAsStringAsync: jest.fn(),
+      deleteAsync: jest.fn(),
     };
 
     setFileSystemModule(globalFs);
