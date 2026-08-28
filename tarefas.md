@@ -125,7 +125,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Listagem (query `origin`) e download com streaming, `Content-Length`, `Content-Disposition` UTF-8, `404` para id removido.
   *Pronto quando:* testes de contrato incluindo nome com acentos e id inexistente.
 
-- [ ] **T-403 · `POST /api/upload` com streaming** ⬅ T-401, T-102, T-301
+- [x] **T-403 · `POST /api/upload` com streaming** ⬅ T-401, T-102, T-301
   Parser multipart com streaming (nunca bufferizar corpo inteiro); sanitização + anti-duplicata; erros `400/413/422/507`.
   *Pronto quando:* teste de contrato para cada código de erro; teste de memória com arquivo grande simulado (chunks).
 

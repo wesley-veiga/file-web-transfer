@@ -15,6 +15,7 @@ import { useSharedFiles } from '../useSharedFiles';
 import { useSharedFilesStore } from '../../store/sharedFilesStore';
 import type { FileRepository } from '../../services/fileRepository';
 import type { FileEntry } from '../../types';
+import { createMockFileRepository as createMockFileRepositoryHelper } from '../../../../__mocks__/testHelpers';
 
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(),
@@ -23,13 +24,8 @@ jest.mock('expo-document-picker', () => ({
 describe('useSharedFiles hook', () => {
   let mockFileRepository: jest.Mocked<FileRepository>;
 
-  const createMockFileRepository = (): jest.Mocked<FileRepository> => ({
-    save: jest.fn(),
-    saveFromUri: jest.fn(),
-    list: jest.fn(),
-    remove: jest.fn(),
-    toDto: jest.fn(),
-  });
+  const createMockFileRepository = (): jest.Mocked<FileRepository> =>
+    createMockFileRepositoryHelper();
 
   const resetStore = () => {
     useSharedFilesStore.setState({

@@ -29,6 +29,19 @@ export interface FileSystemModule {
   deleteAsync: typeof FileSystem.deleteAsync;
   copyAsync: typeof FileSystem.copyAsync;
   moveAsync: typeof FileSystem.moveAsync;
+
+  /**
+   * Anexa conteúdo ao final do arquivo em `uri`, criando-o se não existir.
+   * Usado para escrita incremental (streaming de upload).
+   *
+   * Implementação em produção usa API nova de `expo-file-system` (File/FileHandle),
+   * não a legacy; permite append eficiente sem bufferizar o corpo inteiro.
+   *
+   * @param uri - URI do arquivo
+   * @param content - Conteúdo a anexar (string)
+   * @throws Se falhar ao escrever (sem espaço, permissão, etc.)
+   */
+  appendToFileAsync: (uri: string, content: string) => Promise<void>;
 }
 
 /**
@@ -105,6 +118,48 @@ export interface FileRepository {
    * @returns FileEntryDto segura para exposição via API
    */
   toDto: (entry: FileEntry) => FileEntryDto;
+
+  /**
+   * Inicia uma escrita em streaming: sanitiza o nome, resolve duplicata,
+   * cria o arquivo vazio, e retorna um handle para escrever chunks e finalizar.
+   *
+   * Orquestra sanitização/anti-duplicata reutilizando a lógica de `save()` e `saveFromUri()`,
+   * mas para uploads em streaming onde não conhecemos o tamanho total até o fim.
+   *
+   * @param desiredName - Nome desejado (será sanitizado; se ficar vazio, lança erro)
+   * @param mimeType - MIME type do arquivo (ex.: "application/octet-stream")
+   * @param origin - Origem do arquivo ('received' ou 'shared')
+   * @returns Handle de escrita com métodos para escrever chunks, finalizar e abortar
+   * @throws Error se o nome sanitizado ficar vazio (caller deve mapear para 422 INVALID_FILENAME)
+   */
+  beginStreamedWrite: (
+    desiredName: string,
+    mimeType: string,
+    origin: FileOrigin,
+  ) => Promise<{
+    /** ID único do arquivo (uuid) */
+    id: string;
+    /** Nome final do arquivo após sanitização e resolução de duplicata */
+    finalName: string;
+    /**
+     * Escreve um chunk de dados ao arquivo.
+     * Pode ser chamado múltiplas vezes até que `finish()` seja chamado.
+     * @param data - Dados brutos (string) a anexar ao arquivo
+     */
+    writeChunk: (data: string) => Promise<void>;
+    /**
+     * Finaliza a escrita e grava metadados.
+     * Deve ser chamado uma única vez após todos os chunks terem sido escritos.
+     * @param sizeBytes - Tamanho total do arquivo em bytes
+     * @returns FileEntry completado com metadados gravados
+     */
+    finish: (sizeBytes: number) => Promise<FileEntry>;
+    /**
+     * Aborta a escrita (em caso de erro, por exemplo).
+     * Deleta o arquivo parcial e não grava metadados.
+     */
+    abort: () => Promise<void>;
+  }>;
 }
 
 /**
@@ -296,6 +351,80 @@ export class FileRepositoryImpl implements FileRepository {
       sizeBytes: entry.sizeBytes,
       mimeType: entry.mimeType,
       createdAt: entry.createdAt,
+    };
+  }
+
+  async beginStreamedWrite(
+    desiredName: string,
+    mimeType: string,
+    origin: FileOrigin,
+  ): Promise<{
+    id: string;
+    finalName: string;
+    writeChunk: (data: string) => Promise<void>;
+    finish: (sizeBytes: number) => Promise<FileEntry>;
+    abort: () => Promise<void>;
+  }> {
+    // Sanitizar nome e resolver duplicata
+    const sanitized = sanitizeFileName(desiredName);
+    if (!sanitized || sanitized === '') {
+      throw new Error('Nome sanitizado vazio (INVALID_FILENAME)');
+    }
+
+    const targetDir = origin === 'received' ? this.receivedDir : this.sharedDir;
+    await this.ensureDirectoryExists(targetDir);
+
+    const existingNames = await this.getExistingNames(targetDir);
+    const finalName = resolveDuplicateName(sanitized, existingNames);
+
+    // Gerar id e criar arquivo vazio
+    const id = Crypto.randomUUID();
+    const localUri = targetDir.replace(/\/$/, '') + '/' + finalName;
+
+    // Criar arquivo vazio inicialmente
+    await this.fsModule.writeAsStringAsync(localUri, '');
+
+    // Retornar handle de escrita
+    return {
+      id,
+      finalName,
+      writeChunk: async (data: string) => {
+        await this.fsModule.appendToFileAsync(localUri, data);
+      },
+      finish: async (sizeBytes: number) => {
+        const createdAt = Date.now();
+
+        const entry: FileEntry = {
+          id,
+          name: finalName,
+          sizeBytes,
+          mimeType,
+          localUri,
+          origin,
+          createdAt,
+        };
+
+        // Carregar metadados existentes, adicionar entrada, salvar
+        const metadata = await this.loadMetadata(targetDir);
+        metadata.push({
+          id,
+          name: finalName,
+          sizeBytes,
+          mimeType,
+          localUri,
+          createdAt,
+        });
+        await this.saveMetadata(targetDir, metadata);
+
+        return entry;
+      },
+      abort: async () => {
+        try {
+          await this.fsModule.deleteAsync(localUri);
+        } catch {
+          // Se falhar ao deletar, é ok — arquivo parcial pode ser deixado
+        }
+      },
     };
   }
 
