@@ -20,6 +20,7 @@ import { listFilesForApi, getFileForDownload } from '../features/files/services/
 import type { FileRepository } from '../features/files/services/fileRepository';
 import type { FileOrigin } from '../features/files/types';
 import { fileEntryDtoSchema, apiErrorSchema } from '../shared/types/api';
+import type { FilesChangedAtTracker } from '../shared/lib/filesChangedAtTracker';
 import { createMultipartStreamParser } from '../shared/lib/multipartStreamParser';
 
 /**
@@ -129,6 +130,39 @@ export function registerFileRoutes(
 }
 
 /**
+ * Registra a rota de eventos de polling para atualizações de arquivos.
+ *
+ * GET /api/events: retorna o timestamp da última mudança na lista de arquivos.
+ * Usado pela web-ui para fazer polling a cada 3s e saber se precisa refazer GET /api/files.
+ *
+ * @param apiRouter - Instância do ApiRouter a configurar
+ * @param tracker - Rastreador de mudanças de arquivos
+ */
+export function registerEventsRoute(apiRouter: ApiRouter, tracker: FilesChangedAtTracker): void {
+  // GET /api/events — Atualizações da sessão (polling)
+  const handleGetEvents: ApiHandler = async (
+    _request: HttpServerRequest,
+    _params: Record<string, string>,
+    _query: Record<string, string>,
+  ): Promise<HttpServerResponse> => {
+    try {
+      // `since` é lido pela web-ui só para decidir se refaz GET /api/files — o
+      // servidor não precisa comparar nada, sempre retorna o filesChangedAt atual.
+      const filesChangedAt = tracker.get();
+
+      return createSuccessResponse(200, { filesChangedAt });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error('[EventsRoute] Erro em GET /api/events:', error);
+      return createErrorResponse(500, 'INTERNAL_ERROR', message);
+    }
+  };
+
+  // Registrar a rota no ApiRouter
+  apiRouter.addRoute('GET', '/api/events', handleGetEvents);
+}
+
+/**
  * Cria uma resposta de sucesso (JSON).
  */
 function createSuccessResponse(statusCode: number, data: unknown): HttpServerResponse {
@@ -193,11 +227,14 @@ function createErrorResponse(
  * @param httpModule - Instância do HttpModule para registrar listener de upload
  * @param fileRepository - Repositório para orquestrar escrita em streaming
  * @param maxUploadBytes - Limite de tamanho de upload (ex.: 4GB)
+ * @param tracker - Rastreador de mudanças; tocado ao concluir um upload com sucesso,
+ *   para que GET /api/events reflita a mudança na próxima consulta de polling.
  */
 export function registerUploadRoute(
   httpModule: HttpModule,
   fileRepository: FileRepository,
   maxUploadBytes: number,
+  tracker: FilesChangedAtTracker,
 ): void {
   /**
    * Estado de um upload em andamento.
@@ -394,6 +431,7 @@ export function registerUploadRoute(
         }
 
         activeUploads.delete(uploadId);
+        tracker.touch();
         return createSuccessResponse(201, { file: fileDto });
       }
     } catch (error) {

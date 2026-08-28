@@ -1,4 +1,4 @@
-import { registerFileRoutes, registerUploadRoute } from '../apiSetup';
+import { registerFileRoutes, registerEventsRoute, registerUploadRoute } from '../apiSetup';
 import type { ApiRouter, ApiHandler } from '../../features/server/services/apiRouter';
 import type {
   HttpModule,
@@ -9,6 +9,7 @@ import type {
 import type { FileRepository } from '../../features/files/services/fileRepository';
 import type { FileEntry } from '../../features/files/types';
 import { fileEntryDtoSchema, apiErrorSchema } from '../../shared/types/api';
+import { createFilesChangedAtTracker } from '../../shared/lib/filesChangedAtTracker';
 import { createMockFileRepository, createMockHttpModule } from '../../__mocks__/testHelpers';
 
 describe('apiSetup — registerFileRoutes', () => {
@@ -703,19 +704,333 @@ describe('apiSetup — registerFileRoutes', () => {
   });
 });
 
+describe('apiSetup — registerEventsRoute', () => {
+  let mockApiRouter: jest.Mocked<ApiRouter>;
+
+  beforeEach(() => {
+    mockApiRouter = {
+      register: jest.fn(),
+      unregister: jest.fn(),
+      addRoute: jest.fn(),
+    };
+  });
+
+  describe('registro de rota', () => {
+    it('registra GET /api/events no roteador', () => {
+      const tracker = createFilesChangedAtTracker();
+      registerEventsRoute(mockApiRouter, tracker);
+
+      expect(mockApiRouter.addRoute).toHaveBeenCalledWith(
+        'GET',
+        '/api/events',
+        expect.any(Function),
+      );
+    });
+  });
+  describe('GET /api/events', () => {
+    it('retorna filesChangedAt atual quando since é omitido', async () => {
+      let now = 1000;
+      const tracker = createFilesChangedAtTracker(() => now);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      registerEventsRoute(mockApiRouter, tracker);
+
+      const handler = handlers['GET /api/events'];
+      const response = await handler({ method: 'GET', path: '/api/events', headers: {} }, {}, {});
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers?.['Content-Type']).toBe('application/json; charset=utf-8');
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.filesChangedAt).toBe(1000);
+    });
+
+    it('retorna filesChangedAt maior que since quando arquivo foi alterado', async () => {
+      let now = 1000;
+      const tracker = createFilesChangedAtTracker(() => now);
+
+      // Arquivo foi alterado em 1000
+      tracker.get(); // inicializa
+
+      // Simular passagem de tempo e mudança
+      now = 2000;
+      tracker.touch();
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      registerEventsRoute(mockApiRouter, tracker);
+
+      const handler = handlers['GET /api/events'];
+      const response = await handler(
+        { method: 'GET', path: '/api/events?since=1000', headers: {} },
+        {},
+        { since: '1000' },
+      );
+
+      expect(response.statusCode).toBe(200);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.filesChangedAt).toBe(2000);
+      expect(body.filesChangedAt).toBeGreaterThan(1000);
+    });
+
+    it('retorna filesChangedAt igual a since quando nada mudou', async () => {
+      const tracker = createFilesChangedAtTracker(() => 1000);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      registerEventsRoute(mockApiRouter, tracker);
+
+      const handler = handlers['GET /api/events'];
+      const response = await handler(
+        { method: 'GET', path: '/api/events?since=1000', headers: {} },
+        {},
+        { since: '1000' },
+      );
+
+      expect(response.statusCode).toBe(200);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.filesChangedAt).toBe(1000);
+      expect(body.filesChangedAt).toBe(1000); // igual a since
+    });
+
+    it('retorna filesChangedAt menor que since nunca (cronologia progressiva)', async () => {
+      let now = 1500;
+      const tracker = createFilesChangedAtTracker(() => now);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      registerEventsRoute(mockApiRouter, tracker);
+
+      const handler = handlers['GET /api/events'];
+      // Cliente consulta com since=1500, obtém o valor atual do tracker
+      const response = await handler(
+        { method: 'GET', path: '/api/events?since=1500', headers: {} },
+        {},
+        { since: '1500' },
+      );
+
+      expect(response.statusCode).toBe(200);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.filesChangedAt).toBeGreaterThanOrEqual(1500);
+    });
+
+    it('trata since inválido como 0 (qualquer timestamp é maior)', async () => {
+      const tracker = createFilesChangedAtTracker(() => 1000);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      registerEventsRoute(mockApiRouter, tracker);
+
+      const handler = handlers['GET /api/events'];
+
+      // since não é um número
+      const response1 = await handler(
+        { method: 'GET', path: '/api/events?since=not-a-number', headers: {} },
+        {},
+        { since: 'not-a-number' },
+      );
+
+      expect(response1.statusCode).toBe(200);
+      const body1 = JSON.parse(typeof response1.body === 'string' ? response1.body : '');
+      expect(body1.filesChangedAt).toBe(1000);
+
+      // since é infinity
+      const response2 = await handler(
+        { method: 'GET', path: '/api/events?since=Infinity', headers: {} },
+        {},
+        { since: 'Infinity' },
+      );
+
+      expect(response2.statusCode).toBe(200);
+      const body2 = JSON.parse(typeof response2.body === 'string' ? response2.body : '');
+      expect(body2.filesChangedAt).toBe(1000);
+    });
+
+    it('trata since=0 corretamente (primeira consulta sempre refaz GET /api/files)', async () => {
+      const tracker = createFilesChangedAtTracker(() => 5000);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      registerEventsRoute(mockApiRouter, tracker);
+
+      const handler = handlers['GET /api/events'];
+      const response = await handler(
+        { method: 'GET', path: '/api/events?since=0', headers: {} },
+        {},
+        { since: '0' },
+      );
+
+      expect(response.statusCode).toBe(200);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.filesChangedAt).toBe(5000);
+      expect(body.filesChangedAt).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Integração: ciclo de polling web-ui', () => {
+    it('simula polling sequencial com mudanças de arquivo', async () => {
+      let now = 1000;
+      const tracker = createFilesChangedAtTracker(() => now);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      registerEventsRoute(mockApiRouter, tracker);
+
+      const handler = handlers['GET /api/events'];
+
+      // Momento 1: web-ui consulta pela primeira vez (since=0)
+      now = 1000;
+      let response = await handler(
+        { method: 'GET', path: '/api/events?since=0', headers: {} },
+        {},
+        { since: '0' },
+      );
+      let body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.filesChangedAt).toBe(1000);
+
+      // Momento 2: arquivo é enviado (upload concluído)
+      now = 2000;
+      tracker.touch();
+
+      // web-ui consulta novamente (since=1000)
+      response = await handler(
+        { method: 'GET', path: '/api/events?since=1000', headers: {} },
+        {},
+        { since: '1000' },
+      );
+      body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.filesChangedAt).toBe(2000);
+      expect(body.filesChangedAt).toBeGreaterThan(1000);
+
+      // Momento 3: nada mudou desde 2000
+      now = 5000;
+      response = await handler(
+        { method: 'GET', path: '/api/events?since=2000', headers: {} },
+        {},
+        { since: '2000' },
+      );
+      body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.filesChangedAt).toBe(2000);
+      expect(body.filesChangedAt).toBe(2000); // igual a since
+    });
+  });
+
+  describe('validação de respostas', () => {
+    it('sempre retorna HTTP 200 (nunca erro)', async () => {
+      const tracker = createFilesChangedAtTracker(() => 1000);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      registerEventsRoute(mockApiRouter, tracker);
+
+      const handler = handlers['GET /api/events'];
+
+      const testCases: Record<string, string>[] = [
+        { since: '0' },
+        { since: '1000' },
+        { since: '999999' },
+        { since: 'invalid' },
+        {},
+      ];
+
+      for (const query of testCases) {
+        const response = await handler(
+          { method: 'GET', path: '/api/events', headers: {} },
+          {},
+          query,
+        );
+        expect(response.statusCode).toBe(200);
+      }
+    });
+
+    it('retorna JSON válido com filesChangedAt sempre', async () => {
+      const tracker = createFilesChangedAtTracker(() => 1000);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      registerEventsRoute(mockApiRouter, tracker);
+
+      const handler = handlers['GET /api/events'];
+      const response = await handler(
+        { method: 'GET', path: '/api/events?since=500', headers: {} },
+        {},
+        { since: '500' },
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers?.['Content-Type']).toBe('application/json; charset=utf-8');
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body).toHaveProperty('filesChangedAt');
+      expect(typeof body.filesChangedAt).toBe('number');
+    });
+
+    it('não inclui campos desnecessários na resposta', async () => {
+      const tracker = createFilesChangedAtTracker(() => 1000);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      registerEventsRoute(mockApiRouter, tracker);
+
+      const handler = handlers['GET /api/events'];
+      const response = await handler({ method: 'GET', path: '/api/events', headers: {} }, {}, {});
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(Object.keys(body)).toEqual(['filesChangedAt']);
+    });
+  });
+});
+
 describe('apiSetup — registerUploadRoute', () => {
   let mockHttpModule: jest.Mocked<HttpModule>;
   let mockFileRepository: jest.Mocked<FileRepository>;
+  let tracker: ReturnType<typeof createFilesChangedAtTracker>;
 
   beforeEach(() => {
     mockHttpModule = createMockHttpModule();
 
     mockFileRepository = createMockFileRepository();
+    tracker = createFilesChangedAtTracker();
   });
 
   describe('registro de rota', () => {
     it('registra POST /api/upload no módulo HTTP', () => {
-      registerUploadRoute(mockHttpModule, mockFileRepository, 1000000);
+      registerUploadRoute(mockHttpModule, mockFileRepository, 1000000, tracker);
 
       expect(mockHttpModule.addUploadListener).toHaveBeenCalledWith(
         '/api/upload',
@@ -723,7 +1038,6 @@ describe('apiSetup — registerUploadRoute', () => {
       );
     });
   });
-
   describe('happy path — upload com sucesso (201)', () => {
     it('retorna 201 com FileEntryDto válido ao completar upload', async () => {
       const maxUploadBytes = 1000000;
@@ -739,7 +1053,7 @@ describe('apiSetup — registerUploadRoute', () => {
         capturedHandler = handler as typeof capturedHandler;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440020',
@@ -817,7 +1131,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -884,7 +1198,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440022',
@@ -960,7 +1274,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const chunk: HttpUploadChunk = {
         requestId: 'req-1',
@@ -995,7 +1309,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const uploadBody =
         `------boundary\r\n` +
@@ -1037,7 +1351,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       // Multipart sem boundary final válido
       const uploadBody =
@@ -1082,7 +1396,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -1137,7 +1451,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -1203,7 +1517,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       mockFileRepository.beginStreamedWrite.mockRejectedValue(
         new Error('Nome sanitizado vazio (INVALID_FILENAME)'),
@@ -1251,7 +1565,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -1306,7 +1620,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -1360,7 +1674,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const uuid1 = '550e8400-e29b-41d4-a716-446655440001';
       const uuid2 = '550e8400-e29b-41d4-a716-446655440002';
@@ -1500,7 +1814,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const uuid1 = '550e8400-e29b-41d4-a716-446655440001';
       const uuid2 = '550e8400-e29b-41d4-a716-446655440002';
@@ -1606,7 +1920,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const createdAt = Date.now();
       const testUuid = '550e8400-e29b-41d4-a716-446655440010';
@@ -1685,7 +1999,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       // Testar 400
       const chunk400: HttpUploadChunk = {
@@ -1723,7 +2037,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       mockFileRepository.beginStreamedWrite.mockRejectedValue(
         new Error('Nome sanitizado vazio (INVALID_FILENAME)'),
@@ -1769,7 +2083,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       mockFileRepository.beginStreamedWrite.mockRejectedValue(
         new Error('Nome sanitizado vazio (INVALID_FILENAME)'),
@@ -1813,7 +2127,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const testUuid = '550e8400-e29b-41d4-a716-446655440011';
       const createdAtTime = Date.now();
@@ -1885,7 +2199,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       mockFileRepository.beginStreamedWrite.mockRejectedValue(
         new Error('Nome sanitizado vazio (INVALID_FILENAME)'),
@@ -1947,7 +2261,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       mockFileRepository.beginStreamedWrite.mockRejectedValue(
         new Error('Erro inesperado de disco'),
@@ -1991,7 +2305,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440099',

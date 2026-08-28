@@ -129,7 +129,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Parser multipart com streaming (nunca bufferizar corpo inteiro); sanitização + anti-duplicata; erros `400/413/422/507`.
   *Pronto quando:* teste de contrato para cada código de erro; teste de memória com arquivo grande simulado (chunks).
 
-- [ ] **T-404 · `GET /api/events` (polling)** ⬅ T-401
+- [x] **T-404 · `GET /api/events` (polling)** ⬅ T-401
   `filesChangedAt` atualizado em toda mutação da lista de arquivos.
   *Pronto quando:* testes de `since` maior/menor/igual.
 
