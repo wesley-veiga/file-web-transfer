@@ -8,6 +8,9 @@ import {
   createFileRepository,
   setFileSystemModule,
   type FileSystemModule,
+  SharingServiceImpl,
+  createSharingService,
+  setSharingModule,
 } from '../index';
 
 describe('services/index.ts exports', () => {
@@ -94,5 +97,33 @@ describe('services/index.ts exports', () => {
 
     expect(repo).toBeDefined();
     expect(repo).toBeInstanceOf(FileRepositoryImpl);
+  });
+
+  it('should export SharingServiceImpl', () => {
+    expect(SharingServiceImpl).toBeDefined();
+    expect(typeof SharingServiceImpl).toBe('function');
+  });
+
+  it('should export createSharingService', () => {
+    expect(createSharingService).toBeDefined();
+    expect(typeof createSharingService).toBe('function');
+  });
+
+  it('should export setSharingModule', () => {
+    expect(setSharingModule).toBeDefined();
+    expect(typeof setSharingModule).toBe('function');
+  });
+
+  it('should create SharingServiceImpl instance via createSharingService', () => {
+    const service = createSharingService();
+    expect(service).toBeInstanceOf(SharingServiceImpl);
+  });
+
+  it('should allow setting global SharingModule', () => {
+    const mockModule = { openAsync: jest.fn(), shareAsync: jest.fn() };
+    setSharingModule(mockModule);
+
+    const service = createSharingService();
+    expect(service).toBe(mockModule);
   });
 });
