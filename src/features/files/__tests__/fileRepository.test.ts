@@ -1237,4 +1237,315 @@ describe('FileRepository', () => {
       expect(keys).toEqual(['id', 'name', 'sizeBytes', 'mimeType', 'createdAt']);
     });
   });
+
+  describe('beginStreamedWrite', () => {
+    beforeEach(() => {
+      // Configurar mocks padrão para streaming
+      const writtenFiles = new Map<string, string>();
+
+      (mockFs.getInfoAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        if (writtenFiles.has(uri)) {
+          const content = writtenFiles.get(uri) || '';
+          return {
+            exists: true,
+            isDirectory: false,
+            size: Buffer.byteLength(content, 'utf8'),
+          };
+        }
+        return { exists: false, isDirectory: false };
+      });
+
+      (mockFs.writeAsStringAsync as jest.Mock).mockImplementation(
+        async (uri: string, content: string) => {
+          writtenFiles.set(uri, content);
+        },
+      );
+
+      (mockFs.appendToFileAsync as jest.Mock).mockImplementation(
+        async (uri: string, content: string) => {
+          const existing = writtenFiles.get(uri) || '';
+          writtenFiles.set(uri, existing + content);
+        },
+      );
+
+      (mockFs.readDirectoryAsync as jest.Mock).mockResolvedValue([]);
+      (mockFs.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
+      (mockFs.readAsStringAsync as jest.Mock).mockResolvedValue('[]');
+      (mockFs.deleteAsync as jest.Mock).mockResolvedValue(undefined);
+    });
+
+    it('retorna handle de escrita com id e finalName', async () => {
+      const handle = await repository.beginStreamedWrite('test.txt', 'text/plain', 'received');
+
+      expect(handle).toBeDefined();
+      expect(handle.id).toBeDefined();
+      expect(handle.finalName).toBe('test.txt');
+    });
+
+    it('sanitiza nome ao iniciar escrita em streaming', async () => {
+      const handle = await repository.beginStreamedWrite(
+        '../../etc/passwd',
+        'text/plain',
+        'received',
+      );
+
+      // O nome sanitizado deve ser apenas o basename
+      expect(handle.finalName).toBe('passwd');
+    });
+
+    it('resolve duplicata automaticamente', async () => {
+      // Simular que 'document.txt' já existe
+      (mockFs.readDirectoryAsync as jest.Mock).mockResolvedValue(['document.txt']);
+      (mockFs.readAsStringAsync as jest.Mock).mockResolvedValue(
+        JSON.stringify([
+          {
+            id: 'existing-id',
+            name: 'document.txt',
+            sizeBytes: 100,
+            mimeType: 'text/plain',
+            localUri: 'file:///mock-docs/received/document.txt',
+            createdAt: Date.now(),
+          },
+        ]),
+      );
+
+      const handle = await repository.beginStreamedWrite('document.txt', 'text/plain', 'received');
+
+      expect(handle.finalName).toBe('document (1).txt');
+    });
+
+    it('usa fallback quando nome fica vazio após sanitização', async () => {
+      // sanitizeFileName('.') retorna 'arquivo' (fallback padrão)
+      // portanto beginStreamedWrite não deve rejeitar
+      const handle = await repository.beginStreamedWrite('.', 'text/plain', 'received');
+
+      // O nome deve ser o fallback 'arquivo'
+      expect(handle.finalName).toBe('arquivo');
+    });
+
+    it('cria arquivo vazio inicialmente', async () => {
+      await repository.beginStreamedWrite('stream.txt', 'text/plain', 'received');
+
+      expect(mockFs.writeAsStringAsync).toHaveBeenCalledWith(
+        expect.stringContaining('/received/stream.txt'),
+        '',
+      );
+    });
+
+    it('handle.writeChunk chama appendToFileAsync', async () => {
+      const handle = await repository.beginStreamedWrite('stream.txt', 'text/plain', 'received');
+
+      const chunkData = 'First chunk of data';
+      await handle.writeChunk(chunkData);
+
+      expect(mockFs.appendToFileAsync).toHaveBeenCalledWith(
+        expect.stringContaining('/received/stream.txt'),
+        chunkData,
+      );
+    });
+
+    it('handle.writeChunk pode ser chamado múltiplas vezes', async () => {
+      const handle = await repository.beginStreamedWrite('stream.txt', 'text/plain', 'received');
+
+      await handle.writeChunk('Chunk 1\n');
+      await handle.writeChunk('Chunk 2\n');
+      await handle.writeChunk('Chunk 3\n');
+
+      expect(mockFs.appendToFileAsync).toHaveBeenCalledTimes(3);
+    });
+
+    it('handle.finish grava metadados e retorna FileEntry completo', async () => {
+      const handle = await repository.beginStreamedWrite(
+        'data.bin',
+        'application/octet-stream',
+        'received',
+      );
+
+      const entry = await handle.finish(1024);
+
+      expect(entry).toBeDefined();
+      expect(entry.id).toBe(handle.id);
+      expect(entry.name).toBe('data.bin');
+      expect(entry.sizeBytes).toBe(1024);
+      expect(entry.mimeType).toBe('application/octet-stream');
+      expect(entry.origin).toBe('received');
+      expect(entry.createdAt).toBeGreaterThan(0);
+
+      // Verificar que metadados foram salvos
+      const metaCalls = (mockFs.writeAsStringAsync as jest.Mock).mock.calls.filter((call) =>
+        call[0].includes('.meta.json'),
+      );
+      expect(metaCalls.length).toBeGreaterThan(0);
+    });
+
+    it('handle.finish retorna DTO válido contra schema Zod', async () => {
+      const handle = await repository.beginStreamedWrite('file.pdf', 'application/pdf', 'received');
+      const entry = await handle.finish(5000);
+      const dto = repository.toDto(entry);
+
+      const validated = fileEntryDtoSchema.parse(dto);
+      expect(validated).toBeDefined();
+      expect(validated.id).toBe(handle.id);
+      expect(validated.sizeBytes).toBe(5000);
+    });
+
+    it('handle.abort deleta arquivo parcial', async () => {
+      const handle = await repository.beginStreamedWrite(
+        'incomplete.txt',
+        'text/plain',
+        'received',
+      );
+
+      await handle.writeChunk('Some partial data');
+      await handle.abort();
+
+      expect(mockFs.deleteAsync).toHaveBeenCalledWith(
+        expect.stringContaining('/received/incomplete.txt'),
+      );
+    });
+
+    it('handle.abort não grava metadados', async () => {
+      const handle = await repository.beginStreamedWrite(
+        'abort-test.txt',
+        'text/plain',
+        'received',
+      );
+
+      // Rastrear chamadas de writeAsStringAsync de .meta.json antes e depois
+      const metaCallsBefore = (mockFs.writeAsStringAsync as jest.Mock).mock.calls.filter((call) =>
+        call[0].includes('.meta.json'),
+      ).length;
+
+      await handle.abort();
+
+      const metaCallsAfter = (mockFs.writeAsStringAsync as jest.Mock).mock.calls.filter((call) =>
+        call[0].includes('.meta.json'),
+      ).length;
+
+      // Não deve adicionar nova chamada de meta.json após abort
+      expect(metaCallsAfter).toBe(metaCallsBefore);
+    });
+
+    it('escreve em received/ para origin="received"', async () => {
+      const handle = await repository.beginStreamedWrite('file.txt', 'text/plain', 'received');
+
+      expect(handle.finalName).toBe('file.txt');
+
+      const writeCall = (mockFs.writeAsStringAsync as jest.Mock).mock.calls.find(
+        (call) => call[1] === '',
+      );
+      expect(writeCall[0]).toContain('/received/');
+    });
+
+    it('escreve em shared/ para origin="shared"', async () => {
+      await repository.beginStreamedWrite('shared-file.txt', 'text/plain', 'shared');
+
+      const writeCall = (mockFs.writeAsStringAsync as jest.Mock).mock.calls.find(
+        (call) => call[1] === '',
+      );
+      expect(writeCall[0]).toContain('/shared/');
+    });
+
+    it('trata múltiplos uploads concorrentes com nomes diferentes', async () => {
+      const handle1 = await repository.beginStreamedWrite('file1.txt', 'text/plain', 'received');
+      const handle2 = await repository.beginStreamedWrite('file2.txt', 'text/plain', 'received');
+
+      expect(handle1.id).not.toBe(handle2.id);
+      expect(handle1.finalName).toBe('file1.txt');
+      expect(handle2.finalName).toBe('file2.txt');
+    });
+
+    it('casos de borda — nome com 255 caracteres', async () => {
+      const longName = 'a'.repeat(250) + '.txt'; // Total 254 chars, within limit
+
+      const handle = await repository.beginStreamedWrite(longName, 'text/plain', 'received');
+
+      expect(handle.finalName.length).toBeLessThanOrEqual(255);
+    });
+
+    it('casos de borda — nome com apenas extensão', async () => {
+      // .gitignore é um nome válido
+      const handle = await repository.beginStreamedWrite('.gitignore', 'text/plain', 'received');
+
+      expect(handle.finalName).toBe('.gitignore');
+    });
+
+    it('casos de borda — nome com acentos e unicode', async () => {
+      const handle = await repository.beginStreamedWrite(
+        'relatório-ação-é.txt',
+        'text/plain',
+        'received',
+      );
+
+      expect(handle.finalName).toBe('relatório-ação-é.txt');
+    });
+
+    it('reject writeChunk errors propagam (ex.: sem espaço)', async () => {
+      const handle = await repository.beginStreamedWrite('file.txt', 'text/plain', 'received');
+
+      (mockFs.appendToFileAsync as jest.Mock).mockRejectedValueOnce(
+        new Error('No space left on device'),
+      );
+
+      await expect(handle.writeChunk('data')).rejects.toThrow('No space left on device');
+    });
+
+    it('finish() com sizeBytes=0 é válido', async () => {
+      const handle = await repository.beginStreamedWrite('empty.txt', 'text/plain', 'received');
+
+      const entry = await handle.finish(0);
+
+      expect(entry.sizeBytes).toBe(0);
+    });
+
+    it('finish() com sizeBytes grande (ex.: 1GB simulado) é válido', async () => {
+      const handle = await repository.beginStreamedWrite(
+        'large.bin',
+        'application/octet-stream',
+        'received',
+      );
+
+      const entry = await handle.finish(1024 * 1024 * 1024); // 1GB
+
+      expect(entry.sizeBytes).toBe(1024 * 1024 * 1024);
+    });
+
+    it('múltiplos writeChunk seguidos de finish grava corretamente', async () => {
+      const handle = await repository.beginStreamedWrite(
+        'multi-chunk.txt',
+        'text/plain',
+        'received',
+      );
+
+      await handle.writeChunk('Part 1: ');
+      await handle.writeChunk('Part 2: ');
+      await handle.writeChunk('Part 3');
+
+      const entry = await handle.finish(22); // Total chars
+
+      expect(entry.name).toBe('multi-chunk.txt');
+      expect(entry.sizeBytes).toBe(22);
+
+      // Verificar que metadados foram salvos com o arquivo registrado
+      const metaCalls = (mockFs.writeAsStringAsync as jest.Mock).mock.calls.filter((call) =>
+        call[0].includes('.meta.json'),
+      );
+      expect(metaCalls.length).toBeGreaterThan(0);
+
+      const lastMetaCall = metaCalls[metaCalls.length - 1];
+      const metadata = JSON.parse(lastMetaCall[1]);
+      expect(metadata).toBeInstanceOf(Array);
+      expect(metadata.length).toBeGreaterThan(0);
+      expect(metadata[metadata.length - 1].name).toBe('multi-chunk.txt');
+    });
+
+    it('handle.abort ignora erros ao deletar', async () => {
+      const handle = await repository.beginStreamedWrite('delicate.txt', 'text/plain', 'received');
+
+      (mockFs.deleteAsync as jest.Mock).mockRejectedValueOnce(new Error('Permission denied'));
+
+      // abort() não deve rejeitar mesmo se delete falhar
+      await expect(handle.abort()).resolves.toBeUndefined();
+    });
+  });
 });
