@@ -76,10 +76,11 @@ module.exports = defineConfig([
         {
           default: 'disallow',
           policies: [
-            // src/app pode importar de features e de shared.
+            // src/app pode importar de features, de shared e da web-ui (HTML/CSS/JS
+            // servido em GET / — ver src/web-ui/webUiHtml.ts).
             {
               from: { element: { types: 'app' } },
-              allow: { to: { element: { types: { anyOf: ['feature', 'shared'] } } } },
+              allow: { to: { element: { types: { anyOf: ['feature', 'shared', 'web-ui'] } } } },
             },
             // features podem importar de shared...
             {

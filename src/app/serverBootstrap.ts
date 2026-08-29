@@ -22,7 +22,12 @@ import { createApiRouter } from '../features/server/services/apiRouterFactory';
 import { createFileRepository } from '../features/files/services/fileRepositoryFactory';
 import { createFilesChangedAtTracker } from '../shared/lib/filesChangedAtTracker';
 import { generateSessionId } from '../shared/lib';
-import { registerFileRoutes, registerUploadRoute, registerEventsRoute } from './apiSetup';
+import {
+  registerFileRoutes,
+  registerUploadRoute,
+  registerEventsRoute,
+  registerWebUiRoute,
+} from './apiSetup';
 
 /**
  * Limite máximo de upload em bytes.
@@ -94,4 +99,5 @@ export function initServer(): void {
   });
   registerEventsRoute(apiRouter, tracker);
   registerUploadRoute(httpModule, fileRepository, MAX_UPLOAD_BYTES, tracker);
+  registerWebUiRoute(httpModule);
 }
