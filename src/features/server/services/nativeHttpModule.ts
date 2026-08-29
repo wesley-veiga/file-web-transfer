@@ -242,6 +242,7 @@ export function createDefaultHttpModule(): HttpModule {
         method,
         path: fullPath,
         headers: headersMap,
+        remoteAddress: socket.remoteAddress ?? 'desconhecido',
       };
       const result = await matched.handler(chunk, request);
       if (isLast) {
@@ -264,6 +265,7 @@ export function createDefaultHttpModule(): HttpModule {
         path: fullPath,
         headers: headersMap,
         body: plainBodyChunks.join('') || undefined,
+        remoteAddress: socket.remoteAddress ?? 'desconhecido',
       };
       const result = await matched.handler(request);
       respondAndDestroy(result);

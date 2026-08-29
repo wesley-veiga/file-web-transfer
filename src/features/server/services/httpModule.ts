@@ -14,6 +14,18 @@ export interface HttpServerRequest {
   path: string;
   headers: Record<string, string>;
   body?: unknown;
+  /**
+   * IP remoto do cliente (peer) que originou a requisição, usado por T-602 para
+   * popular `Transfer.peerIp`. Vem de `socket.remoteAddress` na implementação real
+   * (`nativeHttpModule.ts`).
+   *
+   * Opcional (em vez de obrigatório) de propósito: dezenas de testes de T-401/T-402/
+   * T-403 já existentes constroem `HttpServerRequest` literalmente sem esse campo, e
+   * reescrever essas suítes está fora do escopo de T-602. Quem consome este campo
+   * (T-602, `apiSetup.ts`) trata a ausência com o fallback `'desconhecido'` em vez de
+   * quebrar a rota.
+   */
+  remoteAddress?: string;
 }
 
 export interface HttpServerResponse {
