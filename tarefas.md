@@ -154,7 +154,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 
 ## Fase 6 — Transferências em Tempo Real (app host)
 
-- [ ] **T-601 · Store de transferências** ⬅ T-103 **[P]**
+- [x] **T-601 · Store de transferências** ⬅ T-103 **[P]**
   Tipos `Transfer` + store Zustand: fila, progresso, velocidade (média móvel), transições de status, `cancelled` ao parar servidor.
   *Pronto quando:* toda a lógica de agregação testada com relógio mockado.
 
