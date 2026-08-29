@@ -6,8 +6,15 @@ import { sessionInfoSchema, apiErrorSchema } from '../../../shared/types/api';
  * Configuração do roteador de API.
  */
 export interface ApiRouterConfig {
-  /** Identificador da sessão (gerado pelo ServerService) */
-  sessionId: string;
+  /**
+   * Retorna o identificador da sessão atual (gerado pelo ServerService).
+   *
+   * É uma função, não um valor fixo, porque o `ApiRouter` é montado uma única vez
+   * no boot do app (antes de qualquer `ServerService.start()` acontecer), mas o
+   * `sessionId` muda a cada chamada de `start()`. Ler via função permite que
+   * `GET /api/session` sempre reflita o sessionId da sessão em andamento.
+   */
+  getSessionId: () => string;
   /** Versão do app para exibir na API */
   appVersion: string;
   /** Tamanho máximo de upload em bytes */
@@ -222,7 +229,7 @@ export class ApiRouterImpl implements ApiRouter {
    */
   private async handleGetSession(): Promise<HttpServerResponse> {
     const sessionInfo: SessionInfo = {
-      sessionId: this.config.sessionId,
+      sessionId: this.config.getSessionId(),
       appVersion: this.config.appVersion,
       maxUploadBytes: this.config.maxUploadBytes,
     };

@@ -5,11 +5,18 @@
  * - Produção: `createFileRepository()` sem argumentos (usa expo-file-system real via legacy API)
  * - Testes: `createFileRepository(mockFsModule)` com mock de __mocks__/expo-file-system.ts
  *
- * Em produção, importamos de `expo-file-system/legacy` (real); em testes, o mock cobrirá ambos.
+ * Em produção, importamos de `expo-file-system/legacy` (real); em testes, o mock cobrirá ambos
+ * (ver `moduleNameMapper['^expo-file-system/legacy$']` em `jest.config.js`).
+ *
+ * IMPORTANTE: `expo-file-system` (pacote base, sem `/legacy`) reexporta `readAsStringAsync`,
+ * `getInfoAsync`, `writeAsStringAsync` etc. como stubs deprecados que SEMPRE lançam em runtime
+ * (ver `node_modules/expo-file-system/src/legacyWarnings.ts`) — não são a API real. Importar
+ * essas funções do pacote base (mesmo com type cast para `typeof FileSystemLegacy`) quebra em
+ * produção silenciosamente, porque o TypeScript não detecta a troca de implementação por trás
+ * do cast. É por isso que o import abaixo é de `expo-file-system/legacy` de verdade.
  */
 
-import * as FileSystem from 'expo-file-system';
-import type * as FileSystemLegacy from 'expo-file-system/legacy';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import { File } from 'expo-file-system';
 
 import type { FileSystemModule, FileRepository } from './fileRepository';
@@ -50,9 +57,6 @@ export function createFileRepository(fsModule?: FileSystemModule): FileRepositor
  * Ref: https://docs.expo.dev/versions/v57.0.0/sdk/filesystem/
  */
 function createDefaultFileSystemModule(): FileSystemModule {
-  // Type cast para sinalizar que usamos API legacy (expo-file-system/legacy em produção, mock em testes)
-  const fsLegacy = FileSystem as unknown as typeof FileSystemLegacy;
-
   // Implementa appendToFileAsync usando a API nova de `expo-file-system` (classe
   // `File`, não `/legacy`), que suporta append de verdade via `write(content, { append: true })`.
   // Sem essa API, appendToFileAsync não teria como escrever incrementalmente sem
@@ -67,15 +71,15 @@ function createDefaultFileSystemModule(): FileSystemModule {
   }
 
   return {
-    documentDirectory: fsLegacy.documentDirectory ?? 'file:///document/',
-    getInfoAsync: fsLegacy.getInfoAsync,
-    readDirectoryAsync: fsLegacy.readDirectoryAsync,
-    makeDirectoryAsync: fsLegacy.makeDirectoryAsync,
-    writeAsStringAsync: fsLegacy.writeAsStringAsync,
-    readAsStringAsync: fsLegacy.readAsStringAsync,
-    deleteAsync: fsLegacy.deleteAsync,
-    copyAsync: fsLegacy.copyAsync,
-    moveAsync: fsLegacy.moveAsync,
+    documentDirectory: FileSystemLegacy.documentDirectory ?? 'file:///document/',
+    getInfoAsync: FileSystemLegacy.getInfoAsync,
+    readDirectoryAsync: FileSystemLegacy.readDirectoryAsync,
+    makeDirectoryAsync: FileSystemLegacy.makeDirectoryAsync,
+    writeAsStringAsync: FileSystemLegacy.writeAsStringAsync,
+    readAsStringAsync: FileSystemLegacy.readAsStringAsync,
+    deleteAsync: FileSystemLegacy.deleteAsync,
+    copyAsync: FileSystemLegacy.copyAsync,
+    moveAsync: FileSystemLegacy.moveAsync,
     appendToFileAsync,
   };
 }

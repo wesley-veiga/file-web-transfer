@@ -1,6 +1,7 @@
 # Tarefas — Transferir Arquivos
 
 **Derivado de:** [transferir.md](transferir.md) · **Regido por:** [constitution.md](constitution.md)
+**Revisão 1.3 (2026-08-28):** nova T-405 — implementação nativa real do `HttpModule` (T-401–T-404 rodavam só contra mocks); ADR-001 revertido de `react-native-http-bridge-refurbished` para `react-native-tcp-socket` após leitura do código nativo revelar que a lib escolhida não suporta streaming (ver ADR-001 §8, emenda v1.2).
 **Revisão 1.2 (2026-08-27):** modo rede própria despriorizado e removido — T-206/T-207/T-208 marcadas como removidas (ver ADR-002, status Rejeitada); nova T-209 reverte a implementação de T-207; T-701 ajustada (cenário hotspot removido do roteiro).
 **Revisão 1.1 (2026-07-16):** validado contra as novas regras — Android 14+ (T-001 ajustada), modo rede própria HU-08 (novas T-206/T-207/T-208), governança de repositório (nova T-006), cenário hotspot no teste de fogo (T-701 ajustada).
 
@@ -132,6 +133,10 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 - [x] **T-404 · `GET /api/events` (polling)** ⬅ T-401
   `filesChangedAt` atualizado em toda mutação da lista de arquivos.
   *Pronto quando:* testes de `since` maior/menor/igual.
+
+- [x] **T-405 · Implementação nativa do `HttpModule` (`react-native-tcp-socket`)** ⬅ T-203, T-401, T-402, T-403, T-404
+  T-401–T-404 rodam apenas contra mocks; nenhuma implementação real de `HttpModule` existe e nada em `src/app/` chama `setHttpModule()`/`registerFileRoutes()`/`registerUploadRoute()`/`registerEventsRoute()`. Ao tentar ligar isso pela primeira vez, ficou constatado que a lib escolhida em T-202 (`react-native-http-bridge-refurbished`) não suporta streaming de fato (ver ADR-001 §8, emenda v1.2) — decisão revertida para a Alternativa 2.2 do ADR: servidor HTTP/1.1 próprio sobre `react-native-tcp-socket`, reaproveitando o `multipartStreamParser` (T-403) alimentado incrementalmente pelos eventos `data` do socket (sem `Transfer-Encoding: chunked`, sem keep-alive — parser simplificado). Inclui remover `react-native-http-bridge-refurbished` das dependências e conectar as funções de `apiSetup.ts` na inicialização real do app.
+  *Pronto quando:* app inicia o servidor num emulador/dispositivo real sem erro; `GET /api/session`, `GET /api/files`, `GET /api/files/:id/download`, `POST /api/upload` e `GET /api/events` respondem a requisição HTTP real (não mock) na rede local; teste de memória com arquivo grande simulado (chunks) cobrindo o novo transporte, não só o parser.
 
 ## Fase 5 — Interface Web (`web-ui/`)
 
