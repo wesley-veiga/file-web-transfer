@@ -18,6 +18,7 @@ android/
 android/app/build/
 coverage/
 dist/
+ios/
 ios/build/
 node_modules/
 web-build/
