@@ -1,9 +1,15 @@
-import { registerFileRoutes, registerEventsRoute, registerUploadRoute } from '../apiSetup';
+import {
+  registerFileRoutes,
+  registerEventsRoute,
+  registerUploadRoute,
+  registerWebUiRoute,
+} from '../apiSetup';
 import type { ApiRouter, ApiHandler } from '../../features/server/services/apiRouter';
 import type {
   HttpModule,
   HttpUploadChunk,
   HttpServerRequest,
+  HttpServerRequestHandler,
   HttpServerResponse,
 } from '../../features/server/services/httpModule';
 import type { FileRepository } from '../../features/files/services/fileRepository';
@@ -11,6 +17,7 @@ import type { FileEntry } from '../../features/files/types';
 import { fileEntryDtoSchema, apiErrorSchema } from '../../shared/types/api';
 import { createFilesChangedAtTracker } from '../../shared/lib/filesChangedAtTracker';
 import { createMockFileRepository, createMockHttpModule } from '../../__mocks__/testHelpers';
+import { WEB_UI_HTML } from '../../web-ui/webUiHtml';
 
 describe('apiSetup — registerFileRoutes', () => {
   let mockApiRouter: jest.Mocked<ApiRouter>;
@@ -2351,5 +2358,67 @@ describe('apiSetup — registerUploadRoute', () => {
       const body2 = JSON.parse(typeof response2.body === 'string' ? response2.body : '');
       expect(body2.error.code).toBe('INVALID_MULTIPART');
     });
+  });
+});
+
+describe('apiSetup — registerWebUiRoute', () => {
+  let mockHttpModule: jest.Mocked<HttpModule>;
+
+  beforeEach(() => {
+    mockHttpModule = createMockHttpModule();
+  });
+
+  /** Captura o handler registrado via `httpModule.addListener('/', handler)`. */
+  function captureHandler(): HttpServerRequestHandler {
+    let captured: HttpServerRequestHandler | null = null;
+    mockHttpModule.addListener.mockImplementation((path, handler) => {
+      if (path === '/') {
+        captured = handler;
+      }
+    });
+
+    registerWebUiRoute(mockHttpModule);
+
+    if (!captured) {
+      throw new Error('Handler não foi registrado em "/"');
+    }
+    return captured;
+  }
+
+  describe('registro de rota', () => {
+    it('registra um listener no path "/" do HttpModule', () => {
+      registerWebUiRoute(mockHttpModule);
+
+      expect(mockHttpModule.addListener).toHaveBeenCalledWith('/', expect.any(Function));
+      expect(mockHttpModule.addListener).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('GET /', () => {
+    it('retorna 200 com Content-Type text/html e o corpo WEB_UI_HTML', async () => {
+      const handler = captureHandler();
+
+      const response = await handler({ method: 'GET', path: '/', headers: {} });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers?.['Content-Type']).toBe('text/html; charset=utf-8');
+      expect(response.body).toBe(WEB_UI_HTML);
+    });
+  });
+
+  describe('métodos diferentes de GET', () => {
+    it.each(['POST', 'PUT', 'DELETE'])(
+      'retorna 405 com header Allow: GET para %s',
+      async (method) => {
+        const handler = captureHandler();
+
+        const response = await handler({ method, path: '/', headers: {} });
+
+        expect(response.statusCode).toBe(405);
+        expect(response.headers?.['Allow']).toBe('GET');
+        expect(response.headers?.['Content-Type']).toBe('text/plain; charset=utf-8');
+        expect(response.body).toBe('Method Not Allowed');
+      },
+    );
   });
 });
