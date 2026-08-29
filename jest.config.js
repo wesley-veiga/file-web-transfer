@@ -1,42 +1,62 @@
-module.exports = {
-  preset: '@react-native/jest-preset',
-  testEnvironment: 'node',
-  transform: {
-    '^.+\\.tsx?$': [
-      'ts-jest',
-      {
-        tsconfig: {
-          jsx: 'react',
-        },
+const tsJestTransform = {
+  '^.+\\.tsx?$': [
+    'ts-jest',
+    {
+      tsconfig: {
+        jsx: 'react',
       },
-    ],
-  },
-  globals: {
-    'ts-jest': {
       isolatedModules: true,
     },
-  },
-  transformIgnorePatterns: [
-    'node_modules/(?!(expo|expo-router|expo-splash-screen|expo-font|expo-notifications|expo-modules-core|expo-device|expo-sharing|react-native|@react-native|react-native-screens|react-native-gesture-handler|react-native-reanimated|react-native-web|react-native-safe-area-context|react-native-tcp-socket)/)',
   ],
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-    '^@/assets/(.*)$': '<rootDir>/assets/$1',
-    '^expo-notifications$': '<rootDir>/__mocks__/expo-notifications.ts',
-    '^expo-device$': '<rootDir>/__mocks__/expo-device.ts',
-    '^expo-sharing$': '<rootDir>/__mocks__/expo-sharing.ts',
-    // Mesmo mock de `expo-file-system` cobre `/legacy` — o subpath não é auto-detectado
-    // pela convenção `__mocks__/<pacote>.ts` do Jest (só cobre o especificador exato).
-    '^expo-file-system/legacy$': '<rootDir>/__mocks__/expo-file-system.ts',
-    '\\.(css|less|scss|sass)$': '<rootDir>/__mocks__/styleMock.js',
-  },
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+};
+
+module.exports = {
+  projects: [
+    {
+      displayName: 'app',
+      preset: '@react-native/jest-preset',
+      testEnvironment: 'node',
+      transform: tsJestTransform,
+      transformIgnorePatterns: [
+        'node_modules/(?!(expo|expo-router|expo-splash-screen|expo-font|expo-notifications|expo-modules-core|expo-device|expo-sharing|react-native|@react-native|react-native-screens|react-native-gesture-handler|react-native-reanimated|react-native-web|react-native-safe-area-context|react-native-tcp-socket)/)',
+      ],
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/src/$1',
+        '^@/assets/(.*)$': '<rootDir>/assets/$1',
+        '^expo-notifications$': '<rootDir>/__mocks__/expo-notifications.ts',
+        '^expo-device$': '<rootDir>/__mocks__/expo-device.ts',
+        '^expo-sharing$': '<rootDir>/__mocks__/expo-sharing.ts',
+        // Mesmo mock de `expo-file-system` cobre `/legacy` — o subpath não é auto-detectado
+        // pela convenção `__mocks__/<pacote>.ts` do Jest (só cobre o especificador exato).
+        '^expo-file-system/legacy$': '<rootDir>/__mocks__/expo-file-system.ts',
+        '\\.(css|less|scss|sass)$': '<rootDir>/__mocks__/styleMock.js',
+      },
+      setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+      // Testes `*.jsdom.test.ts` rodam no project "web-ui" abaixo (ambiente jsdom puro,
+      // sem o preset do React Native, que conflita com `window` do jsdom).
+      testPathIgnorePatterns: ['/node_modules/', '\\.jsdom\\.test\\.ts$'],
+      clearMocks: true,
+    },
+    {
+      // Projeto isolado para testar o comportamento client-side do HTML/JS embutido em
+      // `src/web-ui/webUiHtml.ts` (T-502+): roda num ambiente jsdom real, sem o preset do
+      // React Native (cujo `setup.js` tenta redefinir `window`, o que conflita com o
+      // `window` que o próprio jsdom já define — daí o project separado).
+      displayName: 'web-ui',
+      testEnvironment: 'jsdom',
+      testEnvironmentOptions: {
+        // Necessário para o jsdom executar as tags <script> ao carregar o HTML via
+        // `document.write` — por padrão o jsdom não roda nenhum script, por segurança.
+        runScripts: 'dangerously',
+        url: 'http://localhost/',
+      },
+      transform: tsJestTransform,
+      testMatch: ['<rootDir>/src/web-ui/**/*.jsdom.test.ts'],
+      clearMocks: true,
+    },
+  ],
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/**/*.d.ts', '!src/**/__tests__/**'],
   coveragePathIgnorePatterns: ['/node_modules/', '/__tests__/'],
-  // Reseta mock.calls/mock.instances (não a implementação) antes de cada teste, para que
-  // testes de features não vazem chamadas registradas nos mocks globais de
-  // expo-file-system/expo-network entre casos de teste.
-  clearMocks: true,
   // Cobertura mínima (constitution.md, Princípio III):
   // - 80% global (statements/branches/functions/lines).
   // - 90% nas camadas de domínio/serviços: utilitários puros de `shared/lib`, serviços e
