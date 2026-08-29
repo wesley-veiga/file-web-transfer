@@ -32,6 +32,12 @@ export class MockSocket extends EventEmitter {
   written: WrittenChunk[] = [];
   pauseCalls = 0;
   resumeCalls = 0;
+  /**
+   * IP remoto do peer (T-602). Ausente por padrão (`undefined`), igual ao comportamento da
+   * lib real quando o SO não consegue determinar o IP — `nativeHttpModule.ts` já tem
+   * fallback para esse caso, então este mock não precisa simular nada além disso.
+   */
+  remoteAddress?: string;
 
   write(data: string | Buffer, encodingOrCb?: string | (() => void), cb?: () => void): boolean {
     const encoding = typeof encodingOrCb === 'string' ? encodingOrCb : undefined;
