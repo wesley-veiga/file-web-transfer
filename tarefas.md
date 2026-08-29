@@ -134,7 +134,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   `filesChangedAt` atualizado em toda mutação da lista de arquivos.
   *Pronto quando:* testes de `since` maior/menor/igual.
 
-- [ ] **T-405 · Implementação nativa do `HttpModule` (`react-native-tcp-socket`)** ⬅ T-203, T-401, T-402, T-403, T-404
+- [x] **T-405 · Implementação nativa do `HttpModule` (`react-native-tcp-socket`)** ⬅ T-203, T-401, T-402, T-403, T-404
   T-401–T-404 rodam apenas contra mocks; nenhuma implementação real de `HttpModule` existe e nada em `src/app/` chama `setHttpModule()`/`registerFileRoutes()`/`registerUploadRoute()`/`registerEventsRoute()`. Ao tentar ligar isso pela primeira vez, ficou constatado que a lib escolhida em T-202 (`react-native-http-bridge-refurbished`) não suporta streaming de fato (ver ADR-001 §8, emenda v1.2) — decisão revertida para a Alternativa 2.2 do ADR: servidor HTTP/1.1 próprio sobre `react-native-tcp-socket`, reaproveitando o `multipartStreamParser` (T-403) alimentado incrementalmente pelos eventos `data` do socket (sem `Transfer-Encoding: chunked`, sem keep-alive — parser simplificado). Inclui remover `react-native-http-bridge-refurbished` das dependências e conectar as funções de `apiSetup.ts` na inicialização real do app.
   *Pronto quando:* app inicia o servidor num emulador/dispositivo real sem erro; `GET /api/session`, `GET /api/files`, `GET /api/files/:id/download`, `POST /api/upload` e `GET /api/events` respondem a requisição HTTP real (não mock) na rede local; teste de memória com arquivo grande simulado (chunks) cobrindo o novo transporte, não só o parser.
 
