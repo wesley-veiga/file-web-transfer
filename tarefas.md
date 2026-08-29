@@ -158,7 +158,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Tipos `Transfer` + store Zustand: fila, progresso, velocidade (média móvel), transições de status, `cancelled` ao parar servidor.
   *Pronto quando:* toda a lógica de agregação testada com relógio mockado.
 
-- [ ] **T-602 · Instrumentação das rotas** ⬅ T-601, T-402, T-403
+- [x] **T-602 · Instrumentação das rotas** ⬅ T-601, T-402, T-403
   Upload/download reportam progresso ao store (mín. a cada 500 ms) sem bloquear a transferência.
   *Pronto quando:* testes garantem emissão de progresso e não-bloqueio (throttle testado).
 
