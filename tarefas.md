@@ -140,7 +140,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 
 ## Fase 5 — Interface Web (`web-ui/`)
 
-- [ ] **T-501 · Página base autocontida** ⬅ T-401
+- [x] **T-501 · Página base autocontida** ⬅ T-401
   HTML/CSS/JS único, sem CDN, responsivo ≥ 320 px, tema claro/escuro, exibe `sessionId` (HU-03); empacotamento como asset servido em `GET /`.
   *Pronto quando:* página abre de outro dispositivo real na rede.
 

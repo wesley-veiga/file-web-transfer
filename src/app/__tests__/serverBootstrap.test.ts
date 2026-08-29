@@ -35,7 +35,13 @@ import { setHttpModule } from '../../features/server/services/serverServiceFacto
 import { createApiRouter } from '../../features/server/services/apiRouterFactory';
 import { createFileRepository } from '../../features/files/services/fileRepositoryFactory';
 import { createFilesChangedAtTracker } from '../../shared/lib/filesChangedAtTracker';
-import { registerFileRoutes, registerUploadRoute, registerEventsRoute } from '../apiSetup';
+import {
+  registerFileRoutes,
+  registerUploadRoute,
+  registerEventsRoute,
+  registerWebUiRoute,
+} from '../apiSetup';
+import { WEB_UI_HTML } from '../../web-ui/webUiHtml';
 // Importado por último de propósito: `initServer()`/`getCurrentSessionId`/`setCurrentSessionId`
 // têm estado de módulo (singleton) compartilhado por todo este arquivo — não há
 // `jest.resetModules()` entre os testes, então a ordem de declaração importa (ver comentário
@@ -81,6 +87,7 @@ jest.mock('../apiSetup', () => {
     registerFileRoutes: jest.fn(actual.registerFileRoutes),
     registerUploadRoute: jest.fn(actual.registerUploadRoute),
     registerEventsRoute: jest.fn(actual.registerEventsRoute),
+    registerWebUiRoute: jest.fn(actual.registerWebUiRoute),
   };
 });
 
@@ -155,7 +162,7 @@ describe('serverBootstrap', () => {
     // histórico de chamadas já teria sido limpo antes da asserção rodar.
     let httpModule: HttpModule;
 
-    it('executa a fiação (HttpModule, ApiRouter, FileRepository, tracker e as 3 rotas) uma única vez, mesmo chamado 3x', () => {
+    it('executa a fiação (HttpModule, ApiRouter, FileRepository, tracker e as 4 rotas) uma única vez, mesmo chamado 3x', () => {
       // Chamada 3x de propósito: só a primeira deve produzir efeito observável.
       initServer();
       initServer();
@@ -172,6 +179,8 @@ describe('serverBootstrap', () => {
       expect(registerFileRoutes).toHaveBeenCalledTimes(1);
       expect(registerUploadRoute).toHaveBeenCalledTimes(1);
       expect(registerEventsRoute).toHaveBeenCalledTimes(1);
+      expect(registerWebUiRoute).toHaveBeenCalledTimes(1);
+      expect(registerWebUiRoute).toHaveBeenCalledWith(httpModule);
     });
 
     describe('requisições HTTP reais contra a pilha completa (nativeHttpModule + ApiRouterImpl + rotas de apiSetup.ts)', () => {
@@ -256,6 +265,24 @@ describe('serverBootstrap', () => {
         const body = jsonBody(socket) as { filesChangedAt: number };
         expect(typeof body.filesChangedAt).toBe('number');
         expect(body.filesChangedAt).toBeGreaterThan(0);
+      });
+
+      it('GET / → 200, com Content-Type text/html e o corpo WEB_UI_HTML (T-501, rota real)', async () => {
+        const socket = connect(server);
+
+        await send(socket, buildHead('GET', '/'));
+
+        expect(statusLine(socket)).toBe('HTTP/1.1 200 OK');
+        const text = socket.writtenText();
+        expect(text).toContain('Content-Type: text/html; charset=utf-8');
+
+        // O corpo tem acentos (UTF-8 multi-byte) — `writtenText()` decodifica tudo como
+        // 'binary' (byte-a-byte, ver `tcpSocketMock.ts`), por isso comparamos via o
+        // buffer bruto decodificado como utf8, em vez da string `text` já mangled.
+        const buffer = socket.writtenBuffer();
+        const headerEnd = buffer.indexOf('\r\n\r\n');
+        const body = buffer.subarray(headerEnd + 4).toString('utf8');
+        expect(body).toBe(WEB_UI_HTML);
       });
     });
   });

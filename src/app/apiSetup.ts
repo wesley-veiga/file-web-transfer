@@ -12,6 +12,7 @@
 import type {
   HttpServerRequest,
   HttpServerResponse,
+  HttpServerRequestHandler,
   HttpModule,
   HttpUploadChunk,
 } from '../features/server/services/httpModule';
@@ -22,6 +23,7 @@ import type { FileOrigin } from '../features/files/types';
 import { fileEntryDtoSchema, apiErrorSchema } from '../shared/types/api';
 import type { FilesChangedAtTracker } from '../shared/lib/filesChangedAtTracker';
 import { createMultipartStreamParser } from '../shared/lib/multipartStreamParser';
+import { WEB_UI_HTML } from '../web-ui/webUiHtml';
 
 /**
  * Registra as rotas de listagem e download de arquivos no ApiRouter.
@@ -160,6 +162,42 @@ export function registerEventsRoute(apiRouter: ApiRouter, tracker: FilesChangedA
 
   // Registrar a rota no ApiRouter
   apiRouter.addRoute('GET', '/api/events', handleGetEvents);
+}
+
+/**
+ * Registra a rota que serve a interface web (T-501) em `GET /`.
+ *
+ * Diferente de `registerFileRoutes`/`registerEventsRoute` (que registram rotas no
+ * `ApiRouter`, cujo catch-all fica em `/api`), esta rota é registrada diretamente no
+ * `HttpModule` com `addListener('/', ...)`. Por causa do roteamento por "prefixo mais
+ * longo" (ver `nativeHttpModule.ts`, função `findHandler`), qualquer path que não bata
+ * com um prefixo mais específico já registrado (como `/api`) cai neste handler — ou
+ * seja, `addListener('/', ...)` funciona como um catch-all "estático" que serve a
+ * página para qualquer rota de navegação, já que não há mais nenhuma outra rota
+ * estática no servidor.
+ *
+ * @param httpModule - Instância do HttpModule para registrar o listener da web-ui
+ */
+export function registerWebUiRoute(httpModule: HttpModule): void {
+  const handleGetWebUi: HttpServerRequestHandler = async (
+    request: HttpServerRequest,
+  ): Promise<HttpServerResponse> => {
+    if (request.method !== 'GET') {
+      return {
+        statusCode: 405,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', Allow: 'GET' },
+        body: 'Method Not Allowed',
+      };
+    }
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      body: WEB_UI_HTML,
+    };
+  };
+
+  httpModule.addListener('/', handleGetWebUi);
 }
 
 /**
