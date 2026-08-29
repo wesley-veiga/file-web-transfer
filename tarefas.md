@@ -148,7 +148,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Seleção múltipla + drag-and-drop, fila sequencial, barra de progresso individual (XHR `upload.onprogress`), mensagens específicas por erro (`413/422/507`), "Tentar novamente" só para não concluídos (HU-04).
   *Pronto quando:* critérios de aceite "Upload — progresso" e "Upload — erros" atendidos.
 
-- [ ] **T-503 · Download + polling na web-ui** ⬅ T-501, T-402, T-404
+- [x] **T-503 · Download + polling na web-ui** ⬅ T-501, T-402, T-404
   Lista de arquivos com atualização a cada 3 s; download nativo; banner "Servidor desconectado" após 2 falhas de polling, some ao reconectar (HU-05).
   *Pronto quando:* critérios de aceite "Download" e "Servidor desconectado" atendidos.
 
