@@ -11,6 +11,8 @@ import {
   ServerServiceImpl,
   ApiRouterImpl,
   createApiRouter,
+  createDefaultHttpModule,
+  ServerServiceError,
 } from '../index';
 
 describe('services/index.ts exports', () => {
@@ -74,5 +76,31 @@ describe('services/index.ts exports', () => {
       maxUploadBytes: 4294967296,
     });
     expect(router).toBeInstanceOf(ApiRouterImpl);
+  });
+
+  it('should export ServerServiceError', () => {
+    expect(ServerServiceError).toBeDefined();
+    expect(typeof ServerServiceError).toBe('function');
+    const error = new ServerServiceError('PORT_UNAVAILABLE', 'porta em uso');
+    expect(error).toBeInstanceOf(Error);
+    expect(error.code).toBe('PORT_UNAVAILABLE');
+  });
+
+  it('should export createDefaultHttpModule (T-405)', () => {
+    expect(createDefaultHttpModule).toBeDefined();
+    expect(typeof createDefaultHttpModule).toBe('function');
+  });
+
+  it('createDefaultHttpModule should return an object satisfying the HttpModule interface', () => {
+    const httpModule = createDefaultHttpModule();
+
+    expect(typeof httpModule.start).toBe('function');
+    expect(typeof httpModule.stop).toBe('function');
+    expect(typeof httpModule.addListener).toBe('function');
+    expect(typeof httpModule.removeListener).toBe('function');
+    expect(typeof httpModule.addUploadListener).toBe('function');
+    expect(typeof httpModule.removeUploadListener).toBe('function');
+    expect(typeof httpModule.isRunning).toBe('function');
+    expect(httpModule.isRunning()).toBe(false);
   });
 });
