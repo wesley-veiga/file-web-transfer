@@ -144,7 +144,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   HTML/CSS/JS único, sem CDN, responsivo ≥ 320 px, tema claro/escuro, exibe `sessionId` (HU-03); empacotamento como asset servido em `GET /`.
   *Pronto quando:* página abre de outro dispositivo real na rede.
 
-- [ ] **T-502 · Upload na web-ui** ⬅ T-501, T-403
+- [x] **T-502 · Upload na web-ui** ⬅ T-501, T-403
   Seleção múltipla + drag-and-drop, fila sequencial, barra de progresso individual (XHR `upload.onprogress`), mensagens específicas por erro (`413/422/507`), "Tentar novamente" só para não concluídos (HU-04).
   *Pronto quando:* critérios de aceite "Upload — progresso" e "Upload — erros" atendidos.
 
