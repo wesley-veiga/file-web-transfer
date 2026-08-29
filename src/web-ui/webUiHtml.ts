@@ -1,6 +1,7 @@
 /**
- * HTML/CSS/JS autocontido da interface web (T-501), servido em `GET /` pelo servidor
- * embarcado (ver `registerWebUiRoute` em `apiSetup.ts`, que importa `WEB_UI_HTML` daqui).
+ * HTML/CSS/JS autocontido da interface web (T-501: página base; T-502: upload; T-503:
+ * download + polling), servido em `GET /` pelo servidor embarcado (ver `registerWebUiRoute`
+ * em `apiSetup.ts`, que importa `WEB_UI_HTML` daqui).
  *
  * Vive em `src/web-ui/` — o elemento `web-ui` já estava previsto em
  * `eslint-plugin-boundaries` (`boundaries/elements` em `eslint.config.js`, apontando para
@@ -264,6 +265,56 @@ export const WEB_UI_HTML = `<!doctype html>
     cursor: pointer;
     flex-shrink: 0;
   }
+
+  .download-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .download-item {
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+  }
+
+  .download-item-link {
+    display: block;
+    padding: 0.75rem;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .download-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .download-item-name {
+    font-weight: 600;
+    word-break: break-word;
+    flex: 1;
+  }
+
+  .download-item-size {
+    color: var(--muted);
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .download-item-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.3rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
 </style>
 </head>
 <body>
@@ -292,7 +343,9 @@ export const WEB_UI_HTML = `<!doctype html>
   </section>
 
   <section id="tab-download" class="tab-panel hidden">
-    <p class="placeholder">Em breve</p>
+    <ul id="download-list" class="download-list">
+      <li class="placeholder">Carregando arquivos…</li>
+    </ul>
   </section>
 </div>
 
@@ -594,9 +647,120 @@ export const WEB_UI_HTML = `<!doctype html>
     });
   }
 
+  var lastKnownFilesChangedAt = 0;
+  var consecutivePollFailures = 0;
+
+  function formatFileType(mimeType) {
+    if (!mimeType) {
+      return "ARQUIVO";
+    }
+    var parts = String(mimeType).split("/");
+    var subtype = parts[1] || parts[0] || "arquivo";
+    return subtype.toUpperCase();
+  }
+
+  function formatDate(epochMs) {
+    try {
+      return new Date(epochMs).toLocaleDateString("pt-BR");
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function renderDownloadList(files) {
+    var list = document.getElementById("download-list");
+    if (!files || !files.length) {
+      list.innerHTML = '<li class="placeholder">Nenhum arquivo compartilhado ainda</li>';
+      return;
+    }
+
+    var html = files
+      .map(function (file) {
+        return (
+          '<li class="download-item">' +
+          '<a class="download-item-link" href="/api/files/' +
+          encodeURIComponent(file.id) +
+          '/download">' +
+          '<div class="download-item-header">' +
+          '<span class="download-item-name">' + escapeHtml(file.name) + "</span>" +
+          '<span class="download-item-size">' + formatBytes(file.sizeBytes) + "</span>" +
+          "</div>" +
+          '<div class="download-item-meta">' +
+          "<span>" + escapeHtml(formatFileType(file.mimeType)) + "</span>" +
+          "<span>" + escapeHtml(formatDate(file.createdAt)) + "</span>" +
+          "</div>" +
+          "</a>" +
+          "</li>"
+        );
+      })
+      .join("");
+
+    list.innerHTML = html;
+  }
+
+  function loadDownloadList() {
+    fetch("/api/files")
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("status " + response.status);
+        }
+        return response.json();
+      })
+      .then(function (data) {
+        renderDownloadList(data && data.files ? data.files : []);
+      })
+      .catch(function () {
+        // Falha pontual ao (re)carregar a lista: mantém o conteúdo atual na tela. Se o
+        // problema persistir, pollEvents() mostra o banner de desconexão em breve.
+      });
+  }
+
+  function showDisconnectedBanner() {
+    document.getElementById("disconnected-banner").classList.remove("hidden");
+  }
+
+  function hideDisconnectedBanner() {
+    document.getElementById("disconnected-banner").classList.add("hidden");
+  }
+
+  function pollEvents() {
+    fetch("/api/events?since=" + lastKnownFilesChangedAt)
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("status " + response.status);
+        }
+        return response.json();
+      })
+      .then(function (data) {
+        consecutivePollFailures = 0;
+        hideDisconnectedBanner();
+
+        if (
+          data &&
+          typeof data.filesChangedAt === "number" &&
+          data.filesChangedAt > lastKnownFilesChangedAt
+        ) {
+          lastKnownFilesChangedAt = data.filesChangedAt;
+          loadDownloadList();
+        }
+      })
+      .catch(function () {
+        consecutivePollFailures++;
+        if (consecutivePollFailures >= 2) {
+          showDisconnectedBanner();
+        }
+      });
+  }
+
+  function setupPolling() {
+    pollEvents();
+    setInterval(pollEvents, 3000);
+  }
+
   setupTabs();
   loadSession();
   setupUpload();
+  setupPolling();
 })();
 </script>
 </body>
