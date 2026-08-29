@@ -1,9 +1,10 @@
 /**
  * Setup das rotas de API para listagem, download e upload de arquivos.
  *
- * Este arquivo é o ÚNICO lugar que pode importar de ambas as features:
+ * Este arquivo é o ÚNICO lugar que pode importar de três features:
  * - `features/server` (ApiRouter, HttpModule)
  * - `features/files` (FileRepository)
+ * - `features/transfer` (TransferStore — instrumentação de progresso, T-602)
  * - `shared/lib` (utilidades comuns como multipartStreamParser)
  *
  * Respeita as boundaries arquiteturais: features nunca se importam entre si.
@@ -24,6 +25,27 @@ import { fileEntryDtoSchema, apiErrorSchema } from '../shared/types/api';
 import type { FilesChangedAtTracker } from '../shared/lib/filesChangedAtTracker';
 import { createMultipartStreamParser } from '../shared/lib/multipartStreamParser';
 import { WEB_UI_HTML } from '../web-ui/webUiHtml';
+import { useTransferStore } from '../features/transfer/store/transferStore';
+import type { TransferStore } from '../features/transfer/store/transferStore';
+
+/**
+ * Fatia do `TransferStore` (T-601) usada pela instrumentação das rotas (T-602).
+ *
+ * Só as ações de escrita usadas por upload/download — nunca o estado `transfers`
+ * em si, que as rotas não precisam ler. Injetável (em vez de importar
+ * `useTransferStore` direto nos handlers) para que o `testador` consiga mockar
+ * sem depender da instância Zustand global.
+ */
+export type TransferStoreActions = Pick<
+  TransferStore,
+  'enqueue' | 'start' | 'reportProgress' | 'complete' | 'fail'
+>;
+
+/** IP de fallback quando o transporte não consegue determinar o IP remoto do peer. */
+const UNKNOWN_PEER_IP = 'desconhecido';
+
+/** Throttle mínimo entre chamadas a `reportProgress` durante um upload (T-602). */
+const PROGRESS_REPORT_THROTTLE_MS = 500;
 
 /**
  * Registra as rotas de listagem e download de arquivos no ApiRouter.
@@ -31,11 +53,15 @@ import { WEB_UI_HTML } from '../web-ui/webUiHtml';
  * @param apiRouter - Instância do ApiRouter a configurar
  * @param fileRepository - Instância do FileRepository para acessar arquivos
  * @param fsModule - Módulo de filesystem para ler conteúdo de arquivos (injetável para testes)
+ * @param transferStore - Ações do TransferStore usadas para instrumentar o progresso do
+ *   download (T-602). Padrão: instância de produção (`useTransferStore.getState()`).
+ *   Injetável para o `testador` mockar sem depender do Zustand global.
  */
 export function registerFileRoutes(
   apiRouter: ApiRouter,
   fileRepository: FileRepository,
   fsModule: { readAsStringAsync: (uri: string) => Promise<string> },
+  transferStore: TransferStoreActions = useTransferStore.getState(),
 ): void {
   // GET /api/files — Listar arquivos disponíveis para download
   const handleListFiles: ApiHandler = async (
@@ -74,7 +100,7 @@ export function registerFileRoutes(
 
   // GET /api/files/:id/download — Baixar arquivo
   const handleDownloadFile: ApiHandler = async (
-    _request: HttpServerRequest,
+    request: HttpServerRequest,
     params: Record<string, string>,
     _query: Record<string, string>,
   ): Promise<HttpServerResponse> => {
@@ -92,6 +118,20 @@ export function registerFileRoutes(
         return createErrorResponse(404, 'FILE_NOT_FOUND', 'Arquivo não encontrado ou foi removido');
       }
 
+      // Instrumentação T-602: enfileira a transferência assim que o arquivo é
+      // encontrado. NOTA DE ESCOPO: esta rota lê o arquivo inteiro de uma vez
+      // (`fsModule.readAsStringAsync`, sem streaming real — ver T-405); por isso
+      // não há progresso incremental possível aqui. `transferredBytes` só é
+      // conhecido de uma vez, no sucesso (= sizeBytes) ou na falha (= 0). Uma
+      // refatoração de streaming de download fica fora do escopo de T-602.
+      const transferId = transferStore.enqueue({
+        direction: 'download',
+        fileName: fileInfo.name,
+        sizeBytes: fileInfo.sizeBytes,
+        peerIp: request.remoteAddress ?? UNKNOWN_PEER_IP,
+      });
+      transferStore.start(transferId);
+
       // Ler conteúdo do arquivo
       let fileContent: string;
       try {
@@ -99,6 +139,7 @@ export function registerFileRoutes(
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Erro desconhecido';
         console.error(`[FileRoutes] Erro ao ler arquivo ${fileId} (${fileInfo.localUri}):`, error);
+        transferStore.fail(transferId, message);
         return createErrorResponse(500, 'INTERNAL_ERROR', `Erro ao ler arquivo: ${message}`);
       }
 
@@ -106,6 +147,11 @@ export function registerFileRoutes(
       // Formato: filename*=UTF-8''<nome-encodado>
       const encodedFileName = encodeURIComponent(fileInfo.name);
       const contentDisposition = `attachment; filename*=UTF-8''${encodedFileName}`;
+
+      // Leitura atômica bem-sucedida: reporta o total de uma vez (não há chunks
+      // incrementais nesta rota, ver nota de escopo acima) e conclui.
+      transferStore.reportProgress(transferId, fileInfo.sizeBytes);
+      transferStore.complete(transferId);
 
       // Retornar arquivo com headers corretos
       // Nota: simulando streaming via base64, já que HttpServerResponse não suporta stream real
@@ -267,12 +313,20 @@ function createErrorResponse(
  * @param maxUploadBytes - Limite de tamanho de upload (ex.: 4GB)
  * @param tracker - Rastreador de mudanças; tocado ao concluir um upload com sucesso,
  *   para que GET /api/events reflita a mudança na próxima consulta de polling.
+ * @param transferStore - Ações do TransferStore usadas para instrumentar o progresso do
+ *   upload (T-602). Padrão: instância de produção (`useTransferStore.getState()`).
+ *   Injetável para o `testador` mockar sem depender do Zustand global.
+ * @param now - Relógio injetável (epoch ms) usado só para o throttle de
+ *   `reportProgress` (no mínimo a cada 500 ms de tempo real, nunca a cada chunk).
+ *   Padrão: `Date.now`. Injetável para o `testador` controlar tempo determinístico.
  */
 export function registerUploadRoute(
   httpModule: HttpModule,
   fileRepository: FileRepository,
   maxUploadBytes: number,
   tracker: FilesChangedAtTracker,
+  transferStore: TransferStoreActions = useTransferStore.getState(),
+  now: () => number = Date.now,
 ): void {
   /**
    * Estado de um upload em andamento.
@@ -283,6 +337,50 @@ export function registerUploadRoute(
     writeHandle: Awaited<ReturnType<typeof fileRepository.beginStreamedWrite>> | null;
     totalBytes: number;
     lastError: { statusCode: number; code: string; message: string } | null;
+    /** Id da transferência no TransferStore (T-602); null até o evento `fileStart`. */
+    transferId: string | null;
+    /** epoch ms da última chamada a `reportProgress` — controla o throttle de 500ms. */
+    lastProgressReportAt: number;
+  }
+
+  /**
+   * Reporta progresso ao TransferStore respeitando o throttle mínimo de
+   * `PROGRESS_REPORT_THROTTLE_MS` — chamado a cada `fileData`, mas só emite de
+   * fato quando tempo real suficiente se passou desde a última emissão. `set()`
+   * do Zustand é síncrono e barato; o throttle existe para não sobrecarregar a
+   * UI, não porque a chamada em si seja lenta (não bloqueia o processamento do
+   * chunk em nenhum dos dois casos).
+   *
+   * @param force - Ignora o throttle (usado na última chamada, ao concluir).
+   */
+  function reportProgressThrottled(state: UploadState, force = false): void {
+    if (!state.transferId) {
+      return;
+    }
+    const timestamp = now();
+    if (!force && timestamp - state.lastProgressReportAt < PROGRESS_REPORT_THROTTLE_MS) {
+      return;
+    }
+    state.lastProgressReportAt = timestamp;
+    transferStore.reportProgress(state.transferId, state.totalBytes);
+  }
+
+  /**
+   * Registra uma falha: guarda `lastError` (para short-circuit de chunks
+   * seguintes do mesmo upload) e propaga ao TransferStore, se a transferência
+   * já havia sido enfileirada (`fileStart` já recebido).
+   */
+  function failUpload(
+    state: UploadState,
+    statusCode: number,
+    code: string,
+    message: string,
+  ): HttpServerResponse {
+    state.lastError = { statusCode, code, message };
+    if (state.transferId) {
+      transferStore.fail(state.transferId, message);
+    }
+    return createErrorResponse(statusCode, code, message);
   }
 
   // Map para rastrear uploads em andamento por identificador único (chunk.requestId)
@@ -321,12 +419,15 @@ export function registerUploadRoute(
         writeHandle: null,
         totalBytes: 0,
         lastError: null,
+        transferId: null,
+        lastProgressReportAt: 0,
       };
 
       activeUploads.set(uploadId, state);
     }
 
-    // Se já houve erro neste upload, retornar erro novamente
+    // Se já houve erro neste upload, retornar erro novamente (fail() já foi
+    // reportado ao TransferStore na primeira ocorrência, não repetir)
     if (state.lastError) {
       if (chunk.isLast) {
         activeUploads.delete(uploadId);
@@ -345,6 +446,21 @@ export function registerUploadRoute(
       for (const event of events) {
         switch (event.type) {
           case 'fileStart': {
+            // T-602: enfileira a transferência assim que o primeiro chunk chega
+            // (identifica o arquivo), antes mesmo de abrir o handle de escrita —
+            // assim falhas em beginStreamedWrite (ex.: 422) também aparecem no
+            // TransferStore. sizeBytes fica null: o Content-Length do request é
+            // do corpo multipart inteiro (inclui boundaries/headers), não do
+            // arquivo em si — reportar isso como sizeBytes induziria a UI a
+            // erro (progresso nunca bateria 100% antes de completar).
+            state.transferId = transferStore.enqueue({
+              direction: 'upload',
+              fileName: event.filename,
+              sizeBytes: null,
+              peerIp: request.remoteAddress ?? UNKNOWN_PEER_IP,
+            });
+            transferStore.start(state.transferId);
+
             // Iniciar escrita em streaming
             try {
               state.writeHandle = await fileRepository.beginStreamedWrite(
@@ -356,8 +472,7 @@ export function registerUploadRoute(
               const message = error instanceof Error ? error.message : 'Erro desconhecido';
               // Se o erro menciona que o nome é vazio após sanitização, é 422
               if (message.includes('INVALID_FILENAME')) {
-                state.lastError = { statusCode: 422, code: 'INVALID_FILENAME', message };
-                return createErrorResponse(422, 'INVALID_FILENAME', 'Nome de arquivo inválido');
+                return failUpload(state, 422, 'INVALID_FILENAME', 'Nome de arquivo inválido');
               }
               throw error;
             }
@@ -366,12 +481,7 @@ export function registerUploadRoute(
 
           case 'fileData': {
             if (!state.writeHandle) {
-              state.lastError = {
-                statusCode: 400,
-                code: 'INVALID_MULTIPART',
-                message: 'Arquivo data sem fileStart',
-              };
-              return createErrorResponse(400, 'INVALID_MULTIPART', 'Formato multipart inválido');
+              return failUpload(state, 400, 'INVALID_MULTIPART', 'Formato multipart inválido');
             }
 
             // Contar bytes
@@ -381,12 +491,12 @@ export function registerUploadRoute(
             if (state.totalBytes > maxUploadBytes) {
               // Abortar escrita
               await state.writeHandle.abort();
-              state.lastError = {
-                statusCode: 413,
-                code: 'FILE_TOO_LARGE',
-                message: 'Arquivo excede tamanho máximo permitido',
-              };
-              return createErrorResponse(413, 'FILE_TOO_LARGE', 'Arquivo excede tamanho máximo');
+              return failUpload(
+                state,
+                413,
+                'FILE_TOO_LARGE',
+                'Arquivo excede tamanho máximo permitido',
+              );
             }
 
             // Escrever chunk
@@ -401,19 +511,15 @@ export function registerUploadRoute(
                 message.toLowerCase().includes('storage')
               ) {
                 await state.writeHandle.abort();
-                state.lastError = {
-                  statusCode: 507,
-                  code: 'INSUFFICIENT_STORAGE',
-                  message: 'Sem espaço no dispositivo',
-                };
-                return createErrorResponse(
-                  507,
-                  'INSUFFICIENT_STORAGE',
-                  'Sem espaço no dispositivo',
-                );
+                return failUpload(state, 507, 'INSUFFICIENT_STORAGE', 'Sem espaço no dispositivo');
               }
               throw error;
             }
+
+            // T-602: reporta progresso ao store, respeitando o throttle de 500ms
+            // (comparação de timestamps, nunca setTimeout/setInterval — não
+            // atrasa o processamento do chunk em si).
+            reportProgressThrottled(state);
             break;
           }
 
@@ -426,12 +532,7 @@ export function registerUploadRoute(
             if (state.writeHandle) {
               await state.writeHandle.abort();
             }
-            state.lastError = {
-              statusCode: 400,
-              code: 'INVALID_MULTIPART',
-              message: 'Corpo multipart malformado',
-            };
-            return createErrorResponse(400, 'INVALID_MULTIPART', 'Corpo multipart malformado');
+            return failUpload(state, 400, 'INVALID_MULTIPART', 'Corpo multipart malformado');
           }
         }
       }
@@ -446,7 +547,7 @@ export function registerUploadRoute(
               await state.writeHandle.abort();
             }
             activeUploads.delete(uploadId);
-            return createErrorResponse(400, 'INVALID_MULTIPART', 'Corpo multipart malformado');
+            return failUpload(state, 400, 'INVALID_MULTIPART', 'Corpo multipart malformado');
           }
         }
 
@@ -465,7 +566,14 @@ export function registerUploadRoute(
           console.error('[UploadRoute] Erro ao validar FileEntryDto:', parsed.error);
           await state.writeHandle.abort();
           activeUploads.delete(uploadId);
-          return createErrorResponse(500, 'INTERNAL_ERROR', 'Erro ao processar arquivo');
+          return failUpload(state, 500, 'INTERNAL_ERROR', 'Erro ao processar arquivo');
+        }
+
+        // T-602: reporta o total final (ignora o throttle — é a última emissão)
+        // e conclui a transferência.
+        reportProgressThrottled(state, true);
+        if (state.transferId) {
+          transferStore.complete(state.transferId);
         }
 
         activeUploads.delete(uploadId);
@@ -485,7 +593,7 @@ export function registerUploadRoute(
       }
 
       activeUploads.delete(uploadId);
-      return createErrorResponse(500, 'INTERNAL_ERROR', message);
+      return failUpload(state, 500, 'INTERNAL_ERROR', message);
     }
   };
 

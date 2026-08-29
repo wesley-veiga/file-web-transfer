@@ -718,4 +718,69 @@ describe('createDefaultHttpModule', () => {
       expect(received[0].isLast).toBe(true);
     });
   });
+
+  describe('remoteAddress (T-602)', () => {
+    it('propaga socket.remoteAddress na request "plain"', async () => {
+      const handler = jest.fn(jsonHandler({ statusCode: 200, body: 'ok' }));
+      module.addListener('/api', handler);
+      await startModule(module);
+      const socket = connect();
+      socket.remoteAddress = '203.0.113.5';
+
+      await send(socket, buildHead('GET', '/api/session'));
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      const [request] = handler.mock.calls[0] as [HttpServerRequest];
+      expect(request.remoteAddress).toBe('203.0.113.5');
+    });
+
+    it('usa "desconhecido" quando o socket não tem remoteAddress (request "plain")', async () => {
+      const handler = jest.fn(jsonHandler({ statusCode: 200, body: 'ok' }));
+      module.addListener('/api', handler);
+      await startModule(module);
+      const socket = connect();
+
+      await send(socket, buildHead('GET', '/api/session'));
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      const [request] = handler.mock.calls[0] as [HttpServerRequest];
+      expect(request.remoteAddress).toBe('desconhecido');
+    });
+
+    it('propaga socket.remoteAddress em cada chunk de upload em streaming', async () => {
+      const receivedRequests: Omit<HttpServerRequest, 'body'>[] = [];
+      const handler = jest.fn(
+        async (chunk: HttpUploadChunk, request: Omit<HttpServerRequest, 'body'>) => {
+          receivedRequests.push(request);
+          return chunk.isLast ? { statusCode: 200, body: 'done' } : undefined;
+        },
+      );
+      module.addUploadListener('/api/upload', handler);
+      await startModule(module);
+      const socket = connect();
+      socket.remoteAddress = '198.51.100.7';
+
+      await send(socket, buildHead('POST', '/api/upload', { 'Content-Length': '10' }) + 'AAAAA');
+      await send(socket, 'BBBBB');
+
+      expect(receivedRequests).toHaveLength(2);
+      expect(receivedRequests.every((r) => r.remoteAddress === '198.51.100.7')).toBe(true);
+    });
+
+    it('usa "desconhecido" quando o socket não tem remoteAddress (upload em streaming)', async () => {
+      const handler = jest.fn(
+        async (chunk: HttpUploadChunk, _request: Omit<HttpServerRequest, 'body'>) =>
+          chunk.isLast ? { statusCode: 200, body: 'done' } : undefined,
+      );
+      module.addUploadListener('/api/upload', handler);
+      await startModule(module);
+      const socket = connect();
+
+      await send(socket, buildHead('POST', '/api/upload', { 'Content-Length': '0' }));
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      const [, request] = handler.mock.calls[0];
+      expect(request.remoteAddress).toBe('desconhecido');
+    });
+  });
 });
