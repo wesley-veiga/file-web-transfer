@@ -93,6 +93,18 @@ jest.mock('react-native', () => {
       ignoreLogs: jest.fn(),
       ignoreAllLogs: jest.fn(),
     },
+    // Stubs mínimos para que `react-native-tcp-socket` (T-405) consiga ser importado em
+    // testes sem crashar: seu módulo `Globals.js` lê `NativeModules.TcpSockets` e
+    // instancia `new NativeEventEmitter(...)` no top-level do módulo. Nenhum destes
+    // stubs precisa funcionar de verdade — só não lançar erro ao importar. Testes que
+    // exercitam `nativeHttpModule.ts` de fato devem usar `jest.mock('react-native-tcp-socket', ...)`
+    // com um fake dedicado, e não depender deste stub.
+    NativeModules: {},
+    NativeEventEmitter: class MockNativeEventEmitter {
+      addListener = jest.fn(() => ({ remove: jest.fn() }));
+      removeAllListeners = jest.fn();
+      emit = jest.fn();
+    },
   };
 
   return mockReactNative;

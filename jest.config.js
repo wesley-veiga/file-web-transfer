@@ -17,7 +17,7 @@ module.exports = {
     },
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(expo|expo-router|expo-splash-screen|expo-font|expo-notifications|expo-modules-core|expo-device|expo-sharing|react-native|@react-native|react-native-screens|react-native-gesture-handler|react-native-reanimated|react-native-web|react-native-safe-area-context)/)',
+    'node_modules/(?!(expo|expo-router|expo-splash-screen|expo-font|expo-notifications|expo-modules-core|expo-device|expo-sharing|react-native|@react-native|react-native-screens|react-native-gesture-handler|react-native-reanimated|react-native-web|react-native-safe-area-context|react-native-tcp-socket)/)',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
@@ -25,6 +25,9 @@ module.exports = {
     '^expo-notifications$': '<rootDir>/__mocks__/expo-notifications.ts',
     '^expo-device$': '<rootDir>/__mocks__/expo-device.ts',
     '^expo-sharing$': '<rootDir>/__mocks__/expo-sharing.ts',
+    // Mesmo mock de `expo-file-system` cobre `/legacy` — o subpath não é auto-detectado
+    // pela convenção `__mocks__/<pacote>.ts` do Jest (só cobre o especificador exato).
+    '^expo-file-system/legacy$': '<rootDir>/__mocks__/expo-file-system.ts',
     '\\.(css|less|scss|sass)$': '<rootDir>/__mocks__/styleMock.js',
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],

@@ -69,7 +69,7 @@ describe('services/index.ts exports', () => {
 
   it('should create ApiRouter instance via createApiRouter', () => {
     const router = createApiRouter({
-      sessionId: 'test-123',
+      getSessionId: () => 'test-123',
       appVersion: '1.0.0',
       maxUploadBytes: 4294967296,
     });
