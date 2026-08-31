@@ -1349,6 +1349,37 @@ describe('FileRepository', () => {
 
       expect(entry.name).toBe('foto (1).jpg');
     });
+
+    it('suporta origin="received" além de "shared"', async () => {
+      const entry = await repository.linkFromUri(
+        'content://com.android.externalstorage.documents/document/primary%3ADownloads%2Freceived.pdf',
+        'received.pdf',
+        'application/pdf',
+        1000,
+        'received',
+      );
+
+      expect(entry.origin).toBe('received');
+      expect(entry.linked).toBe(true);
+
+      // Verificar que foi salvo em received/ metadados (não shared/)
+      const metaCalls = (mockFs.writeAsStringAsync as jest.Mock).mock.calls.filter((c) =>
+        c[0].includes('/received/.meta.json'),
+      );
+      expect(metaCalls.length).toBeGreaterThan(0);
+
+      // Verificar que NÃO foi salvo em shared/ metadados
+      const sharedMetaCalls = (mockFs.writeAsStringAsync as jest.Mock).mock.calls.filter((c) =>
+        c[0].includes('/shared/.meta.json'),
+      );
+      expect(sharedMetaCalls.length).toBe(0);
+
+      // Verificar conteúdo dos metadados salvos
+      const lastMetaCall = metaCalls[metaCalls.length - 1];
+      const savedMeta = JSON.parse(lastMetaCall[1]);
+      expect(savedMeta[0].linked).toBe(true);
+      expect(savedMeta[0].name).toBe('received.pdf');
+    });
   });
 
   describe('getLinkedFolderUri / setLinkedFolderUri (T-701)', () => {
@@ -1964,13 +1995,12 @@ describe('FileRepository', () => {
       const fileContent = 'UEsDBAoAAA==';
       fileContents.set(entry.localUri, fileContent);
 
-      // Mock copyAsync para falhar
-      (mockFs.copyAsync as jest.Mock).mockRejectedValue(
-        new Error('Permission denied copying file'),
-      );
+      // Mock copyAsync para falhar com uma string (não Error)
+      // Isso testa o branch: error instanceof Error ? error.message : 'Erro desconhecido'
+      (mockFs.copyAsync as jest.Mock).mockRejectedValue('Permission denied copying file');
 
       await expect(repository.moveReceivedFileToConfiguredFolder(entry)).rejects.toThrow(
-        /Falha ao copiar arquivo para pasta configurada/,
+        /Erro desconhecido/,
       );
 
       // Verificar que nenhuma tentativa de deletar o original foi feita
@@ -2092,6 +2122,110 @@ describe('FileRepository', () => {
 
       // Verificar que deleteAsync foi chamado com o URI original
       expect(mockFs.deleteAsync).toHaveBeenCalledWith(entry.localUri);
+    });
+
+    it('falha ao deletar original com erro que não é instância de Error: "Erro desconhecido"', async () => {
+      // Configurar pasta de recebidos
+      await repository.setReceivedFolderUri(
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+      );
+
+      const entry: FileEntry = {
+        id: 'test-id',
+        name: 'document.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///mock-docs/received/document.pdf',
+        origin: 'received',
+        createdAt: Date.now(),
+      };
+
+      const fileContent = 'UEsDBAoAAA==';
+      fileContents.set(entry.localUri, fileContent);
+
+      // Mock deleteAsync para rejeitar com uma string (não Error)
+      // Isso testa: error instanceof Error ? error.message : 'Erro desconhecido'
+      (mockFs.deleteAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        if (uri === entry.localUri) {
+          // Rejeita com string, não Error
+          return Promise.reject('Storage permission error');
+        }
+      });
+
+      await expect(repository.moveReceivedFileToConfiguredFolder(entry)).rejects.toThrow(
+        /Erro desconhecido/,
+      );
+
+      // Verificar que deleteAsync foi chamado com o URI original
+      expect(mockFs.deleteAsync).toHaveBeenCalledWith(entry.localUri);
+    });
+
+    it('hash mismatch com erro não-Error ao deletar cópia: ainda prioriza hash error', async () => {
+      // Configurar pasta de recebidos
+      await repository.setReceivedFolderUri(
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+      );
+
+      const entry: FileEntry = {
+        id: 'test-id',
+        name: 'document.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///mock-docs/received/document.pdf',
+        origin: 'received',
+        createdAt: Date.now(),
+      };
+
+      const originalContent = 'UEsDBAoAAA==';
+      fileContents.set(entry.localUri, originalContent);
+
+      const destinationUri =
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload/document.pdf';
+
+      let readCallCount = 0;
+      const originalReadAsStringAsync = (
+        mockFs.readAsStringAsync as jest.Mock
+      ).getMockImplementation();
+      (mockFs.readAsStringAsync as jest.Mock).mockImplementation(
+        async (uri: string, options?: { encoding?: string }) => {
+          if (uri.includes('.receivedFolder.meta.json')) {
+            return originalReadAsStringAsync!(uri, options);
+          }
+
+          readCallCount++;
+          if (readCallCount === 1) {
+            return fileContents.get(uri) || originalContent;
+          } else if (readCallCount === 2) {
+            return 'CORRUPTED_DIFFERENT_HASH==';
+          }
+          if (!fileContents.has(uri)) {
+            throw new Error('File not found');
+          }
+          return fileContents.get(uri) || '';
+        },
+      );
+
+      // Mock deleteAsync para falhar com string (não Error) quando tenta deletar cópia
+      (mockFs.deleteAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        if (uri === destinationUri) {
+          // Falha ao deletar cópia com erro não-Error
+          return Promise.reject('Permission denied deleting file');
+        }
+      });
+
+      (mockFs.copyAsync as jest.Mock).mockImplementation(async ({ from, to }) => {
+        const content = fileContents.get(from);
+        if (content !== undefined) {
+          fileContents.set(to, content);
+        } else {
+          throw new Error('Source file not found');
+        }
+      });
+
+      // Erro do hash mismatch deve ser priorizado, não o erro de deletar
+      await expect(repository.moveReceivedFileToConfiguredFolder(entry)).rejects.toThrow(
+        /Falha na verificação de integridade|hash do arquivo não corresponde/,
+      );
     });
   });
 });
