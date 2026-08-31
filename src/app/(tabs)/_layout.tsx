@@ -56,13 +56,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="transferencias"
-        options={{
-          title: 'Transferências',
-          tabBarIcon: ({ size }) => <TabIcon symbol="🔁" size={size} />,
-        }}
-      />
-      <Tabs.Screen
         name="compartilhados"
         options={{
           title: 'Compartilhados',

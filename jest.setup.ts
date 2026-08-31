@@ -68,6 +68,11 @@ jest.mock('react-native', () => {
       ),
     ActivityIndicator: ({ size, color }: any) =>
       React.createElement('ActivityIndicator', { size, color }),
+    // `visible: false` não renderiza os filhos — replica o comportamento real do
+    // Modal nativo (o conteúdo não fica na árvore/acessível enquanto fechado), e é o
+    // que T-701 (popup de Transferências) depende para testar aberto/fechado.
+    Modal: ({ children, visible, ...props }: any) =>
+      visible ? React.createElement('Modal', props, children) : null,
     Alert: {
       alert: jest.fn(),
     },
