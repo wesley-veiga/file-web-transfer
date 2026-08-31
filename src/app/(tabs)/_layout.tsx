@@ -15,8 +15,34 @@ import { Text } from 'react-native';
  * ícones) instalada no projeto, então usamos emoji simples via `<Text>` — sem
  * depender de fonte de ícones vetoriais, que exigiria linkar assets nativos.
  */
+/**
+ * Achado em teste manual (T-701): com só `fontSize`, o emoji aparecia cortado
+ * no topo/base do ícone. Causa: Android adiciona um padding vertical extra ao
+ * redor do texto por padrão (`includeFontPadding`), e glifos de emoji (fonte
+ * Noto Color Emoji) têm uma caixa vertical naturalmente maior que glifos
+ * latinos no mesmo `fontSize` — dentro do wrapper de tamanho fixo do
+ * react-navigation (`TabBarIcon.js`), isso estourava a área do ícone.
+ * `includeFontPadding: false` remove esse padding extra do Android;
+ * `lineHeight` igual ao `fontSize` (em vez de deixar a fonte decidir) e
+ * `textAlignVertical: 'center'` centralizam o glifo na caixa disponível; um
+ * `fontSize` levemente menor que o `size` pedido dá folga para a caixa maior
+ * do glifo de emoji não estourar de novo.
+ */
 function TabIcon({ symbol, size }: { symbol: string; size: number }) {
-  return <Text style={{ fontSize: size }}>{symbol}</Text>;
+  return (
+    <Text
+      style={{
+        fontSize: size * 0.85,
+        lineHeight: size,
+        includeFontPadding: false,
+        textAlign: 'center',
+        textAlignVertical: 'center',
+        width: size,
+      }}
+    >
+      {symbol}
+    </Text>
+  );
 }
 
 export default function TabsLayout() {
