@@ -719,7 +719,7 @@ export class FileRepositoryImpl implements FileRepository {
           from: entry.localUri,
           to: destinationUri,
         });
-      } catch (moveError) {
+      } catch {
         // Fallback: copiar e depois deletar
         await this.fsModule.copyAsync({
           from: entry.localUri,
