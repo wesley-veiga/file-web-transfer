@@ -12,7 +12,7 @@
  *
  * ## Escopo deliberadamente reduzido
  * Este não é um servidor HTTP completo — é o mínimo necessário para atender as rotas de
- * `src/app/apiSetup.ts`:
+ * `src/bootstrap/apiSetup.ts`:
  * - Sem suporte a `Transfer-Encoding: chunked` (os clientes desta API sempre mandam
  *   `Content-Length`, seja no upload multipart, seja nos requests GET sem corpo).
  * - Sem keep-alive/pipelining: cada conexão atende exatamente um request e a resposta
@@ -132,11 +132,31 @@ export function createDefaultHttpModule(): HttpModule {
   }
 
   /**
-   * Serializa e escreve uma HttpServerResponse no socket.
+   * Serializa e escreve uma HttpServerResponse no socket, chamando `onFlushed`
+   * somente depois que AMBAS as escritas (head + body) forem confirmadas pelo
+   * nativo — nunca antes, e nunca se o socket for destruído no meio do processo.
+   *
    * Recalcula sempre o Content-Length a partir do corpo real (nunca confia
    * no que o handler informou em `response.headers`).
+   *
+   * Achado em T-701 (teste manual em dispositivo real, requisições concorrentes):
+   * `Socket.write()` de `react-native-tcp-socket` é genuinamente assíncrono — só
+   * termina quando o nativo emite o evento `'written'` correspondente (visto no
+   * código-fonte da lib, `Socket.js`). Chamar `socket.destroy()` logo após
+   * `write()` (sem aguardar esse callback) é uma corrida real: sob carga
+   * concorrente, `destroy()` frequentemente vencia a corrida e derrubava a
+   * conexão antes dos bytes serem de fato escritos, causando respostas vazias ou
+   * truncadas (confirmado via `curl` com requisições paralelas — "Empty reply
+   * from server" e "transfer closed with N bytes remaining to read"). Sob
+   * requisições sequenciais e espaçadas isso raramente se manifestava (daí não
+   * ter sido pego em testes unitários com mocks síncronos nem no teste manual
+   * inicial de HU-01).
    */
-  function writeResponse(socket: Socket, response: HttpServerResponse): void {
+  function writeResponse(
+    socket: Socket,
+    response: HttpServerResponse,
+    onFlushed: () => void,
+  ): void {
     const statusText = STATUS_TEXTS[response.statusCode] ?? 'Unknown';
 
     let bodyBuffer: Buffer;
@@ -162,10 +182,18 @@ export function createDefaultHttpModule(): HttpModule {
 
     const head = headerLines.join('\r\n') + '\r\n\r\n';
 
-    if (!socket.destroyed) {
-      socket.write(head, 'utf8');
-      socket.write(bodyBuffer);
+    if (socket.destroyed) {
+      return;
     }
+
+    socket.write(head, 'utf8', () => {
+      if (socket.destroyed) {
+        return;
+      }
+      socket.write(bodyBuffer, undefined, () => {
+        onFlushed();
+      });
+    });
   }
 
   /**
@@ -195,13 +223,22 @@ export function createDefaultHttpModule(): HttpModule {
     }
 
     function respondAndDestroy(response: HttpServerResponse): void {
-      if (!responded && !socket.destroyed) {
-        responded = true;
-        writeResponse(socket, response);
+      if (responded || socket.destroyed) {
+        if (!socket.destroyed) {
+          socket.destroy();
+        }
+        return;
       }
-      if (!socket.destroyed) {
-        socket.destroy();
-      }
+      responded = true;
+      // `destroy()` só acontece depois que `writeResponse` confirma (via
+      // `onFlushed`) que o nativo já escreveu head + body por completo — nunca
+      // antes (ver comentário de `writeResponse` sobre a corrida real com
+      // requisições concorrentes, achado em T-701).
+      writeResponse(socket, response, () => {
+        if (!socket.destroyed) {
+          socket.destroy();
+        }
+      });
     }
 
     function parseHeadPart(headPart: string): boolean {
@@ -368,7 +405,18 @@ export function createDefaultHttpModule(): HttpModule {
           reject(new Error(`EADDRINUSE: ${err.message}`));
         });
 
-        newServer.listen({ port, host: '0.0.0.0' }, undefined, () => {
+        // O callback de conclusão precisa ir no 2º argumento (não no 3º) quando
+        // `options` é um objeto: a implementação real de `Server.listen()`
+        // (node_modules/react-native-tcp-socket/src/Server.js) só lê
+        // `callback_or_host` como callback nesse overload — o 3º parâmetro
+        // `callback` é ignorado silenciosamente quando o 1º argumento é um
+        // objeto. Achado em T-701 (teste manual em dispositivo real): com o
+        // callback no 3º argumento, ele nunca era registrado como listener do
+        // evento `listening`, então esta Promise nunca resolvia — apenas o
+        // caminho de erro (`.on('error', ...)`) funcionava, causando "loading
+        // infinito" (mascarado depois como timeout, uma vez que o timeout de
+        // `serverService.ts` foi adicionado).
+        newServer.listen({ port, host: '0.0.0.0' }, () => {
           server = newServer;
           running = true;
           resolve();

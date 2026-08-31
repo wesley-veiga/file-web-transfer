@@ -5,7 +5,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { useColorScheme } from 'react-native';
 import { useAppLifecycle } from '@/features/server/hooks';
 import { useServerStore } from '@/features/server/store/serverStore';
-import { initServer, setCurrentSessionId } from './serverBootstrap';
+import { initServer, setCurrentSessionId } from '@/bootstrap/serverBootstrap';
 
 SplashScreen.preventAutoHideAsync();
 

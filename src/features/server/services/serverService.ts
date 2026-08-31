@@ -4,6 +4,58 @@ import type { ServerErrorCode, NetworkMode } from '../types';
 import type { HttpModule } from './httpModule';
 
 /**
+ * Tempo máximo de espera por uma chamada ao `HttpModule` nativo (`start`/`stop`).
+ *
+ * Achado em T-701 (teste manual em dispositivo real, Android): a Promise nativa do
+ * `HttpModule` pode nunca resolver nem rejeitar em determinadas condições de
+ * hardware, deixando `ServerServiceImpl.start()` — e a UI, presa em `starting` —
+ * travados indefinidamente ("loading infinito"). `withTimeout` garante que toda
+ * chamada ao módulo nativo sempre termine (com sucesso ou erro mapeável), nunca
+ * trava para sempre.
+ */
+const NATIVE_CALL_TIMEOUT_MS = 8000;
+
+/**
+ * Nome usado para marcar o erro lançado por `withTimeout` — permite que quem
+ * captura o erro distinga "a chamada nativa nunca respondeu" de outros erros sem
+ * depender do texto da mensagem (que poderia colidir com heurísticas de texto como
+ * a de `findAvailablePort()`, que procura por "porta em uso" na mensagem).
+ */
+const TIMEOUT_ERROR_NAME = 'NativeCallTimeoutError';
+
+/**
+ * Rejeita com `timeoutMessage` (erro nomeado `TIMEOUT_ERROR_NAME`) se `promise` não
+ * resolver/rejeitar dentro de `ms`. Não cancela a `promise` original (não há como,
+ * para uma Promise nativa) — apenas garante que quem está aguardando nunca fique
+ * travado esperando por ela.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMessage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const timeoutError = new Error(timeoutMessage);
+      timeoutError.name = TIMEOUT_ERROR_NAME;
+      reject(timeoutError);
+    }, ms);
+
+    // `Promise.resolve(promise)` (em vez de `promise.then(...)` direto) protege
+    // contra uma implementação de `HttpModule` que não retorne uma Promise de
+    // verdade (ex.: mock de teste sem valor configurado, ou módulo nativo que
+    // devolva `undefined`) — sem isso, `.then` de `undefined` lançaria antes
+    // mesmo do timeout ter chance de proteger a chamada.
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
  * Resultado de `ServerService.start()`: informações necessárias para popular `ServerInfo`.
  */
 export interface ServerStartResult {
@@ -67,14 +119,14 @@ export class ServerServiceImpl implements ServerService {
         throw this.createServerError('NO_NETWORK', 'Nenhuma rede disponível');
       }
 
-      // Tentar portas com fallback
+      // Tentar portas com fallback — `findAvailablePort()` já deixa o servidor
+      // rodando na porta retornada (não faz start()+stop()+start() de novo aqui:
+      // ver comentário de `findAvailablePort()` sobre por que fechar e reabrir a
+      // mesma porta é uma corrida real contra o socket nativo).
       const port = await this.findAvailablePort();
       if (!port) {
         throw this.createServerError('PORT_UNAVAILABLE', 'Nenhuma porta livre disponível');
       }
-
-      // Iniciar servidor HTTP na porta encontrada
-      await this.httpModule.start(port);
 
       // Gerar sessionId
       const sessionId = generateSessionId();
@@ -99,17 +151,21 @@ export class ServerServiceImpl implements ServerService {
       if (error instanceof Error) {
         const message = error.message.toLowerCase();
         if (message.includes('network') || message.includes('offline')) {
-          throw this.createServerError('NO_NETWORK', 'Nenhuma rede disponível');
+          throw this.createServerError('NO_NETWORK', 'Nenhuma rede disponível', error);
         }
       }
 
       // Erro desconhecido
-      throw this.createServerError('UNKNOWN', 'Erro desconhecido ao iniciar servidor');
+      throw this.createServerError('UNKNOWN', 'Erro desconhecido ao iniciar servidor', error);
     }
   }
 
   async stop(): Promise<void> {
-    await this.httpModule.stop();
+    await withTimeout(
+      this.httpModule.stop(),
+      NATIVE_CALL_TIMEOUT_MS,
+      'Tempo esgotado ao parar o servidor HTTP',
+    );
   }
 
   isRunning(): boolean {
@@ -138,30 +194,46 @@ export class ServerServiceImpl implements ServerService {
   }
 
   /**
-   * Tenta encontrar uma porta livre começando de `minPort` até `maxPort`.
+   * Tenta encontrar uma porta livre começando de `minPort` até `maxPort`, deixando
+   * o servidor JÁ RODANDO na porta retornada.
    *
    * Estratégia:
    * - Tenta cada porta sequencialmente chamando httpModule.start(port)
    * - Se start() lançar erro de "port already in use" ou similar, tenta a próxima
-   * - Retorna a primeira porta que conseguir iniciar o servidor
+   * - Retorna a primeira porta que conseguir iniciar o servidor — SEM pará-lo
    * - Retorna null se nenhuma porta no intervalo estiver disponível
    *
-   * Nota: `findAvailablePort()` inicia e para o servidor para cada tentativa,
-   * pois não há forma de verificar disponibilidade sem tentar bind. O servidor
-   * é parado imediatamente após verificação bem-sucedida (antes de retornar).
+   * Nota (achado em T-701, teste manual em dispositivo real): a versão anterior
+   * parava o servidor imediatamente após verificar a porta ("apenas testar") e o
+   * `start()` público reabria a MESMA porta logo em seguida. Isso é uma corrida
+   * real contra um socket TCP nativo: `stop()` pode resolver a Promise antes do
+   * socket estar de fato liberado no SO, então o `start()` seguinte na mesma
+   * porta falhava com `EADDRINUSE` de verdade (`java.net.BindException`, visto
+   * via `adb logcat`) — mascarado como erro genérico `UNKNOWN` na UI, mesmo com
+   * a porta "confirmada disponível" segundos antes. Testes com mock nunca
+   * pegaram isso porque um `HttpModule` mockado não tem esse delay real de
+   * liberação de socket. Por isso agora o servidor real É o servidor de teste:
+   * primeira porta que aceitar o bind é a porta final, sem stop()/restart().
    */
   private async findAvailablePort(): Promise<number | null> {
     for (let port = this.minPort; port <= this.maxPort; port++) {
       try {
-        // Tentar iniciar na porta
-        await this.httpModule.start(port);
-
-        // Se chegou aqui, porta está disponível
-        // Parar servidor imediatamente (será reiniciado em start() com dados finais)
-        await this.httpModule.stop();
+        await withTimeout(
+          this.httpModule.start(port),
+          NATIVE_CALL_TIMEOUT_MS,
+          'Tempo esgotado ao iniciar o servidor HTTP',
+        );
 
         return port;
       } catch (error) {
+        // Timeout: a chamada nativa nunca respondeu — não é "porta em uso", não
+        // adianta tentar a próxima (o módulo nativo provavelmente está travado
+        // para qualquer porta). Propaga imediatamente em vez de repetir o timeout
+        // até 10x (achado em T-701 — ver comentário de `NATIVE_CALL_TIMEOUT_MS`).
+        if (error instanceof Error && error.name === TIMEOUT_ERROR_NAME) {
+          throw error;
+        }
+
         // Se erro é "porta em uso", tenta a próxima
         if (error instanceof Error) {
           const message = error.message.toLowerCase();
@@ -186,9 +258,20 @@ export class ServerServiceImpl implements ServerService {
 
   /**
    * Cria um ServerServiceError tipado.
+   *
+   * @param cause - Erro original que motivou este (ex.: o `Error` nativo do
+   *   `HttpModule`). A UI sempre exibe a mensagem genérica por `code` (ver
+   *   `getErrorMessage()` em `useServer.ts`) — `cause` existe só para não perder
+   *   o diagnóstico real em `console.error`/logs (achado em T-701: sem isso, era
+   *   impossível distinguir EADDRINUSE de timeout de outros erros nativos a
+   *   partir do que chegava na tela ou no terminal do Metro).
    */
-  private createServerError(code: ServerErrorCode, message: string): ServerServiceError {
-    return new ServerServiceError(code, message);
+  private createServerError(
+    code: ServerErrorCode,
+    message: string,
+    cause?: unknown,
+  ): ServerServiceError {
+    return new ServerServiceError(code, message, cause);
   }
 }
 
@@ -200,8 +283,8 @@ export class ServerServiceError extends Error {
   readonly code: ServerErrorCode;
   readonly message: string;
 
-  constructor(code: ServerErrorCode, message: string) {
-    super(message);
+  constructor(code: ServerErrorCode, message: string, cause?: unknown) {
+    super(message, cause !== undefined ? { cause } : undefined);
     this.name = 'ServerServiceError';
     this.code = code;
     this.message = message;

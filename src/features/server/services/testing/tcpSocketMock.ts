@@ -94,14 +94,24 @@ export class MockServer extends EventEmitter {
     this.connectionListener = connectionListener;
   }
 
-  listen(
-    options: ListenOptions,
-    hostOrCallback?: string | (() => void),
-    callback?: () => void,
-  ): void {
+  /**
+   * Assinatura e regra de resolução do callback fiéis à implementação REAL de
+   * `Server.listen()` (node_modules/react-native-tcp-socket/src/Server.js,
+   * método `listen`): quando `options` é um objeto (sempre o caso aqui — só
+   * chamamos a variante `listen({port, host}, cb)`), a lib real só olha o 2º
+   * argumento (`hostOrCallback`) como callback — o 3º é ignorado nesse overload.
+   *
+   * Antes desta correção (T-701), este mock era mais permissivo que a lib real
+   * (caía para o 3º argumento se o 2º não fosse função), o que escondeu por
+   * completo um bug real em `nativeHttpModule.ts`: o callback de sucesso do
+   * `start()` era passado como 3º argumento e NUNCA era chamado em produção,
+   * causando "loading infinito" ao iniciar o servidor — só descoberto em teste
+   * manual em dispositivo real, porque nenhum teste unitário reproduzia a regra
+   * real de resolução de argumentos da lib.
+   */
+  listen(options: ListenOptions, hostOrCallback?: string | (() => void)): void {
     this.listenOptions = options;
-    this.listenCallback =
-      typeof hostOrCallback === 'function' ? hostOrCallback : (callback ?? null);
+    this.listenCallback = typeof hostOrCallback === 'function' ? hostOrCallback : null;
   }
 
   /** Simula o sucesso do bind — equivalente ao callback nativo do `listen()` real. */

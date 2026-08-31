@@ -10,7 +10,7 @@ import type { Transfer, TransferStatus } from '../types';
  * (HU-07 — Acompanhar transferências).
  *
  * A lista é 100% reativa: `useTransferStore` é populado sincronamente pelas
- * rotas HTTP instrumentadas em `src/app/apiSetup.ts` (T-602), que chamam
+ * rotas HTTP instrumentadas em `src/bootstrap/apiSetup.ts` (T-602), que chamam
  * `reportProgress` com throttle de 500 ms. Como o seletor Zustand abaixo
  * re-renderiza automaticamente a cada mudança de `transfers`, esta tela não
  * precisa de nenhum polling/`setInterval` adicional para atender ao

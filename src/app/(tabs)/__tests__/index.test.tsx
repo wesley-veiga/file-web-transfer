@@ -1,5 +1,5 @@
 /**
- * Tests for src/app/index.tsx (Home Screen)
+ * Tests for src/app/(tabs)/index.tsx (Home Screen)
  *
  * T-001 · Bootstrap do projeto Expo
  * Testa componente HomeScreen com verificação de código e estrutura
@@ -54,7 +54,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
 
     it('ServerHomeScreen uses Screen component from shared/components', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('Screen');
@@ -63,7 +63,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
 
     it('ServerHomeScreen uses View and Text from react-native', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('View');
@@ -82,7 +82,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
 
     it('ServerHomeScreen handles server state rendering', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('serverInfo.status');
@@ -94,7 +94,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
   describe('Theme Support Verification', () => {
     it('delegates theme handling through ServerHomeScreen', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('dark:');
@@ -150,7 +150,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
   describe('Styling Verification', () => {
     it('ServerHomeScreen uses NativeWind className for styling', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('className');
@@ -158,7 +158,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
 
     it('ServerHomeScreen uses flex-1 class for full height', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('flex-1');
@@ -166,7 +166,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
 
     it('ServerHomeScreen uses styling classes for layout', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('px-');
@@ -175,7 +175,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
 
     it('ServerHomeScreen uses responsive text sizing', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('text-');
@@ -184,7 +184,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
 
     it('ServerHomeScreen does not use StyleSheet.create', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).not.toContain('StyleSheet.create');
@@ -221,7 +221,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
 
     it('ServerHomeScreen imports React Native components', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
       expect(fileContent).toContain('import');
@@ -311,7 +311,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
 
     it('ServerHomeScreen has complete structure', () => {
       const fileContent = require('fs').readFileSync(
-        require('path').join(__dirname, '../../features/server/components/ServerHomeScreen.tsx'),
+        require('path').join(__dirname, '../../../features/server/components/ServerHomeScreen.tsx'),
         'utf-8',
       );
 

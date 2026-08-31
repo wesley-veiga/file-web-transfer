@@ -38,6 +38,10 @@ describe('isValidTransition', () => {
     it('should allow error → idle', () => {
       expect(isValidTransition('error', 'idle')).toBe(true);
     });
+
+    it('should allow error → starting (retry, T-701)', () => {
+      expect(isValidTransition('error', 'starting')).toBe(true);
+    });
   });
 
   describe('invalid transitions', () => {
@@ -59,10 +63,6 @@ describe('isValidTransition', () => {
 
     it('should not allow stopping → starting', () => {
       expect(isValidTransition('stopping', 'starting')).toBe(false);
-    });
-
-    it('should not allow error → starting', () => {
-      expect(isValidTransition('error', 'starting')).toBe(false);
     });
 
     it('should not allow error → running', () => {
@@ -526,7 +526,7 @@ describe('useServerStore', () => {
       warnSpy.mockRestore();
     });
 
-    it('should preserve error state when attempting invalid transition', () => {
+    it('should allow retrying from error state via startRequested (T-701)', () => {
       const error: ServerError = {
         code: 'PORT_UNAVAILABLE',
         message: 'Port not available',
@@ -542,12 +542,13 @@ describe('useServerStore', () => {
 
       const { startRequested } = useServerStore.getState();
 
-      // Try invalid transition from error to starting
+      // "Tentar novamente": error → starting agora é uma transição válida (achado
+      // em T-701 — sem isso, o botão de retry nunca tirava a UI do estado error,
+      // mesmo quando a nova tentativa de iniciar o servidor tinha sucesso).
       startRequested();
 
       const info = useServerStore.getState().serverInfo;
-      expect(info.status).toBe('error');
-      expect(info.error).toEqual(error); // Error state preserved
+      expect(info.status).toBe('starting');
     });
   });
 });

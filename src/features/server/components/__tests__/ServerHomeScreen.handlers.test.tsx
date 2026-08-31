@@ -89,6 +89,33 @@ describe('ServerHomeScreen handlers (T-204)', () => {
       expect(consoleErrorSpy).toHaveBeenCalled();
       consoleErrorSpy.mockRestore();
     });
+
+    it('loga a causa original quando o erro tem `cause` (T-701)', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const originalCause = new Error('EADDRINUSE: bind failed');
+      mockStartFn.mockRejectedValueOnce(new Error('Erro desconhecido', { cause: originalCause }));
+      const { getByText } = await render(<ServerHomeScreen />);
+      fireEvent.press(getByText('Iniciar servidor').parent!);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[ServerHomeScreen] Causa original:',
+        originalCause,
+      );
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('não loga causa original quando o erro não tem `cause`', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockStartFn.mockRejectedValueOnce(new Error('Start failed sem cause'));
+      const { getByText } = await render(<ServerHomeScreen />);
+      fireEvent.press(getByText('Iniciar servidor').parent!);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+        '[ServerHomeScreen] Causa original:',
+        expect.anything(),
+      );
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   describe('handleStopPress', () => {
@@ -196,6 +223,32 @@ describe('ServerHomeScreen handlers (T-204)', () => {
       fireEvent.press(getByText('Tentar novamente').parent!);
       await new Promise((r) => setTimeout(r, 0));
       expect(consoleErrorSpy).toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('loga a causa original quando o erro do retry tem `cause` (T-701)', async () => {
+      useServerStore.setState({
+        serverInfo: {
+          status: 'error',
+          networkMode: null,
+          ip: null,
+          port: null,
+          url: null,
+          sessionId: null,
+          startedAt: null,
+          error: { code: 'UNKNOWN', message: 'Algo deu errado' },
+        },
+      });
+      const originalCause = new Error('Tempo esgotado ao iniciar o servidor HTTP');
+      mockStartFn.mockRejectedValueOnce(new Error('Erro desconhecido', { cause: originalCause }));
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const { getByText } = await render(<ServerHomeScreen />);
+      fireEvent.press(getByText('Tentar novamente').parent!);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[ServerHomeScreen] Causa original:',
+        originalCause,
+      );
       consoleErrorSpy.mockRestore();
     });
   });

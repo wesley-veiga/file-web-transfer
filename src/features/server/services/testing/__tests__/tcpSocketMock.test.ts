@@ -114,17 +114,12 @@ describe('MockServer', () => {
     expect(onListening).toHaveBeenCalledTimes(1);
   });
 
-  it('listen() com (opts, host, callback) usa o terceiro argumento como callback', () => {
-    const server = new MockServer(jest.fn());
-    const onListening = jest.fn();
-
-    server.listen({ port: 8080, host: '0.0.0.0' }, '0.0.0.0', onListening);
-    server.triggerListening();
-
-    expect(onListening).toHaveBeenCalledTimes(1);
-  });
-
-  it('listen() com host string e sem callback não lança ao chamar triggerListening()', () => {
+  it('listen() com host string no 2º argumento não registra callback (fiel à lib real, T-701)', () => {
+    // A lib real (react-native-tcp-socket) só olha o 2º argumento como callback
+    // quando `options` é um objeto — um 3º argumento (removido desta assinatura)
+    // era ignorado nesse overload. Um callback passado ali (bug real encontrado
+    // em nativeHttpModule.ts via teste manual em dispositivo — ver T-701) nunca
+    // seria chamado; `triggerListening()` não deve lançar mesmo sem callback.
     const server = new MockServer(jest.fn());
 
     server.listen({ port: 8080, host: '0.0.0.0' }, '0.0.0.0');
