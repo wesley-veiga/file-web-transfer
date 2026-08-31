@@ -5,10 +5,32 @@
  * - hashSha256: cálculo de hash SHA-256
  * - hashesEqual: comparar hashes com case-insensitivity
  *
- * Nota: hashSha256 retorna um placeholder em produção (a ser implementado
- * com expo-crypto). Os testes verificam a interface e a lógica de comparação.
+ * Nota: expo-crypto é mocado para testes (módulo nativo não funciona em Jest).
+ * Em produção, usa API real do Expo.
  */
 
+// jest.mock() deve estar no topo (requer require() que é nativo em Jest)
+jest.mock('expo-crypto', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const crypto = require('crypto');
+
+  return {
+    digestStringAsync: jest.fn(async (_algorithm: unknown, data: string, _options: unknown) => {
+      // Simular SHA-256: gerar hash base64 determinístico da string
+      // Isso é um mock para testes; em produção, usa API real do Expo
+      const hash = crypto.createHash('sha256').update(data).digest('base64');
+      return hash;
+    }),
+    CryptoDigestAlgorithm: {
+      SHA256: 'SHA256',
+    },
+    CryptoEncoding: {
+      BASE64: 'BASE64',
+    },
+  };
+});
+
+// eslint-disable-next-line import/first
 import { hashSha256, hashesEqual } from '../hashUtils';
 
 describe('hashUtils', () => {
