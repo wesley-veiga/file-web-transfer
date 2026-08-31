@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, FlatList, Alert } from 'react-native';
 import { Screen, Button, Card } from '@/shared/components';
 import { useSharedFiles } from '../hooks/useSharedFiles';
@@ -38,6 +38,7 @@ export function SharedFilesScreen({
     documentPickerModule,
   });
   const files = useSharedFilesStore((state) => state.files);
+  const [isPicking, setIsPicking] = useState(false);
 
   // Carregar arquivos compartilhados ao montar a tela
   useEffect(() => {
@@ -47,11 +48,14 @@ export function SharedFilesScreen({
   }, [loadSharedFiles]);
 
   const handleSharePress = async () => {
+    setIsPicking(true);
     try {
       await pickAndShareFiles();
     } catch (error) {
       console.error('[SharedFilesScreen] Erro ao compartilhar:', error);
       Alert.alert('Erro', 'Não foi possível abrir o seletor de arquivos.');
+    } finally {
+      setIsPicking(false);
     }
   };
 
@@ -89,9 +93,10 @@ export function SharedFilesScreen({
 
           {/* Botão compartilhar */}
           <Button
-            label="Compartilhar arquivos"
+            label={isPicking ? 'Selecionando...' : 'Compartilhar arquivos'}
             variant="primary"
             size="lg"
+            disabled={isPicking}
             onPress={handleSharePress}
             className="w-full mb-6"
           />

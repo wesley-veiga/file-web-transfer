@@ -291,6 +291,48 @@ describe('useSharedFiles hook', () => {
       expect(useSharedFilesStore.getState().files).toHaveLength(1);
     });
 
+    it('deve ignorar chamada concorrente enquanto o picker anterior ainda está aberto (T-701)', async () => {
+      // Bug real em teste manual: um segundo toque no botão antes do picker fechar
+      // disparava `getDocumentAsync` duas vezes, e a lib nativa rejeitava a segunda
+      // chamada com "Different document picking in progress".
+      let resolvePicker: ((value: DocumentPicker.DocumentPickerResult) => void) | undefined;
+      jest.mocked(DocumentPicker.getDocumentAsync).mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolvePicker = resolve;
+        }),
+      );
+
+      const { result } = await renderHook(() =>
+        useSharedFiles({ fileRepository: mockFileRepository }),
+      );
+
+      let firstCall: Promise<void>;
+      let secondCall: Promise<void>;
+      await act(async () => {
+        firstCall = result.current.pickAndShareFiles();
+        secondCall = result.current.pickAndShareFiles();
+        resolvePicker?.({ canceled: true, assets: null });
+        await Promise.all([firstCall, secondCall]);
+      });
+
+      expect(jest.mocked(DocumentPicker.getDocumentAsync)).toHaveBeenCalledTimes(1);
+    });
+
+    it('permite uma nova chamada após o picker anterior finalizar', async () => {
+      const { result } = await renderHook(() =>
+        useSharedFiles({ fileRepository: mockFileRepository }),
+      );
+
+      await act(async () => {
+        await result.current.pickAndShareFiles();
+      });
+      await act(async () => {
+        await result.current.pickAndShareFiles();
+      });
+
+      expect(jest.mocked(DocumentPicker.getDocumentAsync)).toHaveBeenCalledTimes(2);
+    });
+
     it('deve lançar erro se document picker falhar', async () => {
       jest.mocked(DocumentPicker.getDocumentAsync).mockRejectedValueOnce(new Error('Picker error'));
 
