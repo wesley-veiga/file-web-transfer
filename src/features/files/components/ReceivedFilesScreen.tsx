@@ -3,9 +3,11 @@ import { View, Text, ScrollView, FlatList, Alert } from 'react-native';
 import { Screen, Button, Card } from '@/shared/components';
 import { useReceivedFiles } from '../hooks/useReceivedFiles';
 import { useReceivedFilesStore } from '../store/receivedFilesStore';
+import { ReceivedFolderConfigurationSection } from './ReceivedFolderConfigurationSection';
 import { formatBytes } from '@/shared/lib';
 import type { FileRepository, FileSystemModule } from '../services/fileRepository';
 import type { SharingModule } from '../services/sharingService';
+import type { FolderSharingModule } from '../services/folderSharingService';
 
 interface ReceivedFilesScreenProps {
   /** Para injetar mock em testes. */
@@ -14,6 +16,8 @@ interface ReceivedFilesScreenProps {
   fileSystemModule?: FileSystemModule;
   /** Para injetar mock de SharingModule em testes. */
   sharingModule?: SharingModule;
+  /** Para injetar mock de FolderSharingModule (SAF) em testes. */
+  folderSharingModule?: FolderSharingModule;
 }
 
 /**
@@ -30,6 +34,7 @@ export function ReceivedFilesScreen({
   fileRepository,
   fileSystemModule,
   sharingModule,
+  folderSharingModule,
 }: ReceivedFilesScreenProps) {
   const { loadReceivedFiles, openFile, shareFile, removeFile } = useReceivedFiles({
     fileRepository,
@@ -89,6 +94,21 @@ export function ReceivedFilesScreen({
             <Text className="text-base text-text-secondary-light dark:text-text-secondary-dark">
               Recebidos
             </Text>
+          </View>
+
+          {/* Seção de configuração de pasta (T-802) */}
+          <View className="mb-6">
+            <ReceivedFolderConfigurationSection
+              fileRepository={fileRepository}
+              fileSystemModule={fileSystemModule}
+              folderSharingModule={folderSharingModule}
+              onConfigured={() => {
+                // Recarregar lista após configurar pasta (em caso futuro de mudança de preferência)
+                loadReceivedFiles().catch((error) => {
+                  console.error('[ReceivedFilesScreen] Erro ao recarregar após config:', error);
+                });
+              }}
+            />
           </View>
 
           {/* Lista de arquivos ou estado vazio */}

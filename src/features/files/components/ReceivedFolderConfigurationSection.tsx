@@ -9,17 +9,32 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useReceivedFolderConfiguration } from '../hooks/useReceivedFolderConfiguration';
+import type { FileRepository, FileSystemModule } from '../services/fileRepository';
+import type { FolderSharingModule } from '../services/folderSharingService';
 
 export interface ReceivedFolderConfigurationSectionProps {
+  /** Para injetar mock em testes. */
+  fileRepository?: FileRepository;
+  /** Para injetar mock de FileSystemModule em testes. */
+  fileSystemModule?: FileSystemModule;
+  /** Para injetar mock de FolderSharingModule (SAF) em testes. */
+  folderSharingModule?: FolderSharingModule;
   /** Callback opcional ao terminar a configuração com sucesso */
   onConfigured?: () => void;
 }
 
 export function ReceivedFolderConfigurationSection({
+  fileRepository,
+  fileSystemModule,
+  folderSharingModule,
   onConfigured,
 }: ReceivedFolderConfigurationSectionProps): React.ReactElement {
   const { configuredFolderUri, isLoading, error, selectFolder, clearFolder } =
-    useReceivedFolderConfiguration();
+    useReceivedFolderConfiguration({
+      fileRepository,
+      fileSystemModule,
+      folderSharingModule,
+    });
 
   const [isSelecting, setIsSelecting] = React.useState(false);
 
