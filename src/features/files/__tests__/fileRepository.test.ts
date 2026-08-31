@@ -1711,4 +1711,164 @@ describe('FileRepository', () => {
       await expect(handle.abort()).resolves.toBeUndefined();
     });
   });
+
+  describe('getReceivedFolderUri / setReceivedFolderUri', () => {
+    beforeEach(() => {
+      const fileContents = new Map<string, string>();
+
+      (mockFs.readAsStringAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        if (fileContents.has(uri)) {
+          return fileContents.get(uri) || '';
+        }
+        throw new Error('File not found');
+      });
+
+      (mockFs.writeAsStringAsync as jest.Mock).mockImplementation(
+        async (uri: string, content: string) => {
+          fileContents.set(uri, content);
+        },
+      );
+
+      (mockFs.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
+      (mockFs.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+    });
+
+    it('getReceivedFolderUri retorna null se não configurado', async () => {
+      const uri = await repository.getReceivedFolderUri();
+      expect(uri).toBeNull();
+    });
+
+    it('setReceivedFolderUri persiste URI e getReceivedFolderUri retorna', async () => {
+      const folderUri = 'content://com.android.externalstorage.documents/tree/primary%3ADownload';
+
+      await repository.setReceivedFolderUri(folderUri);
+      const retrieved = await repository.getReceivedFolderUri();
+
+      expect(retrieved).toBe(folderUri);
+    });
+
+    it('setReceivedFolderUri com null limpa configuração', async () => {
+      const folderUri = 'content://com.android.externalstorage.documents/tree/primary%3ADownload';
+
+      await repository.setReceivedFolderUri(folderUri);
+      await repository.setReceivedFolderUri(null);
+      const retrieved = await repository.getReceivedFolderUri();
+
+      expect(retrieved).toBeNull();
+    });
+  });
+
+  describe('moveReceivedFileToConfiguredFolder (T-802)', () => {
+    let fileContents: Map<string, string>;
+
+    beforeEach(() => {
+      fileContents = new Map<string, string>();
+
+      (mockFs.readAsStringAsync as jest.Mock).mockImplementation(
+        async (uri: string, options?: { encoding?: string }) => {
+          if (!fileContents.has(uri)) {
+            throw new Error('File not found');
+          }
+          return fileContents.get(uri) || '';
+        },
+      );
+
+      (mockFs.writeAsStringAsync as jest.Mock).mockImplementation(
+        async (uri: string, content: string) => {
+          fileContents.set(uri, content);
+        },
+      );
+
+      (mockFs.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
+
+      (mockFs.moveAsync as jest.Mock).mockImplementation(async ({ from, to }) => {
+        const content = fileContents.get(from);
+        if (content !== undefined) {
+          fileContents.set(to, content);
+          fileContents.delete(from);
+        } else {
+          throw new Error('Source file not found');
+        }
+      });
+
+      (mockFs.copyAsync as jest.Mock).mockImplementation(async ({ from, to }) => {
+        const content = fileContents.get(from);
+        if (content !== undefined) {
+          fileContents.set(to, content);
+        } else {
+          throw new Error('Source file not found');
+        }
+      });
+
+      (mockFs.deleteAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        fileContents.delete(uri);
+      });
+
+      (mockFs.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+    });
+
+    it('arquivo de received sem pasta configurada permanece na sandbox', async () => {
+      const entry: FileEntry = {
+        id: 'test-id',
+        name: 'document.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///mock-docs/received/document.pdf',
+        origin: 'received',
+        createdAt: Date.now(),
+      };
+
+      const result = await repository.moveReceivedFileToConfiguredFolder(entry);
+
+      expect(result.localUri).toBe(entry.localUri);
+    });
+
+    it('arquivo non-received retorna sem mudanças', async () => {
+      const entry: FileEntry = {
+        id: 'test-id',
+        name: 'shared-file.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///mock-docs/shared/shared-file.pdf',
+        origin: 'shared',
+        createdAt: Date.now(),
+      };
+
+      const result = await repository.moveReceivedFileToConfiguredFolder(entry);
+
+      expect(result).toEqual(entry);
+    });
+
+    it('move bem-sucedido com hash conferindo atualiza localUri', async () => {
+      // Configurar pasta de recebidos
+      await repository.setReceivedFolderUri(
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+      );
+
+      const entry: FileEntry = {
+        id: 'test-id',
+        name: 'document.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///mock-docs/received/document.pdf',
+        origin: 'received',
+        createdAt: Date.now(),
+      };
+
+      // Simular arquivo na sandbox com conteúdo (como base64)
+      const fileContent = 'UEsDBAoAAA=='; // Simulado: PDF magic + base64 alguns bytes
+      fileContents.set(entry.localUri, fileContent);
+
+      const result = await repository.moveReceivedFileToConfiguredFolder(entry);
+
+      // Deve ter atualizado o localUri para apontar para pasta configurada
+      expect(result.localUri).toBe(
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload/document.pdf',
+      );
+
+      // Arquivo deve estar no novo local e fora do antigo
+      expect(fileContents.has(result.localUri)).toBe(true);
+      expect(fileContents.has(entry.localUri)).toBe(false);
+    });
+  });
 });

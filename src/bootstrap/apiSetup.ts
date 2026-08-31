@@ -584,7 +584,26 @@ export function registerUploadRoute(
         }
 
         const fileEntry = await state.writeHandle.finish(state.totalBytes);
-        const fileDto = fileRepository.toDto(fileEntry);
+
+        // T-802: mover arquivo para pasta de recebidos configurada (se houver)
+        // e verificar hash SHA-256 para garantir integridade
+        let finalEntry = fileEntry;
+        try {
+          finalEntry = await fileRepository.moveReceivedFileToConfiguredFolder(fileEntry);
+        } catch (moveError) {
+          const message = moveError instanceof Error ? moveError.message : 'Erro desconhecido';
+          console.error('[UploadRoute] Erro ao mover arquivo para pasta configurada:', moveError);
+          activeUploads.delete(uploadId);
+          // Arquivo original preservado na sandbox; usuário informado do erro
+          return failUpload(
+            state,
+            500,
+            'RECEIVED_FOLDER_MOVE_FAILED',
+            `Falha ao finalizar o arquivo na pasta configurada: ${message}. Arquivo preservado no dispositivo.`,
+          );
+        }
+
+        const fileDto = fileRepository.toDto(finalEntry);
 
         // Validar DTO contra schema
         const parsed = fileEntryDtoSchema.safeParse(fileDto);

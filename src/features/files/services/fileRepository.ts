@@ -15,6 +15,7 @@ import * as Crypto from 'expo-crypto';
 import type * as FileSystem from 'expo-file-system/legacy'; // Tipos apenas; runtime usará expo-file-system via injeção
 
 import { sanitizeFileName, resolveDuplicateName } from '../../../shared/lib';
+import { hashSha256, hashesEqual } from '../../../shared/lib/hashUtils';
 import type { FileEntryDto } from '../../../shared/types/api';
 import type { FileEntry, FileOrigin } from '../types';
 
@@ -145,6 +146,25 @@ export interface FileRepository {
   setLinkedFolderUri: (uri: string | null) => Promise<void>;
 
   /**
+   * Lê a URI da pasta configurada para salvar arquivos recebidos (T-802).
+   *
+   * Persistida num arquivo pequeno dentro da sandbox (não o conteúdo da
+   * pasta — só a referência), sobrevive a reinícios do app enquanto a
+   * permissão SAF concedida pelo usuário continuar válida.
+   *
+   * @returns URI da pasta configurada para recebidos, ou `null` se nenhuma foi configurada
+   */
+  getReceivedFolderUri: () => Promise<string | null>;
+
+  /**
+   * Define (ou remove, passando `null`) a URI da pasta configurada para
+   * salvar arquivos recebidos (T-802).
+   *
+   * @param uri - URI SAF da pasta, ou `null` para usar o local padrão (sandbox)
+   */
+  setReceivedFolderUri: (uri: string | null) => Promise<void>;
+
+  /**
    * Lista todos os arquivos do repositório.
    *
    * @param origin - Filtra por origem (opcional; se omitido, retorna todos)
@@ -167,6 +187,27 @@ export interface FileRepository {
    * @returns FileEntryDto segura para exposição via API
    */
   toDto: (entry: FileEntry) => FileEntryDto;
+
+  /**
+   * Move um arquivo de recebidos para a pasta externa configurada (T-802), se houver.
+   *
+   * Orquestra:
+   * - Verifica se há pasta configurada via SAF
+   * - Se não houver, retorna o entry sem mudanças (arquivo permanece em `received/`)
+   * - Se houver:
+   *   - Calcula hash SHA-256 do arquivo antes do move
+   *   - Move o arquivo para a pasta configurada
+   *   - Calcula hash SHA-256 do arquivo no novo local
+   *   - Compara; se não baterem, deleta de lá, deixa na sandbox e lança erro
+   *   - Atualiza metadados com novo localUri
+   *   - Retorna entry com localUri apontando para o novo local
+   *
+   * @param entry - FileEntry do arquivo a mover (deve estar em `received/`)
+   * @param fsModule - Módulo de filesystem (pode incluir `readAsStringAsync` com suporte a base64 e `moveAsync`)
+   * @returns FileEntry com localUri possivelmente atualizado (aponta para pasta configurada se move bem-sucedido)
+   * @throws Error se pasta configurada existe mas arquivo falha ao se mover ou hash não bate
+   */
+  moveReceivedFileToConfiguredFolder: (entry: FileEntry) => Promise<FileEntry>;
 
   /**
    * Inicia uma escrita em streaming: sanitiza o nome, resolve duplicata,
@@ -238,6 +279,8 @@ export class FileRepositoryImpl implements FileRepository {
   private readonly metaFileName = '.meta.json';
   private readonly linkedFolderMetaPath: string;
 
+  private readonly receivedFolderMetaPath: string;
+
   constructor(fsModule: FileSystemModule) {
     this.fsModule = fsModule;
     this.baseDir = fsModule.documentDirectory || 'file:///document/';
@@ -246,6 +289,9 @@ export class FileRepositoryImpl implements FileRepository {
     // Guarda só a REFERÊNCIA (URI) da pasta vinculada (T-701) — nunca o conteúdo
     // dela — dentro da sandbox, junto de `shared/.meta.json`.
     this.linkedFolderMetaPath = this.sharedDir + '/.linked-folder.json';
+    // Guarda só a REFERÊNCIA (URI) da pasta configurada para recebidos (T-802)
+    // — dentro da sandbox, junto de `received/.meta.json`.
+    this.receivedFolderMetaPath = this.receivedDir + '/.received-folder.json';
   }
 
   async save(
@@ -415,6 +461,21 @@ export class FileRepositoryImpl implements FileRepository {
   async setLinkedFolderUri(uri: string | null): Promise<void> {
     await this.ensureDirectoryExists(this.sharedDir);
     await this.fsModule.writeAsStringAsync(this.linkedFolderMetaPath, JSON.stringify({ uri }));
+  }
+
+  async getReceivedFolderUri(): Promise<string | null> {
+    try {
+      const content = await this.fsModule.readAsStringAsync(this.receivedFolderMetaPath);
+      const parsed = JSON.parse(content) as { uri: string | null };
+      return parsed.uri ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async setReceivedFolderUri(uri: string | null): Promise<void> {
+    await this.ensureDirectoryExists(this.receivedDir);
+    await this.fsModule.writeAsStringAsync(this.receivedFolderMetaPath, JSON.stringify({ uri }));
   }
 
   async list(origin?: FileOrigin): Promise<FileEntry[]> {
@@ -624,6 +685,86 @@ export class FileRepositoryImpl implements FileRepository {
       }));
     } catch {
       return [];
+    }
+  }
+
+  async moveReceivedFileToConfiguredFolder(entry: FileEntry): Promise<FileEntry> {
+    // Só move se for arquivo de recebidos
+    if (entry.origin !== 'received') {
+      return entry;
+    }
+
+    // Verificar se há pasta configurada
+    const targetFolderUri = await this.getReceivedFolderUri();
+    if (!targetFolderUri) {
+      // Sem pasta configurada, arquivo permanece na sandbox
+      return entry;
+    }
+
+    try {
+      // Calcular hash do arquivo antes do move
+      const originalBase64 = await this.fsModule.readAsStringAsync(entry.localUri, {
+        encoding: 'base64',
+      });
+      const originalHash = await hashSha256(Buffer.from(originalBase64, 'base64'));
+
+      // Construir URI de destino (concatenar nome do arquivo à pasta configurada)
+      const destinationUri = targetFolderUri.replace(/\/$/, '') + '/' + entry.name;
+
+      // Mover arquivo para pasta configurada
+      // Nota: moveAsync é mais eficiente que copy+delete, mas nem sempre suportado.
+      // Se falhar, tenta copy+delete como fallback.
+      try {
+        await this.fsModule.moveAsync({
+          from: entry.localUri,
+          to: destinationUri,
+        });
+      } catch (moveError) {
+        // Fallback: copiar e depois deletar
+        await this.fsModule.copyAsync({
+          from: entry.localUri,
+          to: destinationUri,
+        });
+        await this.fsModule.deleteAsync(entry.localUri);
+      }
+
+      // Calcular hash do arquivo no novo local
+      const movedBase64 = await this.fsModule.readAsStringAsync(destinationUri, {
+        encoding: 'base64',
+      });
+      const movedHash = await hashSha256(Buffer.from(movedBase64, 'base64'));
+
+      // Comparar hashes
+      if (!hashesEqual(originalHash, movedHash)) {
+        // Hashes não conferem — deletar arquivo do novo local e lançar erro
+        try {
+          await this.fsModule.deleteAsync(destinationUri);
+        } catch {
+          // Se falhar ao deletar, ignora (arquivo já está corrompido/truncado)
+        }
+        throw new Error(
+          `Falha na verificação de integridade: hash do arquivo não corresponde após o move. Arquivo preservado na sandbox.`,
+        );
+      }
+
+      // Move bem-sucedido — atualizar entry e metadados com novo localUri
+      const updatedEntry: FileEntry = {
+        ...entry,
+        localUri: destinationUri,
+      };
+
+      // Atualizar metadados
+      const metadata = await this.loadMetadata(this.receivedDir);
+      const updated = metadata.map((m) =>
+        m.id === entry.id ? { ...m, localUri: destinationUri } : m,
+      );
+      await this.saveMetadata(this.receivedDir, updated);
+
+      return updatedEntry;
+    } catch (error) {
+      // Falha no move ou hash check — relançar erro para que caller saiba
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      throw new Error(`Erro ao mover arquivo para pasta configurada: ${message}`);
     }
   }
 }

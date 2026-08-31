@@ -39,6 +39,8 @@ export function createMockFileRepository(): jest.Mocked<FileRepository> {
     linkFromUri: jest.fn(),
     getLinkedFolderUri: jest.fn().mockResolvedValue(null),
     setLinkedFolderUri: jest.fn(),
+    getReceivedFolderUri: jest.fn().mockResolvedValue(null),
+    setReceivedFolderUri: jest.fn(),
     list: jest.fn(),
     remove: jest.fn(),
     toDto: jest.fn((entry: FileEntry) => ({
@@ -49,6 +51,9 @@ export function createMockFileRepository(): jest.Mocked<FileRepository> {
       createdAt: entry.createdAt,
     })),
     beginStreamedWrite: jest.fn(),
+    moveReceivedFileToConfiguredFolder: jest
+      .fn()
+      .mockImplementation((entry) => Promise.resolve(entry)),
   };
 }
 
