@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, FlatList, Alert } from 'react-native';
-import { Screen, Button, Card } from '@/shared/components';
+import { Screen, Button, Card, FileItemThumbnail } from '@/shared/components';
 import { useSharedFiles } from '../hooks/useSharedFiles';
 import { useSharedFilesStore } from '../store/sharedFilesStore';
 import { formatBytes } from '@/shared/lib';
@@ -182,7 +182,13 @@ export function SharedFilesScreen({
                 </Card>
               ) : (
                 folderFiles.map((file) => (
-                  <Card key={file.uri} className="mb-3 flex-row items-center justify-between">
+                  <Card key={file.uri} className="mb-3 flex-row items-center gap-3">
+                    <FileItemThumbnail
+                      uri={file.uri}
+                      mimeType={file.mimeType}
+                      name={file.name}
+                      size={56}
+                    />
                     <View className="flex-1">
                       <Text
                         className="text-base font-medium text-text-light dark:text-text-dark"
@@ -216,7 +222,8 @@ export function SharedFilesScreen({
               keyExtractor={(item) => item.id}
               scrollEnabled={false}
               renderItem={({ item, index }) => (
-                <Card className="mb-3 flex-row items-center justify-between">
+                <Card className="mb-3 flex-row items-center gap-3">
+                  <FileItemThumbnail uri="" mimeType={item.mimeType} name={item.name} size={56} />
                   <View className="flex-1">
                     <Text
                       className="text-base font-medium text-text-light dark:text-text-dark"
@@ -234,7 +241,7 @@ export function SharedFilesScreen({
                     variant="secondary"
                     size="sm"
                     onPress={() => handleRemovePress(item.id, item.name)}
-                    className="ml-3"
+                    className="ml-3 flex-shrink-0"
                   />
                 </Card>
               )}
