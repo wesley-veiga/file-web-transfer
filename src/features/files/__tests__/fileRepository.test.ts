@@ -1839,7 +1839,7 @@ describe('FileRepository', () => {
       expect(result).toEqual(entry);
     });
 
-    it('move bem-sucedido com hash conferindo atualiza localUri', async () => {
+    it('copy bem-sucedido com hash conferindo atualiza localUri e deleta original', async () => {
       // Configurar pasta de recebidos
       await repository.setReceivedFolderUri(
         'content://com.android.externalstorage.documents/tree/primary%3ADownload',
@@ -1866,7 +1866,7 @@ describe('FileRepository', () => {
         'content://com.android.externalstorage.documents/tree/primary%3ADownload/document.pdf',
       );
 
-      // Arquivo deve estar no novo local e fora do antigo
+      // Arquivo deve estar APENAS no novo local (original foi deletado após hash conferir)
       expect(fileContents.has(result.localUri)).toBe(true);
       expect(fileContents.has(entry.localUri)).toBe(false);
     });

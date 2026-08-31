@@ -702,7 +702,7 @@ export class FileRepositoryImpl implements FileRepository {
     }
 
     try {
-      // Calcular hash do arquivo antes do move
+      // 1. Calcular hash do arquivo original (ainda na sandbox)
       const originalBase64 = await this.fsModule.readAsStringAsync(entry.localUri, {
         encoding: 'base64',
       });
@@ -711,49 +711,57 @@ export class FileRepositoryImpl implements FileRepository {
       // Construir URI de destino (concatenar nome do arquivo à pasta configurada)
       const destinationUri = targetFolderUri.replace(/\/$/, '') + '/' + entry.name;
 
-      // Mover arquivo para pasta configurada
-      // Nota: moveAsync é mais eficiente que copy+delete, mas nem sempre suportado.
-      // Se falhar, tenta copy+delete como fallback.
+      // 2. COPIAR arquivo para pasta configurada (nunca apagar origem até confirmar integridade)
+      // Importante: usar copyAsync, não moveAsync, para preservar original até verificação de hash.
       try {
-        await this.fsModule.moveAsync({
-          from: entry.localUri,
-          to: destinationUri,
-        });
-      } catch {
-        // Fallback: copiar e depois deletar
         await this.fsModule.copyAsync({
           from: entry.localUri,
           to: destinationUri,
         });
-        await this.fsModule.deleteAsync(entry.localUri);
+      } catch (copyError) {
+        const message = copyError instanceof Error ? copyError.message : 'Erro desconhecido';
+        throw new Error(`Falha ao copiar arquivo para pasta configurada: ${message}`);
       }
 
-      // Calcular hash do arquivo no novo local
-      const movedBase64 = await this.fsModule.readAsStringAsync(destinationUri, {
+      // 3. Calcular hash do arquivo copiado no destino
+      const copiedBase64 = await this.fsModule.readAsStringAsync(destinationUri, {
         encoding: 'base64',
       });
-      const movedHash = await hashSha256(Buffer.from(movedBase64, 'base64'));
+      const copiedHash = await hashSha256(Buffer.from(copiedBase64, 'base64'));
 
-      // Comparar hashes
-      if (!hashesEqual(originalHash, movedHash)) {
-        // Hashes não conferem — deletar arquivo do novo local e lançar erro
+      // 4. Verificar integridade: comparar hashes
+      if (!hashesEqual(originalHash, copiedHash)) {
+        // Hashes não conferem — arquivo foi corrompido durante cópia
+        // Deletar a cópia corrompida do destino
         try {
           await this.fsModule.deleteAsync(destinationUri);
         } catch {
-          // Se falhar ao deletar, ignora (arquivo já está corrompido/truncado)
+          // Se falhar ao deletar cópia, ignora (será artifact de corrupção)
         }
+        // Original permanece intacto na sandbox
         throw new Error(
-          `Falha na verificação de integridade: hash do arquivo não corresponde após o move. Arquivo preservado na sandbox.`,
+          `Falha na verificação de integridade: hash do arquivo não corresponde. Arquivo preservado na sandbox.`,
         );
       }
 
-      // Move bem-sucedido — atualizar entry e metadados com novo localUri
+      // 5. Hashes conferem — agora é seguro apagar o original da sandbox
+      try {
+        await this.fsModule.deleteAsync(entry.localUri);
+      } catch (deleteError) {
+        // Se falhar ao deletar original, lançar erro (não é falha silenciosa)
+        const message = deleteError instanceof Error ? deleteError.message : 'Erro desconhecido';
+        // Nota: cópia íntegra já existe no destino, então arquivo não está perdido
+        throw new Error(
+          `Arquivo copiado com sucesso para pasta configurada, mas falha ao limpar sandbox: ${message}`,
+        );
+      }
+
+      // 6. Atualizar entry e metadados com novo localUri
       const updatedEntry: FileEntry = {
         ...entry,
         localUri: destinationUri,
       };
 
-      // Atualizar metadados
       const metadata = await this.loadMetadata(this.receivedDir);
       const updated = metadata.map((m) =>
         m.id === entry.id ? { ...m, localUri: destinationUri } : m,
@@ -762,9 +770,9 @@ export class FileRepositoryImpl implements FileRepository {
 
       return updatedEntry;
     } catch (error) {
-      // Falha no move ou hash check — relançar erro para que caller saiba
+      // Relançar erro para caller saber que operação falhou
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
-      throw new Error(`Erro ao mover arquivo para pasta configurada: ${message}`);
+      throw new Error(`Erro ao processar arquivo na pasta configurada: ${message}`);
     }
   }
 }
