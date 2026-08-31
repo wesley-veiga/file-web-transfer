@@ -543,11 +543,10 @@ export class FileRepositoryImpl implements FileRepository {
     finish: (sizeBytes: number) => Promise<FileEntry>;
     abort: () => Promise<void>;
   }> {
-    // Sanitizar nome e resolver duplicata
+    // Sanitizar nome e resolver duplicata.
+    // Nota: `sanitizeFileName` nunca retorna string vazia — tem fallback para 'arquivo',
+    // então `sanitized` sempre é não-vazio e válido.
     const sanitized = sanitizeFileName(desiredName);
-    if (!sanitized || sanitized === '') {
-      throw new Error('Nome sanitizado vazio (INVALID_FILENAME)');
-    }
 
     const targetDir = origin === 'received' ? this.receivedDir : this.sharedDir;
     await this.ensureDirectoryExists(targetDir);
