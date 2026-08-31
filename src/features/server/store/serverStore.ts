@@ -17,8 +17,12 @@ export function isValidTransition(from: ServerStatus, to: ServerStatus): boolean
     'starting→error',
     'running→error',
     'stopping→error',
-    // Recovery from error
+    // Recovery from error: reset volta para idle; "Tentar novamente" tenta
+    // iniciar de novo diretamente (achado em T-701 — sem `error→starting`, o
+    // botão "Tentar novamente" nunca movia o estado para fora de `error`, nem
+    // quando a nova tentativa de start() tinha sucesso de verdade).
     'error→idle',
+    'error→starting',
   ];
 
   return validTransitions.includes(`${from}→${to}`);

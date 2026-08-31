@@ -119,18 +119,14 @@ export class ServerServiceImpl implements ServerService {
         throw this.createServerError('NO_NETWORK', 'Nenhuma rede disponível');
       }
 
-      // Tentar portas com fallback
+      // Tentar portas com fallback — `findAvailablePort()` já deixa o servidor
+      // rodando na porta retornada (não faz start()+stop()+start() de novo aqui:
+      // ver comentário de `findAvailablePort()` sobre por que fechar e reabrir a
+      // mesma porta é uma corrida real contra o socket nativo).
       const port = await this.findAvailablePort();
       if (!port) {
         throw this.createServerError('PORT_UNAVAILABLE', 'Nenhuma porta livre disponível');
       }
-
-      // Iniciar servidor HTTP na porta encontrada
-      await withTimeout(
-        this.httpModule.start(port),
-        NATIVE_CALL_TIMEOUT_MS,
-        'Tempo esgotado ao iniciar o servidor HTTP',
-      );
 
       // Gerar sessionId
       const sessionId = generateSessionId();
@@ -198,34 +194,34 @@ export class ServerServiceImpl implements ServerService {
   }
 
   /**
-   * Tenta encontrar uma porta livre começando de `minPort` até `maxPort`.
+   * Tenta encontrar uma porta livre começando de `minPort` até `maxPort`, deixando
+   * o servidor JÁ RODANDO na porta retornada.
    *
    * Estratégia:
    * - Tenta cada porta sequencialmente chamando httpModule.start(port)
    * - Se start() lançar erro de "port already in use" ou similar, tenta a próxima
-   * - Retorna a primeira porta que conseguir iniciar o servidor
+   * - Retorna a primeira porta que conseguir iniciar o servidor — SEM pará-lo
    * - Retorna null se nenhuma porta no intervalo estiver disponível
    *
-   * Nota: `findAvailablePort()` inicia e para o servidor para cada tentativa,
-   * pois não há forma de verificar disponibilidade sem tentar bind. O servidor
-   * é parado imediatamente após verificação bem-sucedida (antes de retornar).
+   * Nota (achado em T-701, teste manual em dispositivo real): a versão anterior
+   * parava o servidor imediatamente após verificar a porta ("apenas testar") e o
+   * `start()` público reabria a MESMA porta logo em seguida. Isso é uma corrida
+   * real contra um socket TCP nativo: `stop()` pode resolver a Promise antes do
+   * socket estar de fato liberado no SO, então o `start()` seguinte na mesma
+   * porta falhava com `EADDRINUSE` de verdade (`java.net.BindException`, visto
+   * via `adb logcat`) — mascarado como erro genérico `UNKNOWN` na UI, mesmo com
+   * a porta "confirmada disponível" segundos antes. Testes com mock nunca
+   * pegaram isso porque um `HttpModule` mockado não tem esse delay real de
+   * liberação de socket. Por isso agora o servidor real É o servidor de teste:
+   * primeira porta que aceitar o bind é a porta final, sem stop()/restart().
    */
   private async findAvailablePort(): Promise<number | null> {
     for (let port = this.minPort; port <= this.maxPort; port++) {
       try {
-        // Tentar iniciar na porta
         await withTimeout(
           this.httpModule.start(port),
           NATIVE_CALL_TIMEOUT_MS,
-          'Tempo esgotado ao testar disponibilidade de porta',
-        );
-
-        // Se chegou aqui, porta está disponível
-        // Parar servidor imediatamente (será reiniciado em start() com dados finais)
-        await withTimeout(
-          this.httpModule.stop(),
-          NATIVE_CALL_TIMEOUT_MS,
-          'Tempo esgotado ao liberar porta de teste',
+          'Tempo esgotado ao iniciar o servidor HTTP',
         );
 
         return port;

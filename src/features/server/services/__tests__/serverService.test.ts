@@ -99,21 +99,20 @@ describe('ServerService', () => {
     });
 
     it('deve fazer fallback para próxima porta se a primeira estiver indisponível', async () => {
-      // 8080 falha em findAvailablePort, 8081 funciona em findAvailablePort,
-      // depois 8081 é chamado novamente em start()
+      // 8080 falha, 8081 funciona — servidor real fica rodando em 8081 direto
+      // (T-701: sem start()+stop()+start() redundante na mesma porta, ver
+      // comentário de `findAvailablePort()` em serverService.ts).
       mockHttpModule.start
-        .mockRejectedValueOnce(new Error('Port 8080 already in use (EADDRINUSE)')) // findAvailablePort tenta 8080
-        .mockResolvedValueOnce(undefined) // findAvailablePort tenta 8081 (sucesso)
-        .mockResolvedValueOnce(undefined); // start() tenta 8081 novamente
-      mockHttpModule.stop.mockResolvedValue(undefined);
+        .mockRejectedValueOnce(new Error('Port 8080 already in use (EADDRINUSE)'))
+        .mockResolvedValueOnce(undefined);
 
       const result = await serverService.start('wifi');
 
-      // Verificar que tentou: 8080 (falha), 8081 (findAvailablePort), 8081 (start)
-      expect(mockHttpModule.start).toHaveBeenCalledTimes(3);
+      expect(mockHttpModule.start).toHaveBeenCalledTimes(2);
       expect(mockHttpModule.start).toHaveBeenNthCalledWith(1, 8080);
       expect(mockHttpModule.start).toHaveBeenNthCalledWith(2, 8081);
-      expect(mockHttpModule.start).toHaveBeenNthCalledWith(3, 8081);
+      // stop() nunca é chamado durante o start — a porta testada é a porta real.
+      expect(mockHttpModule.stop).not.toHaveBeenCalled();
 
       // Verificar que resultado contém porta 8081
       expect(result.port).toBe(8081);
@@ -201,16 +200,16 @@ describe('ServerService', () => {
       expect(result.port).toBe(8080);
     });
 
-    it('deve chamar httpModule.start com a porta 8080 (findAvailablePort) e depois novamente para iniciar de verdade', async () => {
-      mockHttpModule.stop.mockResolvedValue(undefined);
-
+    it('deve chamar httpModule.start com a porta 8080 uma única vez, sem stop()/restart (T-701)', async () => {
       await serverService.start('wifi');
 
-      // findAvailablePort chama start(8080) uma vez e depois stop
-      // Depois start() chama start(8080) novamente para iniciar de verdade
+      // findAvailablePort() já deixa o servidor rodando na porta 8080 — nenhum
+      // start()+stop()+start() redundante (ver comentário em serverService.ts:
+      // fechar e reabrir a mesma porta é uma corrida real contra o socket nativo,
+      // achado via `adb logcat` num dispositivo real durante T-701).
       expect(mockHttpModule.start).toHaveBeenCalledWith(8080);
-      expect(mockHttpModule.start).toHaveBeenCalledTimes(2); // Uma vez em findAvailablePort, uma em start()
-      expect(mockHttpModule.stop).toHaveBeenCalledTimes(1); // stop() é chamado por findAvailablePort após verificação
+      expect(mockHttpModule.start).toHaveBeenCalledTimes(1);
+      expect(mockHttpModule.stop).not.toHaveBeenCalled();
     });
 
     it('deve gerar sessionId determinístico (mockado)', async () => {
