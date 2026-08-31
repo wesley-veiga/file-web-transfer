@@ -305,4 +305,67 @@ describe('ServerService', () => {
       }
     });
   });
+
+  describe('timeout de chamadas nativas (T-701 — achado em teste manual: httpModule pode nunca resolver)', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('start() rejeita com UNKNOWN em vez de travar para sempre quando httpModule.start() nunca resolve', async () => {
+      // Promise que nunca resolve nem rejeita — simula o achado real em T-701.
+      mockHttpModule.start.mockReturnValue(new Promise(() => {}));
+
+      const startPromise = serverService.start('wifi');
+      // Engole a rejeição não tratada até o `await` abaixo observar — evita
+      // "Unhandled promise rejection" no console durante o avanço do timer.
+      startPromise.catch(() => {});
+
+      await jest.advanceTimersByTimeAsync(8000);
+
+      await expect(startPromise).rejects.toBeInstanceOf(ServerServiceError);
+      await expect(startPromise).rejects.toMatchObject({ code: 'UNKNOWN' });
+    });
+
+    it('findAvailablePort() propaga o timeout imediatamente, sem tentar as próximas 9 portas', async () => {
+      // httpModule.start nunca resolve na primeira tentativa (porta 8080).
+      mockHttpModule.start.mockReturnValue(new Promise(() => {}));
+
+      const startPromise = serverService.start('wifi');
+      startPromise.catch(() => {});
+
+      await jest.advanceTimersByTimeAsync(8000);
+      await expect(startPromise).rejects.toBeInstanceOf(ServerServiceError);
+
+      // Só uma tentativa: o timeout não é "porta em uso" (o texto contém "porta",
+      // que colidiria com a heurística de retry se não fosse pelo TIMEOUT_ERROR_NAME
+      // dedicado) — não deve iterar as 9 portas restantes do intervalo.
+      expect(mockHttpModule.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('stop() rejeita em vez de travar para sempre quando httpModule.stop() nunca resolve', async () => {
+      mockHttpModule.stop.mockReturnValue(new Promise(() => {}));
+
+      const stopPromise = serverService.stop();
+      stopPromise.catch(() => {});
+
+      await jest.advanceTimersByTimeAsync(8000);
+
+      await expect(stopPromise).rejects.toThrow('Tempo esgotado ao parar o servidor HTTP');
+    });
+
+    it('não rejeita por timeout quando httpModule.start()/stop() resolvem antes dos 8s', async () => {
+      mockHttpModule.stop.mockResolvedValue(undefined);
+
+      const result = await serverService.start('wifi');
+
+      expect(result.port).toBe(8080);
+      // Nenhum timer de 8s deveria continuar pendente após a resolução bem-sucedida
+      // (clearTimeout chamado) — confirmamos que avançar o tempo não causa efeito.
+      await jest.advanceTimersByTimeAsync(8000);
+    });
+  });
 });

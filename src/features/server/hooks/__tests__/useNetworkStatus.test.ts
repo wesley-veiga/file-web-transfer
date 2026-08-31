@@ -7,6 +7,12 @@
  * - State updates on network changes
  * - Error handling
  * - Memory leak prevention (cleanup on unmount)
+ *
+ * `ssid` sempre é `null` (achado de T-701: `expo-network` nunca expôs esse campo em
+ * `NetworkState` — ver comentário em `useNetworkStatus.ts`), então os testes abaixo
+ * verificam apenas que o hook nunca tenta popular `ssid` com um valor, em vez de
+ * cobrir variações de valor de SSID (o que testava uma lógica que nunca funcionou
+ * em produção — expo-network não fornece isso).
  */
 
 import { renderHook, waitFor, act } from '@testing-library/react-native';
@@ -24,9 +30,7 @@ const mockAddNetworkStateListener = Network.addNetworkStateListener as jest.Mock
 
 describe('useNetworkStatus (T-204)', () => {
   let mockListenerRemove: jest.Mock;
-  let capturedListener:
-    | ((state: { isConnected: boolean | null; type?: string; ssid?: string | number }) => void)
-    | null;
+  let capturedListener: ((state: { isConnected: boolean | null; type?: string }) => void) | null;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -38,15 +42,10 @@ describe('useNetworkStatus (T-204)', () => {
       isConnected: true,
       isInternetReachable: true,
       type: Network.NetworkStateType.WIFI,
-      ssid: 'TestNetwork',
-    } as Network.NetworkState);
+    });
 
     mockAddNetworkStateListener.mockImplementation(((
-      callback: (state: {
-        isConnected: boolean | null;
-        type?: string;
-        ssid?: string | number;
-      }) => void,
+      callback: (state: { isConnected: boolean | null; type?: string }) => void,
     ) => {
       capturedListener = callback;
       return {
@@ -61,37 +60,26 @@ describe('useNetworkStatus (T-204)', () => {
       expect(result.current).toBeDefined();
     });
 
-    it('sets up network state monitoring on mount', async () => {
-      const { result } = await renderHook(() => useNetworkStatus());
-      expect(result.current).toBeDefined();
-      // Hook internally calls getNetworkStateAsync and registers listener
-    });
-
     it('returns object with required properties', async () => {
       const { result } = await renderHook(() => useNetworkStatus());
-      if (result.current) {
-        expect(result.current).toHaveProperty('isConnected');
-        expect(result.current).toHaveProperty('ssid');
-      }
+      expect(result.current).toHaveProperty('isConnected');
+      expect(result.current).toHaveProperty('ssid');
     });
   });
 
   describe('State updates from getNetworkStateAsync', () => {
-    it('updates with WiFi network info', async () => {
+    it('updates with connected WiFi state', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: true,
         type: Network.NetworkStateType.WIFI,
-        ssid: 'HomeWiFi',
-      } as Network.NetworkState);
+      });
 
       const { result } = await renderHook(() => useNetworkStatus());
 
       await waitFor(() => {
-        if (result.current) {
-          expect(result.current.isConnected).toBe(true);
-          expect(result.current.ssid).toBe('HomeWiFi');
-        }
+        expect(result.current.isConnected).toBe(true);
       });
+      expect(result.current.ssid).toBeNull();
     });
 
     it('updates with disconnected state', async () => {
@@ -103,77 +91,12 @@ describe('useNetworkStatus (T-204)', () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
       await waitFor(() => {
-        if (result.current) {
-          expect(result.current.isConnected).toBe(false);
-        }
+        expect(result.current.isConnected).toBe(false);
       });
+      expect(result.current.ssid).toBeNull();
     });
 
-    it('handles missing SSID', async () => {
-      mockGetNetworkStateAsync.mockResolvedValueOnce({
-        isConnected: true,
-        type: Network.NetworkStateType.WIFI,
-      });
-
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      await waitFor(() => {
-        if (result.current) {
-          expect(result.current.ssid).toBeNull();
-        }
-      });
-    });
-
-    it('treats empty SSID as null', async () => {
-      mockGetNetworkStateAsync.mockResolvedValueOnce({
-        isConnected: true,
-        type: Network.NetworkStateType.WIFI,
-        ssid: '',
-      } as Network.NetworkState);
-
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      await waitFor(() => {
-        if (result.current) {
-          expect(result.current.ssid).toBeNull();
-        }
-      });
-    });
-
-    it('converts numeric SSID to string', async () => {
-      mockGetNetworkStateAsync.mockResolvedValueOnce({
-        isConnected: true,
-        type: Network.NetworkStateType.WIFI,
-        ssid: 123 as unknown as string | number,
-      } as Network.NetworkState);
-
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      await waitFor(() => {
-        if (result.current) {
-          expect(result.current.ssid).toBe('123');
-        }
-      });
-    });
-
-    it('preserves SSID with special characters', async () => {
-      const ssid = 'Café-WiFi-😊';
-      mockGetNetworkStateAsync.mockResolvedValueOnce({
-        isConnected: true,
-        type: Network.NetworkStateType.WIFI,
-        ssid,
-      } as Network.NetworkState);
-
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      await waitFor(() => {
-        if (result.current) {
-          expect(result.current.ssid).toBe(ssid);
-        }
-      });
-    });
-
-    it('handles undefined isConnected', async () => {
+    it('handles undefined isConnected as false', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: undefined,
         type: Network.NetworkStateType.NONE,
@@ -182,13 +105,11 @@ describe('useNetworkStatus (T-204)', () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
       await waitFor(() => {
-        if (result.current) {
-          expect(result.current.isConnected).toBe(false);
-        }
+        expect(result.current.isConnected).toBe(false);
       });
     });
 
-    it('handles null isConnected', async () => {
+    it('handles null isConnected as false', async () => {
       mockGetNetworkStateAsync.mockResolvedValueOnce({
         isConnected: null,
         type: Network.NetworkStateType.NONE,
@@ -197,9 +118,7 @@ describe('useNetworkStatus (T-204)', () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
       await waitFor(() => {
-        if (result.current) {
-          expect(result.current.isConnected).toBe(false);
-        }
+        expect(result.current.isConnected).toBe(false);
       });
     });
   });
@@ -211,11 +130,9 @@ describe('useNetworkStatus (T-204)', () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
       await waitFor(() => {
-        if (result.current) {
-          expect(result.current.isConnected).toBe(false);
-          expect(result.current.ssid).toBeNull();
-        }
+        expect(result.current.isConnected).toBe(false);
       });
+      expect(result.current.ssid).toBeNull();
     });
 
     it('handles non-Error rejection', async () => {
@@ -224,88 +141,49 @@ describe('useNetworkStatus (T-204)', () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
       await waitFor(() => {
-        if (result.current) {
-          expect(result.current.isConnected).toBe(false);
-        }
+        expect(result.current.isConnected).toBe(false);
       });
     });
   });
 
   describe('Listener callback updates', () => {
-    it('processes listener events with network info', async () => {
+    it('processes connection event from listener', async () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
-      if (capturedListener) {
-        act(() => {
-          capturedListener!({
-            isConnected: true,
-            type: 'wifi',
-            ssid: 'UpdatedNetwork',
-          });
-        });
-      }
+      expect(capturedListener).not.toBeNull();
+      await act(async () => {
+        capturedListener!({ isConnected: true, type: 'wifi' });
+      });
 
       await waitFor(() => {
-        if (result.current) {
-          expect(result.current).toBeDefined();
-        }
+        expect(result.current.isConnected).toBe(true);
       });
+      expect(result.current.ssid).toBeNull();
     });
 
-    it('processes disconnection event', async () => {
+    it('processes disconnection event from listener', async () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
-      if (capturedListener) {
-        act(() => {
-          capturedListener!({
-            isConnected: false,
-            type: 'none',
-          });
-        });
-      }
+      expect(capturedListener).not.toBeNull();
+      await act(async () => {
+        capturedListener!({ isConnected: false, type: 'none' });
+      });
 
       await waitFor(() => {
-        if (result.current) {
-          expect(result.current).toBeDefined();
-        }
+        expect(result.current.isConnected).toBe(false);
       });
     });
 
     it('handles listener with null isConnected', async () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
-      if (capturedListener) {
-        act(() => {
-          capturedListener!({
-            isConnected: null,
-            type: 'none',
-          });
-        });
-      }
-
-      await waitFor(() => {
-        if (result.current) {
-          expect(result.current.isConnected).toBe(false);
-        }
+      expect(capturedListener).not.toBeNull();
+      await act(async () => {
+        capturedListener!({ isConnected: null, type: 'none' });
       });
-    });
-
-    it('handles listener without ssid field', async () => {
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      if (capturedListener) {
-        act(() => {
-          capturedListener!({
-            isConnected: true,
-            type: 'cellular',
-          });
-        });
-      }
 
       await waitFor(() => {
-        if (result.current) {
-          expect(result.current.ssid).toBeNull();
-        }
+        expect(result.current.isConnected).toBe(false);
       });
     });
 
@@ -313,49 +191,34 @@ describe('useNetworkStatus (T-204)', () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
       const updates = [
-        { isConnected: true, type: 'wifi', ssid: 'Net1' },
-        { isConnected: true, type: 'wifi', ssid: 'Net2' },
+        { isConnected: true, type: 'wifi' },
         { isConnected: false, type: 'none' },
+        { isConnected: true, type: 'cellular' },
       ];
 
       for (const update of updates) {
-        if (capturedListener) {
-          act(() => {
-            capturedListener!(update);
-          });
-        }
+        await act(async () => {
+          capturedListener!(update);
+        });
       }
 
-      expect(result.current).toBeDefined();
+      expect(result.current.isConnected).toBe(true);
     });
 
-    it('handles malformed listener state', async () => {
+    it('handles malformed listener state without throwing', async () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
-      if (capturedListener) {
-        expect(() => {
-          act(() => {
-            capturedListener!({
-              isConnected: 'invalid' as unknown as boolean,
-            });
-          });
-        }).not.toThrow();
-      }
+      expect(() => {
+        act(() => {
+          capturedListener!({ isConnected: 'invalid' as unknown as boolean });
+        });
+      }).not.toThrow();
 
       expect(result.current).toBeDefined();
     });
   });
 
   describe('Return value contract', () => {
-    it('returns object with required properties', async () => {
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      if (result.current) {
-        expect(result.current).toHaveProperty('isConnected');
-        expect(result.current).toHaveProperty('ssid');
-      }
-    });
-
     it('isConnected is boolean', async () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
@@ -366,66 +229,12 @@ describe('useNetworkStatus (T-204)', () => {
       });
     });
 
-    it('ssid is string or null', async () => {
+    it('ssid is always null (expo-network não fornece SSID — ver comentário do hook)', async () => {
       const { result } = await renderHook(() => useNetworkStatus());
 
       await waitFor(() => {
         if (result.current) {
-          expect(result.current.ssid === null || typeof result.current.ssid === 'string').toBe(
-            true,
-          );
-        }
-      });
-    });
-  });
-
-  describe('Edge cases', () => {
-    it('handles network state with extra properties', async () => {
-      mockGetNetworkStateAsync.mockResolvedValueOnce({
-        isConnected: true,
-        type: Network.NetworkStateType.WIFI,
-        ssid: 'Test',
-        extra: 'ignored',
-      } as Network.NetworkState);
-
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      await waitFor(() => {
-        if (result.current) {
-          expect(result.current.isConnected).toBe(true);
-        }
-      });
-    });
-
-    it('handles numeric 0 as SSID', async () => {
-      mockGetNetworkStateAsync.mockResolvedValueOnce({
-        isConnected: true,
-        type: Network.NetworkStateType.WIFI,
-        ssid: 0 as unknown as number,
-      } as Network.NetworkState);
-
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      await waitFor(() => {
-        if (result.current) {
-          expect(result.current.ssid).toBe('0');
-        }
-      });
-    });
-
-    it('handles very long SSID', async () => {
-      const longSsid = 'A'.repeat(255);
-      mockGetNetworkStateAsync.mockResolvedValueOnce({
-        isConnected: true,
-        type: Network.NetworkStateType.WIFI,
-        ssid: longSsid,
-      } as Network.NetworkState);
-
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      await waitFor(() => {
-        if (result.current) {
-          expect(result.current.ssid).toBe(longSsid);
+          expect(result.current.ssid).toBeNull();
         }
       });
     });
@@ -433,73 +242,9 @@ describe('useNetworkStatus (T-204)', () => {
 
   describe('Cleanup and memory', () => {
     it('provides mechanism for cleaning up listener subscription', () => {
-      // The hook sets up listener cleanup via isMounted flag in useEffect cleanup
+      // O hook faz cleanup do listener via isMounted flag + subscription.remove()
+      // no retorno do useEffect (lógica não alterada por este fix — ver useNetworkStatus.ts).
       expect(typeof mockListenerRemove).toBe('function');
-    });
-  });
-
-  describe('isMounted flag branches (line 29, 38, 50 coverage)', () => {
-    it('line 29: updates state in try block when mounted during resolution', async () => {
-      mockGetNetworkStateAsync.mockResolvedValueOnce({
-        isConnected: true,
-        type: Network.NetworkStateType.WIFI,
-        ssid: 'SuccessNetwork',
-      } as Network.NetworkState);
-
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      // Wait for line 29-35 to execute (isMounted is true, setNetworkStatus called)
-      await waitFor(() => {
-        if (result.current) {
-          expect(result.current.ssid).toBe('SuccessNetwork');
-        }
-      });
-    });
-
-    it('line 38: updates state in catch block when mounted after error', async () => {
-      mockGetNetworkStateAsync.mockRejectedValueOnce(new Error('Network failed'));
-
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      // Wait for line 38-42 to execute (isMounted is true, setNetworkStatus in catch)
-      await waitFor(() => {
-        if (result.current) {
-          expect(result.current.isConnected).toBe(false);
-          expect(result.current.ssid).toBeNull();
-        }
-      });
-    });
-
-    it('line 50: listener updates state when mounted via callback', async () => {
-      mockGetNetworkStateAsync.mockResolvedValueOnce({
-        isConnected: true,
-        type: Network.NetworkStateType.WIFI,
-        ssid: 'Initial',
-      } as Network.NetworkState);
-
-      const { result } = await renderHook(() => useNetworkStatus());
-
-      await waitFor(() => {
-        expect(result.current).toBeDefined();
-      });
-
-      // Trigger listener callback (line 49-58) with isMounted = true
-      if (capturedListener) {
-        await act(async () => {
-          capturedListener!({
-            isConnected: true,
-            type: 'wifi',
-            ssid: 'ListenerUpdate',
-          });
-        });
-
-        await waitFor(() => {
-          if (result.current) {
-            // Line 50-56 executed: isMounted is true, setNetworkStatus in listener
-            expect(result.current.ssid).toBe('ListenerUpdate');
-          }
-        });
-      }
     });
   });
 });

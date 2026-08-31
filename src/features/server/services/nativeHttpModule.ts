@@ -12,7 +12,7 @@
  *
  * ## Escopo deliberadamente reduzido
  * Este não é um servidor HTTP completo — é o mínimo necessário para atender as rotas de
- * `src/app/apiSetup.ts`:
+ * `src/bootstrap/apiSetup.ts`:
  * - Sem suporte a `Transfer-Encoding: chunked` (os clientes desta API sempre mandam
  *   `Content-Length`, seja no upload multipart, seja nos requests GET sem corpo).
  * - Sem keep-alive/pipelining: cada conexão atende exatamente um request e a resposta

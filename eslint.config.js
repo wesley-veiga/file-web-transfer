@@ -61,6 +61,11 @@ module.exports = defineConfig([
       'boundaries/elements': [
         { type: 'app', pattern: 'src/app/**', partialMatch: false },
         {
+          type: 'bootstrap',
+          pattern: 'src/bootstrap/**',
+          partialMatch: false,
+        },
+        {
           type: 'feature',
           pattern: 'src/features/*/**',
           capture: ['feature'],
@@ -76,10 +81,22 @@ module.exports = defineConfig([
         {
           default: 'disallow',
           policies: [
-            // src/app pode importar de features, de shared e da web-ui (HTML/CSS/JS
-            // servido em GET / — ver src/web-ui/webUiHtml.ts).
+            // src/app pode importar de features, de shared, da web-ui (HTML/CSS/JS
+            // servido em GET / — ver src/web-ui/webUiHtml.ts) e da composição em
+            // src/bootstrap (initServer(), chamado uma única vez em _layout.tsx).
             {
               from: { element: { types: 'app' } },
+              allow: {
+                to: { element: { types: { anyOf: ['feature', 'shared', 'web-ui', 'bootstrap'] } } },
+              },
+            },
+            // src/bootstrap é a composition root: único lugar autorizado a importar de
+            // múltiplas features ao mesmo tempo (apiSetup.ts/serverBootstrap.ts, T-405/
+            // T-602) — mora fora de src/app/ porque o Expo Router trata todo .ts/.tsx
+            // dentro de src/app/ como candidato a rota (ver docs.expo.dev/router, "Non-
+            // navigation components live outside the src/app directory").
+            {
+              from: { element: { types: 'bootstrap' } },
               allow: { to: { element: { types: { anyOf: ['feature', 'shared', 'web-ui'] } } } },
             },
             // features podem importar de shared...

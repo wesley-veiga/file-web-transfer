@@ -8,10 +8,14 @@ export interface NetworkStatus {
 
 /**
  * Hook que monitora o status da rede disponível no dispositivo.
- * Retorna se há rede disponível (Wi-Fi ou móvel) e o SSID quando possível.
+ * Retorna se há rede disponível (Wi-Fi ou móvel).
  *
- * Nota: SSID nem sempre está disponível em iOS sem permissões adicionais,
- * mas a informação de conectividade sempre funciona.
+ * `ssid` sempre retorna `null`: `expo-network` (a lib usada aqui) nunca expôs esse
+ * campo em `NetworkState` (só `type`/`isConnected`/`isInternetReachable`) — obter o
+ * SSID real exigiria um módulo nativo dedicado (ex.: `react-native-wifi-reborn`),
+ * que no Android também exige permissão de localização em runtime. Fica como
+ * limitação conhecida (HU-01) até essa decisão de produto/permissão ser tomada;
+ * o campo é mantido na interface para não quebrar quem já lê `networkStatus.ssid`.
  */
 export function useNetworkStatus(): NetworkStatus {
   const [networkStatus, setNetworkStatus] = useState<NetworkStatus>({
@@ -29,9 +33,7 @@ export function useNetworkStatus(): NetworkStatus {
         if (isMounted) {
           setNetworkStatus({
             isConnected: state.isConnected ?? false,
-            ssid: (state as unknown as Record<string, unknown>).ssid
-              ? String((state as unknown as Record<string, unknown>).ssid)
-              : null,
+            ssid: null,
           });
         }
       } catch {
@@ -50,9 +52,7 @@ export function useNetworkStatus(): NetworkStatus {
       if (isMounted) {
         setNetworkStatus({
           isConnected: state.isConnected ?? false,
-          ssid: (state as unknown as Record<string, unknown>).ssid
-            ? String((state as unknown as Record<string, unknown>).ssid)
-            : null,
+          ssid: null,
         });
       }
     });

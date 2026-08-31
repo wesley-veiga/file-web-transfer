@@ -4,6 +4,58 @@ import type { ServerErrorCode, NetworkMode } from '../types';
 import type { HttpModule } from './httpModule';
 
 /**
+ * Tempo máximo de espera por uma chamada ao `HttpModule` nativo (`start`/`stop`).
+ *
+ * Achado em T-701 (teste manual em dispositivo real, Android): a Promise nativa do
+ * `HttpModule` pode nunca resolver nem rejeitar em determinadas condições de
+ * hardware, deixando `ServerServiceImpl.start()` — e a UI, presa em `starting` —
+ * travados indefinidamente ("loading infinito"). `withTimeout` garante que toda
+ * chamada ao módulo nativo sempre termine (com sucesso ou erro mapeável), nunca
+ * trava para sempre.
+ */
+const NATIVE_CALL_TIMEOUT_MS = 8000;
+
+/**
+ * Nome usado para marcar o erro lançado por `withTimeout` — permite que quem
+ * captura o erro distinga "a chamada nativa nunca respondeu" de outros erros sem
+ * depender do texto da mensagem (que poderia colidir com heurísticas de texto como
+ * a de `findAvailablePort()`, que procura por "porta em uso" na mensagem).
+ */
+const TIMEOUT_ERROR_NAME = 'NativeCallTimeoutError';
+
+/**
+ * Rejeita com `timeoutMessage` (erro nomeado `TIMEOUT_ERROR_NAME`) se `promise` não
+ * resolver/rejeitar dentro de `ms`. Não cancela a `promise` original (não há como,
+ * para uma Promise nativa) — apenas garante que quem está aguardando nunca fique
+ * travado esperando por ela.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMessage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const timeoutError = new Error(timeoutMessage);
+      timeoutError.name = TIMEOUT_ERROR_NAME;
+      reject(timeoutError);
+    }, ms);
+
+    // `Promise.resolve(promise)` (em vez de `promise.then(...)` direto) protege
+    // contra uma implementação de `HttpModule` que não retorne uma Promise de
+    // verdade (ex.: mock de teste sem valor configurado, ou módulo nativo que
+    // devolva `undefined`) — sem isso, `.then` de `undefined` lançaria antes
+    // mesmo do timeout ter chance de proteger a chamada.
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
  * Resultado de `ServerService.start()`: informações necessárias para popular `ServerInfo`.
  */
 export interface ServerStartResult {
@@ -74,7 +126,11 @@ export class ServerServiceImpl implements ServerService {
       }
 
       // Iniciar servidor HTTP na porta encontrada
-      await this.httpModule.start(port);
+      await withTimeout(
+        this.httpModule.start(port),
+        NATIVE_CALL_TIMEOUT_MS,
+        'Tempo esgotado ao iniciar o servidor HTTP',
+      );
 
       // Gerar sessionId
       const sessionId = generateSessionId();
@@ -109,7 +165,11 @@ export class ServerServiceImpl implements ServerService {
   }
 
   async stop(): Promise<void> {
-    await this.httpModule.stop();
+    await withTimeout(
+      this.httpModule.stop(),
+      NATIVE_CALL_TIMEOUT_MS,
+      'Tempo esgotado ao parar o servidor HTTP',
+    );
   }
 
   isRunning(): boolean {
@@ -154,14 +214,30 @@ export class ServerServiceImpl implements ServerService {
     for (let port = this.minPort; port <= this.maxPort; port++) {
       try {
         // Tentar iniciar na porta
-        await this.httpModule.start(port);
+        await withTimeout(
+          this.httpModule.start(port),
+          NATIVE_CALL_TIMEOUT_MS,
+          'Tempo esgotado ao testar disponibilidade de porta',
+        );
 
         // Se chegou aqui, porta está disponível
         // Parar servidor imediatamente (será reiniciado em start() com dados finais)
-        await this.httpModule.stop();
+        await withTimeout(
+          this.httpModule.stop(),
+          NATIVE_CALL_TIMEOUT_MS,
+          'Tempo esgotado ao liberar porta de teste',
+        );
 
         return port;
       } catch (error) {
+        // Timeout: a chamada nativa nunca respondeu — não é "porta em uso", não
+        // adianta tentar a próxima (o módulo nativo provavelmente está travado
+        // para qualquer porta). Propaga imediatamente em vez de repetir o timeout
+        // até 10x (achado em T-701 — ver comentário de `NATIVE_CALL_TIMEOUT_MS`).
+        if (error instanceof Error && error.name === TIMEOUT_ERROR_NAME) {
+          throw error;
+        }
+
         // Se erro é "porta em uso", tenta a próxima
         if (error instanceof Error) {
           const message = error.message.toLowerCase();
