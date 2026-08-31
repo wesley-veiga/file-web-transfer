@@ -19,10 +19,15 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import TabsLayout from '../_layout';
 
+interface TabScreenOptions {
+  title?: string;
+  tabBarIcon?: (props: { focused: boolean; size: number; color: string }) => React.ReactNode;
+}
+
 jest.mock('expo-router', () => {
   const ReactActual = jest.requireActual('react');
 
-  const TabsScreen = (props: { name: string; options?: { title?: string } }) =>
+  const TabsScreen = (props: { name: string; options?: TabScreenOptions }) =>
     ReactActual.createElement('Tabs.Screen', { name: props.name, ...props.options });
 
   const Tabs = (props: { children?: React.ReactNode }) =>
@@ -37,7 +42,7 @@ function findTabScreens(container: {
   queryAll: (predicate: (i: { type: string }) => boolean) => unknown[];
 }) {
   return container.queryAll((instance) => instance.type === 'Tabs.Screen') as {
-    props: Record<string, unknown>;
+    props: Record<string, unknown> & Partial<TabScreenOptions>;
   }[];
 }
 
@@ -90,6 +95,32 @@ describe('TabsLayout ((tabs)/_layout.tsx)', () => {
     expect(screens.length).toBeGreaterThan(0);
     screens.forEach((screen) => {
       expect(screen.props.title).toBeTruthy();
+    });
+  });
+
+  it('declara `tabBarIcon` em todas as abas (regressão do MissingIcon, T-701)', async () => {
+    // Sem `tabBarIcon`, o <Tabs> do expo-router cai no fallback `MissingIcon` do
+    // react-navigation — um glifo que a fonte do Android não renderiza, aparecendo
+    // como o quadrado-com-X visto em teste manual em dispositivo real.
+    const { container } = await render(<TabsLayout />);
+    const screens = findTabScreens(container);
+
+    expect(screens.length).toBeGreaterThan(0);
+    screens.forEach((screen) => {
+      expect(typeof screen.props.tabBarIcon).toBe('function');
+    });
+  });
+
+  it('cada `tabBarIcon` retorna um elemento com um símbolo definido ao ser chamado', async () => {
+    const { container } = await render(<TabsLayout />);
+    const screens = findTabScreens(container);
+
+    screens.forEach((screen) => {
+      const icon = screen.props.tabBarIcon?.({ focused: false, size: 24, color: '#000' }) as
+        React.ReactElement<{ symbol: string }> | undefined;
+
+      expect(icon).toBeDefined();
+      expect(icon?.props.symbol).toBeTruthy();
     });
   });
 });
