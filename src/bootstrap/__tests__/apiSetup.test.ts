@@ -2570,6 +2570,162 @@ describe('apiSetup — registerUploadRoute', () => {
     });
   });
 
+  describe('T-802 — moveReceivedFileToConfiguredFolder na rota de upload', () => {
+    it('com pasta configurada, arquivo é movido com sucesso', async () => {
+      const maxUploadBytes = 1000000;
+
+      let capturedHandler: (
+        chunk: HttpUploadChunk,
+        request: Omit<HttpServerRequest, 'body'>,
+      ) => Promise<HttpServerResponse> = () => {
+        throw new Error('Handler não foi registrado');
+      };
+
+      mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
+        capturedHandler = handler as typeof capturedHandler;
+      });
+
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+
+      const originalEntry: FileEntry = {
+        id: '550e8400-e29b-41d4-a716-446655440021',
+        name: 'test.txt',
+        sizeBytes: 11,
+        mimeType: 'text/plain',
+        localUri: 'file:///received/test.txt',
+        origin: 'received',
+        createdAt: Date.now(),
+      };
+
+      const movedEntry: FileEntry = {
+        ...originalEntry,
+        localUri:
+          'content://com.android.externalstorage.documents/tree/primary%3ADownload/test.txt',
+      };
+
+      const mockWriteHandle = {
+        id: originalEntry.id,
+        finalName: 'test.txt',
+        writeChunk: jest.fn().mockResolvedValue(undefined),
+        finish: jest.fn().mockResolvedValue(originalEntry),
+        abort: jest.fn().mockResolvedValue(undefined),
+      };
+
+      mockFileRepository.beginStreamedWrite.mockResolvedValue(mockWriteHandle);
+      mockFileRepository.moveReceivedFileToConfiguredFolder.mockResolvedValue(movedEntry);
+      mockFileRepository.toDto.mockReturnValue({
+        id: movedEntry.id,
+        name: movedEntry.name,
+        sizeBytes: movedEntry.sizeBytes,
+        mimeType: movedEntry.mimeType,
+        createdAt: movedEntry.createdAt,
+      });
+
+      const boundary = '----WebKitFormBoundary';
+      const uploadBody =
+        `------WebKitFormBoundary\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="test.txt"\r\n` +
+        `Content-Type: text/plain\r\n` +
+        `\r\n` +
+        `Hello World\r\n` +
+        `------WebKitFormBoundary--\r\n`;
+
+      const chunk: HttpUploadChunk = {
+        requestId: 'req-2',
+        data: uploadBody,
+        isLast: true,
+      };
+
+      const request = {
+        method: 'POST',
+        path: '/api/upload',
+        headers: { 'content-type': 'multipart/form-data; boundary=----WebKitFormBoundary' },
+      };
+
+      const response = await capturedHandler(chunk, request);
+
+      expect(response.statusCode).toBe(201);
+      expect(mockFileRepository.moveReceivedFileToConfiguredFolder).toHaveBeenCalledWith(
+        originalEntry,
+      );
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.file.name).toBe('test.txt');
+      expect(body.file).not.toHaveProperty('localUri');
+    });
+
+    it('falha no move (hash mismatch): retorna 500 RECEIVED_FOLDER_MOVE_FAILED, arquivo preservado na sandbox', async () => {
+      const maxUploadBytes = 1000000;
+
+      let capturedHandler: (
+        chunk: HttpUploadChunk,
+        request: Omit<HttpServerRequest, 'body'>,
+      ) => Promise<HttpServerResponse> = () => {
+        throw new Error('Handler não foi registrado');
+      };
+
+      mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
+        capturedHandler = handler as typeof capturedHandler;
+      });
+
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+
+      const originalEntry: FileEntry = {
+        id: '550e8400-e29b-41d4-a716-446655440022',
+        name: 'test.txt',
+        sizeBytes: 11,
+        mimeType: 'text/plain',
+        localUri: 'file:///received/test.txt',
+        origin: 'received',
+        createdAt: Date.now(),
+      };
+
+      const mockWriteHandle = {
+        id: originalEntry.id,
+        finalName: 'test.txt',
+        writeChunk: jest.fn().mockResolvedValue(undefined),
+        finish: jest.fn().mockResolvedValue(originalEntry),
+        abort: jest.fn().mockResolvedValue(undefined),
+      };
+
+      mockFileRepository.beginStreamedWrite.mockResolvedValue(mockWriteHandle);
+      mockFileRepository.moveReceivedFileToConfiguredFolder.mockRejectedValue(
+        new Error(
+          'Falha na verificação de integridade: hash do arquivo não corresponde. Arquivo preservado na sandbox.',
+        ),
+      );
+
+      const boundary = '----WebKitFormBoundary';
+      const uploadBody =
+        `------WebKitFormBoundary\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="test.txt"\r\n` +
+        `Content-Type: text/plain\r\n` +
+        `\r\n` +
+        `Hello World\r\n` +
+        `------WebKitFormBoundary--\r\n`;
+
+      const chunk: HttpUploadChunk = {
+        requestId: 'req-3',
+        data: uploadBody,
+        isLast: true,
+      };
+
+      const request = {
+        method: 'POST',
+        path: '/api/upload',
+        headers: { 'content-type': 'multipart/form-data; boundary=----WebKitFormBoundary' },
+      };
+
+      const response = await capturedHandler(chunk, request);
+
+      expect(response.statusCode).toBe(500);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('RECEIVED_FOLDER_MOVE_FAILED');
+      expect(body.error.message).toContain('Falha ao finalizar o arquivo');
+    });
+  });
+
   describe('branches de erro adicionais (cobertura)', () => {
     it('reenvia o mesmo erro para chunks subsequentes após o upload já ter falhado, e limpa o estado no isLast', async () => {
       const maxUploadBytes = 1000000;

@@ -1870,5 +1870,228 @@ describe('FileRepository', () => {
       expect(fileContents.has(result.localUri)).toBe(true);
       expect(fileContents.has(entry.localUri)).toBe(false);
     });
+
+    it('hash mismatch: deleta cópia corrompida, preserva original na sandbox, lança erro', async () => {
+      // Configurar pasta de recebidos
+      await repository.setReceivedFolderUri(
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+      );
+
+      const entry: FileEntry = {
+        id: 'test-id',
+        name: 'document.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///mock-docs/received/document.pdf',
+        origin: 'received',
+        createdAt: Date.now(),
+      };
+
+      const originalContent = 'UEsDBAoAAA=='; // Conteúdo original
+      fileContents.set(entry.localUri, originalContent);
+
+      const destinationUri =
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload/document.pdf';
+
+      // Rastrear chamadas de readAsStringAsync (exceto para metadados de pasta)
+      let readCallCount = 0;
+      const originalReadAsStringAsync = (
+        mockFs.readAsStringAsync as jest.Mock
+      ).getMockImplementation();
+      (mockFs.readAsStringAsync as jest.Mock).mockImplementation(
+        async (uri: string, options?: { encoding?: string }) => {
+          // Se é o arquivo de metadados de pasta configurada, usar comportamento original
+          if (uri.includes('.receivedFolder.meta.json')) {
+            return originalReadAsStringAsync!(uri, options);
+          }
+
+          // Caso contrário, simular hash mismatch
+          readCallCount++;
+          if (readCallCount === 1) {
+            // Primeira leitura — arquivo original (mantem conteúdo correto)
+            return fileContents.get(uri) || originalContent;
+          } else if (readCallCount === 2) {
+            // Segunda leitura — arquivo copiado (simular corrupção)
+            return 'CORRUPTED_DIFFERENT_HASH=='; // Conteúdo diferente = hash diferente
+          }
+          // Para outras chamadas, usar comportamento do fileContents
+          if (!fileContents.has(uri)) {
+            throw new Error('File not found');
+          }
+          return fileContents.get(uri) || '';
+        },
+      );
+
+      // copyAsync ainda copia para fileContents (comportamento normal)
+      (mockFs.copyAsync as jest.Mock).mockImplementation(async ({ from, to }) => {
+        const content = fileContents.get(from);
+        if (content !== undefined) {
+          fileContents.set(to, content);
+        } else {
+          throw new Error('Source file not found');
+        }
+      });
+
+      await expect(repository.moveReceivedFileToConfiguredFolder(entry)).rejects.toThrow(
+        /Falha na verificação de integridade|hash do arquivo não corresponde/,
+      );
+
+      // Verificar que a cópia corrompida foi deletada
+      expect(mockFs.deleteAsync).toHaveBeenCalledWith(destinationUri);
+
+      // Verificar que o original NÃO foi deletado (não deve ter chamada de deleteAsync com entry.localUri)
+      const deleteAsyncCalls = (mockFs.deleteAsync as jest.Mock).mock.calls;
+      const deletedOriginal = deleteAsyncCalls.some((call) => call[0] === entry.localUri);
+      expect(deletedOriginal).toBe(false);
+    });
+
+    it('falha no copyAsync: não toca original, lança erro', async () => {
+      // Configurar pasta de recebidos
+      await repository.setReceivedFolderUri(
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+      );
+
+      const entry: FileEntry = {
+        id: 'test-id',
+        name: 'document.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///mock-docs/received/document.pdf',
+        origin: 'received',
+        createdAt: Date.now(),
+      };
+
+      const fileContent = 'UEsDBAoAAA==';
+      fileContents.set(entry.localUri, fileContent);
+
+      // Mock copyAsync para falhar
+      (mockFs.copyAsync as jest.Mock).mockRejectedValue(
+        new Error('Permission denied copying file'),
+      );
+
+      await expect(repository.moveReceivedFileToConfiguredFolder(entry)).rejects.toThrow(
+        /Falha ao copiar arquivo para pasta configurada/,
+      );
+
+      // Verificar que nenhuma tentativa de deletar o original foi feita
+      const deleteAsyncCalls = (mockFs.deleteAsync as jest.Mock).mock.calls;
+      const deletedOriginal = deleteAsyncCalls.some((call) => call[0] === entry.localUri);
+      expect(deletedOriginal).toBe(false);
+
+      // Original deve estar ainda presente
+      expect(fileContents.has(entry.localUri)).toBe(true);
+    });
+
+    it('entrada não encontrada em metadados: ainda assim atualiza a cópia (metadados não têm essa entrada)', async () => {
+      // Configurar pasta de recebidos
+      await repository.setReceivedFolderUri(
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+      );
+
+      const entry: FileEntry = {
+        id: 'orphan-id',
+        name: 'document.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///mock-docs/received/document.pdf',
+        origin: 'received',
+        createdAt: Date.now(),
+      };
+
+      const fileContent = 'UEsDBAoAAA==';
+      fileContents.set(entry.localUri, fileContent);
+
+      // Mock loadMetadata para retornar um array vazio (entry não existe nos metadados)
+      const originalLoadMetadata = (mockFs.readAsStringAsync as jest.Mock).getMockImplementation();
+      let loadMetadataCallCount = 0;
+      (mockFs.readAsStringAsync as jest.Mock).mockImplementation(
+        async (uri: string, options?: { encoding?: string }) => {
+          // Se é o arquivo de metadados de pasta configurada, usar comportamento original
+          if (uri.includes('.receivedFolder.meta.json')) {
+            return originalLoadMetadata!(uri, options);
+          }
+          // Se é metadados de recebidos, retornar array com outro arquivo (não contém nosso entry)
+          if (uri.includes('received') && uri.includes('.meta')) {
+            loadMetadataCallCount++;
+            return JSON.stringify([
+              {
+                id: 'other-id',
+                name: 'other.txt',
+                sizeBytes: 100,
+                mimeType: 'text/plain',
+                localUri: 'file:///mock-docs/received/other.txt',
+                createdAt: Date.now() - 1000,
+              },
+            ]);
+          }
+          // Caso contrário, simular leitura normal
+          if (!fileContents.has(uri)) {
+            throw new Error('File not found');
+          }
+          return fileContents.get(uri) || '';
+        },
+      );
+
+      const result = await repository.moveReceivedFileToConfiguredFolder(entry);
+
+      // Arquivo deve ter sido movido com sucesso mesmo se não estava nos metadados
+      const destinationUri =
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload/document.pdf';
+      expect(result.localUri).toBe(destinationUri);
+
+      // Arquivo deve estar APENAS no novo local
+      expect(fileContents.has(destinationUri)).toBe(true);
+      expect(fileContents.has(entry.localUri)).toBe(false);
+    });
+
+    it('falha ao deletar original após hash conferir: lança erro específico, cópia já segura', async () => {
+      // Configurar pasta de recebidos
+      await repository.setReceivedFolderUri(
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+      );
+
+      const entry: FileEntry = {
+        id: 'test-id',
+        name: 'document.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///mock-docs/received/document.pdf',
+        origin: 'received',
+        createdAt: Date.now(),
+      };
+
+      const fileContent = 'UEsDBAoAAA==';
+      fileContents.set(entry.localUri, fileContent);
+
+      // Track deleteAsync calls
+      let deleteCallCount = 0;
+      const originalDeleteAsync = mockFs.deleteAsync as jest.Mock;
+      (mockFs.deleteAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        deleteCallCount++;
+        // Primeira chamada (deletar cópia corrompida se hash não bater) — sucesso
+        // Segunda chamada (deletar original) — FALHA
+        if (deleteCallCount === 2) {
+          throw new Error('Failed to delete original: Storage error');
+        }
+        // Chamar implementação original para a primeira chamada
+        return originalDeleteAsync.mock.results[deleteCallCount - 1]?.value;
+      });
+
+      // Precisamos fazer a chamada falhar na segunda tentativa de deleteAsync
+      // Re-implementar o mock de deleteAsync inteiramente
+      (mockFs.deleteAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        if (uri === entry.localUri) {
+          throw new Error('Failed to delete original: Storage error');
+        }
+        // Sucesso para outras URIs
+      });
+
+      await expect(repository.moveReceivedFileToConfiguredFolder(entry)).rejects.toThrow(
+        /Arquivo copiado com sucesso para pasta configurada, mas falha ao limpar sandbox/,
+      );
+
+      // Verificar que deleteAsync foi chamado com o URI original
+      expect(mockFs.deleteAsync).toHaveBeenCalledWith(entry.localUri);
+    });
   });
 });
