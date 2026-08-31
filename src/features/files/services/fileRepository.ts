@@ -96,6 +96,55 @@ export interface FileRepository {
   ) => Promise<FileEntry>;
 
   /**
+   * Vincula um arquivo já existente ao repositório SEM copiá-lo (T-701 —
+   * "compartilhar por pasta sem duplicar").
+   *
+   * Diferença central para `saveFromUri()`: `localUri` da entrada criada é o
+   * PRÓPRIO `sourceUri` (nunca uma cópia dentro da sandbox), e a entrada nasce
+   * com `linked: true` — `remove()` de uma entrada vinculada nunca apaga o
+   * arquivo real, só o registro de metadados (desvincula).
+   *
+   * Usado para arquivos de uma pasta vinculada via Storage Access Framework:
+   * evita duplicar o conteúdo (útil sobretudo para arquivos grandes) e reflete
+   * automaticamente qualquer alteração posterior do arquivo original, já que
+   * nada foi copiado.
+   *
+   * @param sourceUri - URI do arquivo original (ex.: URI SAF `content://...`)
+   * @param desiredName - Nome desejado (será sanitizado)
+   * @param mimeType - MIME type (ex.: "image/jpeg")
+   * @param sizeBytes - Tamanho do arquivo em bytes
+   * @param origin - Origem do arquivo (na prática, sempre 'shared')
+   * @returns FileEntry criado com `linked: true`
+   * @throws Error se falhar ao criar diretório ou atualizar metadados
+   */
+  linkFromUri: (
+    sourceUri: string,
+    desiredName: string,
+    mimeType: string,
+    sizeBytes: number,
+    origin: FileOrigin,
+  ) => Promise<FileEntry>;
+
+  /**
+   * Lê a URI da pasta vinculada para compartilhamento (T-701), se houver.
+   *
+   * Persistida num arquivo pequeno dentro da sandbox (não o conteúdo da
+   * pasta — só a referência), sobrevive a reinícios do app enquanto a
+   * permissão SAF concedida pelo usuário continuar válida.
+   *
+   * @returns URI da pasta vinculada, ou `null` se nenhuma foi vinculada ainda
+   */
+  getLinkedFolderUri: () => Promise<string | null>;
+
+  /**
+   * Define (ou remove, passando `null`) a URI da pasta vinculada para
+   * compartilhamento (T-701).
+   *
+   * @param uri - URI SAF da pasta, ou `null` para desvincular
+   */
+  setLinkedFolderUri: (uri: string | null) => Promise<void>;
+
+  /**
    * Lista todos os arquivos do repositório.
    *
    * @param origin - Filtra por origem (opcional; se omitido, retorna todos)
@@ -187,12 +236,16 @@ export class FileRepositoryImpl implements FileRepository {
   private readonly receivedDir: string;
   private readonly sharedDir: string;
   private readonly metaFileName = '.meta.json';
+  private readonly linkedFolderMetaPath: string;
 
   constructor(fsModule: FileSystemModule) {
     this.fsModule = fsModule;
     this.baseDir = fsModule.documentDirectory || 'file:///document/';
     this.receivedDir = this.baseDir.replace(/\/$/, '') + '/received';
     this.sharedDir = this.baseDir.replace(/\/$/, '') + '/shared';
+    // Guarda só a REFERÊNCIA (URI) da pasta vinculada (T-701) — nunca o conteúdo
+    // dela — dentro da sandbox, junto de `shared/.meta.json`.
+    this.linkedFolderMetaPath = this.sharedDir + '/.linked-folder.json';
   }
 
   async save(
@@ -305,6 +358,65 @@ export class FileRepositoryImpl implements FileRepository {
     return entry;
   }
 
+  async linkFromUri(
+    sourceUri: string,
+    desiredName: string,
+    mimeType: string,
+    sizeBytes: number,
+    origin: FileOrigin,
+  ): Promise<FileEntry> {
+    const targetDir = origin === 'received' ? this.receivedDir : this.sharedDir;
+    await this.ensureDirectoryExists(targetDir);
+
+    // Sanitiza/resolve duplicata contra os nomes em `.meta.json` (`getExistingNames`
+    // lê de lá, não do filesystem — necessário para detectar colisão com outra
+    // entrada vinculada, que não tem arquivo físico em `targetDir`).
+    const finalName = await this.resolveFinalName(targetDir, desiredName);
+
+    const id = Crypto.randomUUID();
+    const createdAt = Date.now();
+
+    const entry: FileEntry = {
+      id,
+      name: finalName,
+      sizeBytes,
+      mimeType,
+      localUri: sourceUri,
+      origin,
+      createdAt,
+      linked: true,
+    };
+
+    const metadata = await this.loadMetadata(targetDir);
+    metadata.push({
+      id,
+      name: finalName,
+      sizeBytes,
+      mimeType,
+      localUri: sourceUri,
+      createdAt,
+      linked: true,
+    });
+    await this.saveMetadata(targetDir, metadata);
+
+    return entry;
+  }
+
+  async getLinkedFolderUri(): Promise<string | null> {
+    try {
+      const content = await this.fsModule.readAsStringAsync(this.linkedFolderMetaPath);
+      const parsed = JSON.parse(content) as { uri: string | null };
+      return parsed.uri ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async setLinkedFolderUri(uri: string | null): Promise<void> {
+    await this.ensureDirectoryExists(this.sharedDir);
+    await this.fsModule.writeAsStringAsync(this.linkedFolderMetaPath, JSON.stringify({ uri }));
+  }
+
   async list(origin?: FileOrigin): Promise<FileEntry[]> {
     const results: FileEntry[] = [];
 
@@ -335,8 +447,13 @@ export class FileRepositoryImpl implements FileRepository {
     // Determinar diretório
     const targetDir = entry.origin === 'received' ? this.receivedDir : this.sharedDir;
 
-    // Deletar arquivo
-    await this.fsModule.deleteAsync(entry.localUri);
+    // Entradas vinculadas (T-701 — "compartilhar por pasta sem duplicar") apontam
+    // para um arquivo que o app não copiou e não possui: "remover" delas significa
+    // só desvincular (apagar o registro de metadados), NUNCA apagar o arquivo real
+    // do usuário.
+    if (!entry.linked) {
+      await this.fsModule.deleteAsync(entry.localUri);
+    }
 
     // Atualizar metadados
     const metadata = await this.loadMetadata(targetDir);
@@ -457,17 +574,17 @@ export class FileRepositoryImpl implements FileRepository {
   }
 
   /**
-   * Obtém lista de nomes de arquivos existentes em um diretório.
-   * Exclui o arquivo de metadados (.meta.json).
+   * Obtém lista de nomes de arquivos já registrados num diretório de origem.
+   *
+   * Lê de `.meta.json` (a mesma fonte de verdade que `list()` usa), não do
+   * filesystem via `readDirectoryAsync()`: entradas vinculadas (`linked: true`,
+   * T-701 — "compartilhar por pasta sem duplicar") têm registro em metadados
+   * mas NENHUM arquivo físico dentro de `dirUri` — checar o filesystem deixaria
+   * de detectar colisão de nome com uma entrada vinculada existente.
    */
   private async getExistingNames(dirUri: string): Promise<string[]> {
-    try {
-      const files = await this.fsModule.readDirectoryAsync(dirUri);
-      return files.filter((f) => f !== this.metaFileName);
-    } catch {
-      // Diretório não existe ou vazio
-      return [];
-    }
+    const metadata = await this.loadMetadata(dirUri);
+    return metadata.map((m) => m.name);
   }
 
   /**
