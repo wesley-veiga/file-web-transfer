@@ -78,8 +78,8 @@ describe('T-001 Bootstrap - Integration', () => {
       });
     });
 
-    it('src/app/index.tsx exists', () => {
-      const filePath = path.join(process.cwd(), 'src/app/index.tsx');
+    it('src/app/(tabs)/index.tsx exists', () => {
+      const filePath = path.join(process.cwd(), 'src/app/(tabs)/index.tsx');
       expect(fs.existsSync(filePath)).toBe(true);
     });
 
@@ -91,7 +91,7 @@ describe('T-001 Bootstrap - Integration', () => {
 
   describe('Home Screen Content', () => {
     it('Home screen uses ServerHomeScreen component (T-204)', () => {
-      const indexPath = path.join(process.cwd(), 'src/app/index.tsx');
+      const indexPath = path.join(process.cwd(), 'src/app/(tabs)/index.tsx');
       const content = fs.readFileSync(indexPath, 'utf-8');
       expect(content).toContain('ServerHomeScreen');
       expect(content).toContain('features/server');
@@ -108,13 +108,13 @@ describe('T-001 Bootstrap - Integration', () => {
     });
 
     it('Home screen uses expo-splash-screen', () => {
-      const indexPath = path.join(process.cwd(), 'src/app/index.tsx');
+      const indexPath = path.join(process.cwd(), 'src/app/(tabs)/index.tsx');
       const content = fs.readFileSync(indexPath, 'utf-8');
       expect(content).toContain('expo-splash-screen');
     });
 
     it('Home screen has proper theme support via Screen component', () => {
-      const indexPath = path.join(process.cwd(), 'src/app/index.tsx');
+      const indexPath = path.join(process.cwd(), 'src/app/(tabs)/index.tsx');
       const content = fs.readFileSync(indexPath, 'utf-8');
       // Screen component handles theme support internally
       expect(content).toContain('Screen');

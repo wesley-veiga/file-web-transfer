@@ -1,0 +1,95 @@
+/**
+ * Testes de src/app/(tabs)/_layout.tsx — navegação por abas (T-701).
+ *
+ * T-701 encontrou, em teste manual num dispositivo real, que as telas de
+ * Transferências/Compartilhados/Recebidos (já testadas e aprovadas em T-603,
+ * T-302 e T-303) nunca estavam conectadas a nenhuma rota navegável: o app só
+ * tinha a Home. Esta suíte cobre a navegação em si — não a lógica interna
+ * das telas de destino, já coberta em seus próprios arquivos de teste.
+ *
+ * `jest.setup.ts` mocka `expo-router` globalmente, mas sem exportar `Tabs`
+ * (o projeto, até T-701, só usava `Stack`). O mock abaixo sobrescreve
+ * `expo-router` apenas para este arquivo de teste, acrescentando `Tabs` e
+ * `Tabs.Screen` como componentes inspecionáveis (repassam `name`/`options`
+ * como props do elemento renderizado), o suficiente para um layout puramente
+ * declarativo como este — sem precisar montar um navigator real completo.
+ */
+
+import React from 'react';
+import { render } from '@testing-library/react-native';
+import TabsLayout from '../_layout';
+
+jest.mock('expo-router', () => {
+  const ReactActual = jest.requireActual('react');
+
+  const TabsScreen = (props: { name: string; options?: { title?: string } }) =>
+    ReactActual.createElement('Tabs.Screen', { name: props.name, ...props.options });
+
+  const Tabs = (props: { children?: React.ReactNode }) =>
+    ReactActual.createElement('Tabs', null, props.children);
+  Tabs.Screen = TabsScreen;
+
+  return { Tabs };
+});
+
+/** Busca todos os nós host `Tabs.Screen` renderizados pelo mock de `expo-router`. */
+function findTabScreens(container: {
+  queryAll: (predicate: (i: { type: string }) => boolean) => unknown[];
+}) {
+  return container.queryAll((instance) => instance.type === 'Tabs.Screen') as {
+    props: Record<string, unknown>;
+  }[];
+}
+
+describe('TabsLayout ((tabs)/_layout.tsx)', () => {
+  it('renderiza sem lançar erro', async () => {
+    await expect(render(<TabsLayout />)).resolves.toBeDefined();
+  });
+
+  it('exporta uma função default nomeada TabsLayout', () => {
+    expect(typeof TabsLayout).toBe('function');
+    expect(TabsLayout.name).toBe('TabsLayout');
+  });
+
+  it('declara exatamente 4 abas (Tabs.Screen)', async () => {
+    const { container } = await render(<TabsLayout />);
+    const screens = findTabScreens(container);
+    expect(screens).toHaveLength(4);
+  });
+
+  it.each([
+    ['index', 'Servidor'],
+    ['transferencias', 'Transferências'],
+    ['compartilhados', 'Compartilhados'],
+    ['recebidos', 'Recebidos'],
+  ])('declara a aba "%s" com title "%s"', async (name, title) => {
+    const { container } = await render(<TabsLayout />);
+    const screens = findTabScreens(container);
+    const match = screens.find((screen) => screen.props.name === name);
+
+    expect(match).toBeDefined();
+    expect(match?.props.title).toBe(title);
+  });
+
+  it('mantém a ordem das abas: Servidor, Transferências, Compartilhados, Recebidos', async () => {
+    const { container } = await render(<TabsLayout />);
+    const screens = findTabScreens(container);
+
+    expect(screens.map((screen) => screen.props.name)).toEqual([
+      'index',
+      'transferencias',
+      'compartilhados',
+      'recebidos',
+    ]);
+  });
+
+  it('não declara nenhuma aba com título vazio', async () => {
+    const { container } = await render(<TabsLayout />);
+    const screens = findTabScreens(container);
+
+    expect(screens.length).toBeGreaterThan(0);
+    screens.forEach((screen) => {
+      expect(screen.props.title).toBeTruthy();
+    });
+  });
+});

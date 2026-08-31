@@ -9,7 +9,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react-native';
 import { useColorScheme } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
-import HomeScreen from '../index';
+import HomeScreen from '../(tabs)/index';
 import RootLayout from '../_layout';
 
 // Type-safe mock functions
