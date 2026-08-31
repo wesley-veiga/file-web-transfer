@@ -368,7 +368,18 @@ export function createDefaultHttpModule(): HttpModule {
           reject(new Error(`EADDRINUSE: ${err.message}`));
         });
 
-        newServer.listen({ port, host: '0.0.0.0' }, undefined, () => {
+        // O callback de conclusão precisa ir no 2º argumento (não no 3º) quando
+        // `options` é um objeto: a implementação real de `Server.listen()`
+        // (node_modules/react-native-tcp-socket/src/Server.js) só lê
+        // `callback_or_host` como callback nesse overload — o 3º parâmetro
+        // `callback` é ignorado silenciosamente quando o 1º argumento é um
+        // objeto. Achado em T-701 (teste manual em dispositivo real): com o
+        // callback no 3º argumento, ele nunca era registrado como listener do
+        // evento `listening`, então esta Promise nunca resolvia — apenas o
+        // caminho de erro (`.on('error', ...)`) funcionava, causando "loading
+        // infinito" (mascarado depois como timeout, uma vez que o timeout de
+        // `serverService.ts` foi adicionado).
+        newServer.listen({ port, host: '0.0.0.0' }, () => {
           server = newServer;
           running = true;
           resolve();
