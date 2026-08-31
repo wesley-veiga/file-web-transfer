@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer';
 import {
   registerFileRoutes,
   registerEventsRoute,
@@ -22,7 +23,9 @@ import { WEB_UI_HTML } from '../../web-ui/webUiHtml';
 describe('apiSetup — registerFileRoutes', () => {
   let mockApiRouter: jest.Mocked<ApiRouter>;
   let mockFileRepository: jest.Mocked<FileRepository>;
-  let mockFsModule: jest.Mocked<{ readAsStringAsync: (uri: string) => Promise<string> }>;
+  let mockFsModule: jest.Mocked<{
+    readAsStringAsync: (uri: string, options?: { encoding?: 'utf8' | 'base64' }) => Promise<string>;
+  }>;
 
   beforeEach(() => {
     mockApiRouter = {
@@ -159,8 +162,15 @@ describe('apiSetup — registerFileRoutes', () => {
         createdAt: Date.now(),
       };
 
+      // Bytes reais de arquivo binário (magic bytes de JPEG, todos ≥ 0x80 incluídos de
+      // propósito): regressão do bug real de T-701 onde ler/escrever esse tipo de
+      // conteúdo como texto UTF-8 corrompia o arquivo antes mesmo de sair pela rede.
+      const binaryContent = Buffer.from([
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
+      ]);
+
       mockFileRepository.list.mockResolvedValue([entry]);
-      mockFsModule.readAsStringAsync.mockResolvedValue('PDF_CONTENT_HERE');
+      mockFsModule.readAsStringAsync.mockResolvedValue(binaryContent.toString('base64'));
 
       const handlers: Record<string, ApiHandler> = {};
       mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
@@ -181,7 +191,12 @@ describe('apiSetup — registerFileRoutes', () => {
       expect(response.headers?.['Content-Length']).toBe('5000');
       expect(response.headers?.['Content-Disposition']).toContain('attachment');
       expect(response.headers?.['Content-Disposition']).toContain('filename*=UTF-8');
-      expect(response.body).toBe('PDF_CONTENT_HERE');
+      // Lê como base64 (não UTF-8) e decodifica para os bytes exatos — T-701.
+      expect(mockFsModule.readAsStringAsync).toHaveBeenCalledWith('file:///path/document.pdf', {
+        encoding: 'base64',
+      });
+      expect(Buffer.isBuffer(response.body)).toBe(true);
+      expect(response.body as Buffer).toEqual(binaryContent);
     });
 
     it('retorna 404 para arquivo não encontrado', async () => {
@@ -503,8 +518,10 @@ describe('apiSetup — registerFileRoutes', () => {
         createdAt: Date.now(),
       };
 
+      const binaryContent = Buffer.from('PDF_CONTENT', 'utf8');
+
       mockFileRepository.list.mockResolvedValue([entry]);
-      mockFsModule.readAsStringAsync.mockResolvedValue('PDF_CONTENT');
+      mockFsModule.readAsStringAsync.mockResolvedValue(binaryContent.toString('base64'));
 
       const handlers: Record<string, ApiHandler> = {};
       mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
@@ -526,8 +543,8 @@ describe('apiSetup — registerFileRoutes', () => {
       expect(headerStr).not.toContain('localUri');
       expect(headerStr).not.toContain('/secret/path');
       // Verificar body (conteúdo do arquivo, não expõe localUri)
-      expect(response.body).toBe('PDF_CONTENT');
-      expect(response.body).not.toContain('localUri');
+      expect(response.body as Buffer).toEqual(binaryContent);
+      expect((response.body as Buffer).toString('utf8')).not.toContain('localUri');
     });
 
     it('retorna 500 quando falha ao ler arquivo do filesystem', async () => {

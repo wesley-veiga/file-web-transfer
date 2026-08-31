@@ -65,9 +65,24 @@ function createDefaultFileSystemModule(): FileSystemModule {
   // contrário do resto deste módulo, aqui NÃO há fallback silencioso: se
   // `File.write` falhar, o erro propaga (o chamador em `apiSetup.ts` já mapeia
   // isso para 500/507 conforme a mensagem).
+  //
+  // `content` chega aqui como uma string "binary" (latin1): cada char code é
+  // exatamente um byte do corpo do upload (ver `nativeHttpModule.ts`, que lê o
+  // socket com `chunk.toString('binary')`). Achado em T-701 (teste manual em
+  // dispositivo real, jpeg/mov corrompidos ao chegar no host): passar essa
+  // string diretamente para `File.write(string, ...)` faz o nativo Android
+  // codificar `content.toByteArray()` como UTF-8 por padrão
+  // (`FileSystemFile.kt`), reescrevendo todo byte ≥ 0x80 como uma sequência
+  // multi-byte — corrompendo qualquer arquivo binário real. Convertendo para
+  // `Uint8Array` antes de escrever, o nativo grava os bytes exatos
+  // (`File.write(Uint8Array, ...)` não passa por nenhuma codificação de texto).
   async function appendToFileAsync(uri: string, content: string): Promise<void> {
     const file = new File(uri);
-    await file.write(content, { append: true });
+    const bytes = new Uint8Array(content.length);
+    for (let i = 0; i < content.length; i++) {
+      bytes[i] = content.charCodeAt(i) & 0xff;
+    }
+    await file.write(bytes, { append: true });
   }
 
   return {
