@@ -56,15 +56,16 @@ describe('TabsLayout ((tabs)/_layout.tsx)', () => {
     expect(TabsLayout.name).toBe('TabsLayout');
   });
 
-  it('declara exatamente 4 abas (Tabs.Screen)', async () => {
+  it('declara exatamente 3 abas (Tabs.Screen)', async () => {
+    // "Transferências" deixou de ser uma aba (T-701): agora é um popup aberto
+    // por um botão flutuante na tela Servidor — ver src/app/(tabs)/index.tsx.
     const { container } = await render(<TabsLayout />);
     const screens = findTabScreens(container);
-    expect(screens).toHaveLength(4);
+    expect(screens).toHaveLength(3);
   });
 
   it.each([
     ['index', 'Servidor'],
-    ['transferencias', 'Transferências'],
     ['compartilhados', 'Compartilhados'],
     ['recebidos', 'Recebidos'],
   ])('declara a aba "%s" com title "%s"', async (name, title) => {
@@ -76,13 +77,12 @@ describe('TabsLayout ((tabs)/_layout.tsx)', () => {
     expect(match?.props.title).toBe(title);
   });
 
-  it('mantém a ordem das abas: Servidor, Transferências, Compartilhados, Recebidos', async () => {
+  it('mantém a ordem das abas: Servidor, Compartilhados, Recebidos', async () => {
     const { container } = await render(<TabsLayout />);
     const screens = findTabScreens(container);
 
     expect(screens.map((screen) => screen.props.name)).toEqual([
       'index',
-      'transferencias',
       'compartilhados',
       'recebidos',
     ]);

@@ -7,8 +7,14 @@
 
 import React from 'react';
 import { useColorScheme } from 'react-native';
+import { render, fireEvent, cleanup } from '@testing-library/react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import HomeScreen from '../index';
+import { useServerStore } from '../../../features/server/store/serverStore';
+import { useNetworkStatus } from '../../../features/server/hooks/useNetworkStatus';
+import { useServer } from '../../../features/server/hooks/useServer';
+import { useTransferStore } from '../../../features/transfer/store/transferStore';
+import type { Transfer } from '../../../features/transfer/types';
 
 // Type-safe mock functions
 const mockedUseColorScheme = useColorScheme as jest.MockedFunction<typeof useColorScheme>;
@@ -16,11 +22,116 @@ const mockedHideAsync = SplashScreen.hideAsync as jest.MockedFunction<
   typeof SplashScreen.hideAsync
 >;
 
+jest.mock('../../../features/server/hooks/useNetworkStatus');
+const mockUseNetworkStatus = useNetworkStatus as jest.MockedFunction<typeof useNetworkStatus>;
+
+jest.mock('../../../features/server/hooks/useServer', () => ({
+  useServer: jest.fn(),
+}));
+const mockUseServer = useServer as jest.MockedFunction<typeof useServer>;
+
+/** Epoch fixo — nunca usamos `Date.now()` real em dados de teste. */
+const FIXED_TIME = 1_700_000_000_000;
+
+function makeTransfer(overrides: Partial<Transfer> = {}): Transfer {
+  return {
+    id: 't-1',
+    direction: 'upload',
+    fileName: 'arquivo.bin',
+    sizeBytes: 1000,
+    transferredBytes: 0,
+    status: 'queued',
+    peerIp: '192.168.0.10',
+    startedAt: FIXED_TIME,
+    finishedAt: null,
+    speedBps: null,
+    errorMessage: null,
+    ...overrides,
+  };
+}
+
 describe('HomeScreen (src/app/index.tsx)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedUseColorScheme.mockReturnValue('light');
     mockedHideAsync.mockResolvedValue(undefined);
+
+    mockUseServer.mockReturnValue({
+      start: jest.fn().mockResolvedValue(undefined),
+      stop: jest.fn().mockResolvedValue(undefined),
+      reset: jest.fn(),
+    });
+    mockUseNetworkStatus.mockReturnValue({ isConnected: true, ssid: 'TestNetwork' });
+    useServerStore.setState({
+      serverInfo: {
+        status: 'idle',
+        networkMode: null,
+        ip: null,
+        port: null,
+        url: null,
+        sessionId: null,
+        startedAt: null,
+        error: null,
+      },
+    });
+    useTransferStore.getState().reset();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  describe('Popup de Transferências (T-701)', () => {
+    it('mostra o botão flutuante, mas o modal começa fechado', async () => {
+      const { getByTestId, queryByTestId } = await render(<HomeScreen />);
+
+      expect(getByTestId('transfers-fab')).toBeTruthy();
+      expect(queryByTestId('transfers-modal-close')).toBeNull();
+    });
+
+    it('abre o modal com a lista de transferências ao tocar no botão flutuante', async () => {
+      useTransferStore.setState({ transfers: [makeTransfer({ fileName: 'foto.jpg' })] });
+
+      const { getByTestId, getByText } = await render(<HomeScreen />);
+
+      await fireEvent.press(getByTestId('transfers-fab'));
+
+      expect(getByText('foto.jpg')).toBeTruthy();
+    });
+
+    it('fecha o modal ao tocar em "Fechar"', async () => {
+      const { getByTestId, queryByTestId } = await render(<HomeScreen />);
+
+      await fireEvent.press(getByTestId('transfers-fab'));
+      expect(getByTestId('transfers-modal-close')).toBeTruthy();
+
+      await fireEvent.press(getByTestId('transfers-modal-close'));
+
+      expect(queryByTestId('transfers-modal-close')).toBeNull();
+    });
+
+    it('não mostra badge quando não há transferências ativas', async () => {
+      useTransferStore.setState({ transfers: [makeTransfer({ status: 'completed' })] });
+
+      const { queryByTestId } = await render(<HomeScreen />);
+
+      expect(queryByTestId('transfers-fab-badge')).toBeNull();
+    });
+
+    it('mostra badge com a contagem de transferências ativas/na fila', async () => {
+      useTransferStore.setState({
+        transfers: [
+          makeTransfer({ id: 't-1', status: 'active' }),
+          makeTransfer({ id: 't-2', status: 'queued' }),
+          makeTransfer({ id: 't-3', status: 'completed' }),
+        ],
+      });
+
+      const { getByTestId, getByText } = await render(<HomeScreen />);
+
+      expect(getByTestId('transfers-fab-badge')).toBeTruthy();
+      expect(getByText('2')).toBeTruthy();
+    });
   });
 
   describe('Component Export and Type', () => {
@@ -77,7 +188,7 @@ describe('HomeScreen (src/app/index.tsx)', () => {
         require('path').join(__dirname, '../index.tsx'),
         'utf-8',
       );
-      expect(fileContent).toContain('return <ServerHomeScreen');
+      expect(fileContent).toContain('<ServerHomeScreen');
     });
 
     it('ServerHomeScreen handles server state rendering', () => {
