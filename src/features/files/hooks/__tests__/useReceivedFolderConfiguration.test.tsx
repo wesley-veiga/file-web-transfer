@@ -67,7 +67,6 @@ describe('useReceivedFolderConfiguration hook (T-802)', () => {
   it('selectFolder: ignora cancelamento (permissão negada)', async () => {
     mockFolderSharingModule.requestDirectoryPermissionsAsync.mockResolvedValue({
       granted: false,
-      directoryUri: null,
     });
 
     const { result } = await renderHook(() =>
@@ -271,7 +270,6 @@ describe('useReceivedFolderConfiguration hook (T-802)', () => {
   it('cria fileRepository padrão quando não fornecido', async () => {
     mockFolderSharingModule.requestDirectoryPermissionsAsync.mockResolvedValue({
       granted: false,
-      directoryUri: null,
     });
 
     // Não fornece fileRepository - deveria usar createFileRepository()
