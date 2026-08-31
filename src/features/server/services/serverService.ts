@@ -151,12 +151,12 @@ export class ServerServiceImpl implements ServerService {
       if (error instanceof Error) {
         const message = error.message.toLowerCase();
         if (message.includes('network') || message.includes('offline')) {
-          throw this.createServerError('NO_NETWORK', 'Nenhuma rede disponível');
+          throw this.createServerError('NO_NETWORK', 'Nenhuma rede disponível', error);
         }
       }
 
       // Erro desconhecido
-      throw this.createServerError('UNKNOWN', 'Erro desconhecido ao iniciar servidor');
+      throw this.createServerError('UNKNOWN', 'Erro desconhecido ao iniciar servidor', error);
     }
   }
 
@@ -258,9 +258,20 @@ export class ServerServiceImpl implements ServerService {
 
   /**
    * Cria um ServerServiceError tipado.
+   *
+   * @param cause - Erro original que motivou este (ex.: o `Error` nativo do
+   *   `HttpModule`). A UI sempre exibe a mensagem genérica por `code` (ver
+   *   `getErrorMessage()` em `useServer.ts`) — `cause` existe só para não perder
+   *   o diagnóstico real em `console.error`/logs (achado em T-701: sem isso, era
+   *   impossível distinguir EADDRINUSE de timeout de outros erros nativos a
+   *   partir do que chegava na tela ou no terminal do Metro).
    */
-  private createServerError(code: ServerErrorCode, message: string): ServerServiceError {
-    return new ServerServiceError(code, message);
+  private createServerError(
+    code: ServerErrorCode,
+    message: string,
+    cause?: unknown,
+  ): ServerServiceError {
+    return new ServerServiceError(code, message, cause);
   }
 }
 
@@ -272,8 +283,8 @@ export class ServerServiceError extends Error {
   readonly code: ServerErrorCode;
   readonly message: string;
 
-  constructor(code: ServerErrorCode, message: string) {
-    super(message);
+  constructor(code: ServerErrorCode, message: string, cause?: unknown) {
+    super(message, cause !== undefined ? { cause } : undefined);
     this.name = 'ServerServiceError';
     this.code = code;
     this.message = message;

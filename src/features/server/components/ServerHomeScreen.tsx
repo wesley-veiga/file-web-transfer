@@ -32,8 +32,15 @@ export function ServerHomeScreen({ httpModule }: ServerHomeScreenProps) {
     try {
       await start('wifi');
     } catch (error) {
-      // Erro já foi mapeado e armazenado no store
+      // Erro já foi mapeado e armazenado no store — logamos `error.cause` (T-701)
+      // porque `ServerServiceError.message` é sempre um texto genérico por
+      // `code` (ver `getErrorMessage()` em `useServer.ts`); sem o `cause`, o
+      // erro nativo original (ex.: EADDRINUSE vs. timeout) fica invisível tanto
+      // na tela quanto no terminal do Metro.
       console.error('[ServerHomeScreen] Erro ao iniciar servidor:', error);
+      if (error instanceof Error && error.cause !== undefined) {
+        console.error('[ServerHomeScreen] Causa original:', error.cause);
+      }
     }
   };
 
@@ -60,6 +67,9 @@ export function ServerHomeScreen({ httpModule }: ServerHomeScreenProps) {
       await start('wifi');
     } catch (error) {
       console.error('[ServerHomeScreen] Erro ao tentar novamente:', error);
+      if (error instanceof Error && error.cause !== undefined) {
+        console.error('[ServerHomeScreen] Causa original:', error.cause);
+      }
     }
   };
 
