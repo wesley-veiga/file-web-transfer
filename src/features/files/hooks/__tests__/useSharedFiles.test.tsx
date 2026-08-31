@@ -506,6 +506,230 @@ describe('useSharedFiles hook', () => {
     });
   });
 
+  describe('pasta vinculada (T-701 — compartilhar por pasta sem duplicar)', () => {
+    const folderUri = 'content://tree/primary%3ADownload';
+    const folderFileFixture = {
+      uri: 'content://.../document/primary%3ADownload%2Ffoto.jpg',
+      name: 'foto.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 2048,
+    };
+
+    function createMockFolderSharingModule() {
+      return {
+        requestDirectoryPermissionsAsync: jest.fn(),
+        readDirectoryAsync: jest.fn().mockResolvedValue([folderFileFixture.uri]),
+        getInfoAsync: jest.fn().mockResolvedValue({
+          exists: true,
+          uri: folderFileFixture.uri,
+          isDirectory: false,
+          size: folderFileFixture.sizeBytes,
+          modificationTime: 0,
+        }),
+      };
+    }
+
+    describe('loadLinkedFolder', () => {
+      it('sem pasta vinculada: linkedFolderUri fica null e folderFiles vazio', async () => {
+        mockFileRepository.getLinkedFolderUri.mockResolvedValue(null);
+        mockFileRepository.list.mockResolvedValue([]);
+        const folderSharingModule = createMockFolderSharingModule();
+
+        const { result } = await renderHook(() =>
+          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
+        );
+
+        await act(async () => {
+          await result.current.loadLinkedFolder();
+        });
+
+        expect(result.current.linkedFolderUri).toBeNull();
+        expect(result.current.folderFiles).toEqual([]);
+        expect(folderSharingModule.readDirectoryAsync).not.toHaveBeenCalled();
+      });
+
+      it('com pasta vinculada: popula linkedFolderUri e folderFiles', async () => {
+        mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
+        mockFileRepository.list.mockResolvedValue([]);
+        const folderSharingModule = createMockFolderSharingModule();
+
+        const { result } = await renderHook(() =>
+          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
+        );
+
+        await act(async () => {
+          await result.current.loadLinkedFolder();
+        });
+
+        expect(result.current.linkedFolderUri).toBe(folderUri);
+        expect(result.current.folderFiles).toEqual([folderFileFixture]);
+      });
+
+      it('marca isFolderFileEnabled(uri) true quando já existe entrada linked com o mesmo localUri', async () => {
+        mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
+        mockFileRepository.list.mockResolvedValue([
+          createMockFileEntry({
+            id: 'linked-1',
+            localUri: folderFileFixture.uri,
+            linked: true,
+          }),
+        ]);
+        const folderSharingModule = createMockFolderSharingModule();
+
+        const { result } = await renderHook(() =>
+          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
+        );
+
+        await act(async () => {
+          await result.current.loadLinkedFolder();
+        });
+
+        expect(result.current.isFolderFileEnabled(folderFileFixture.uri)).toBe(true);
+        expect(result.current.isFolderFileEnabled('content://outro.jpg')).toBe(false);
+      });
+
+      it('propaga erro quando fileRepository.list falha', async () => {
+        mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
+        mockFileRepository.list.mockRejectedValue(new Error('list failed'));
+        const folderSharingModule = createMockFolderSharingModule();
+
+        const { result } = await renderHook(() =>
+          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
+        );
+
+        await expect(
+          act(async () => {
+            await result.current.loadLinkedFolder();
+          }),
+        ).rejects.toThrow('list failed');
+      });
+    });
+
+    describe('pickFolder', () => {
+      it('usuário concede permissão: persiste a URI e carrega os arquivos da pasta', async () => {
+        mockFileRepository.list.mockResolvedValue([]);
+        const folderSharingModule = createMockFolderSharingModule();
+        folderSharingModule.requestDirectoryPermissionsAsync.mockResolvedValue({
+          granted: true,
+          directoryUri: folderUri,
+        });
+
+        const { result } = await renderHook(() =>
+          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
+        );
+
+        await act(async () => {
+          await result.current.pickFolder();
+        });
+
+        expect(mockFileRepository.setLinkedFolderUri).toHaveBeenCalledWith(folderUri);
+        expect(result.current.linkedFolderUri).toBe(folderUri);
+        expect(result.current.folderFiles).toEqual([folderFileFixture]);
+      });
+
+      it('usuário nega/cancela: não persiste nada e não muda o estado', async () => {
+        const folderSharingModule = createMockFolderSharingModule();
+        folderSharingModule.requestDirectoryPermissionsAsync.mockResolvedValue({
+          granted: false,
+        });
+
+        const { result } = await renderHook(() =>
+          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
+        );
+
+        await act(async () => {
+          await result.current.pickFolder();
+        });
+
+        expect(mockFileRepository.setLinkedFolderUri).not.toHaveBeenCalled();
+        expect(result.current.linkedFolderUri).toBeNull();
+      });
+    });
+
+    describe('toggleFolderFile', () => {
+      it('arquivo ainda não habilitado: vincula via linkFromUri e adiciona ao store', async () => {
+        mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
+        mockFileRepository.list.mockResolvedValue([]);
+        const linkedEntry = createMockFileEntry({
+          id: 'new-linked',
+          name: folderFileFixture.name,
+          localUri: folderFileFixture.uri,
+          linked: true,
+        });
+        mockFileRepository.linkFromUri.mockResolvedValue(linkedEntry);
+        const folderSharingModule = createMockFolderSharingModule();
+
+        const { result } = await renderHook(() =>
+          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
+        );
+        await act(async () => {
+          await result.current.loadLinkedFolder();
+        });
+
+        await act(async () => {
+          await result.current.toggleFolderFile(folderFileFixture);
+        });
+
+        expect(mockFileRepository.linkFromUri).toHaveBeenCalledWith(
+          folderFileFixture.uri,
+          folderFileFixture.name,
+          folderFileFixture.mimeType,
+          folderFileFixture.sizeBytes,
+          'shared',
+        );
+        expect(useSharedFilesStore.getState().files.some((f) => f.id === 'new-linked')).toBe(true);
+        expect(result.current.isFolderFileEnabled(folderFileFixture.uri)).toBe(true);
+      });
+
+      it('arquivo já habilitado: desvincula via removeFile (não chama linkFromUri de novo)', async () => {
+        mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
+        mockFileRepository.list.mockResolvedValue([
+          createMockFileEntry({
+            id: 'already-linked',
+            localUri: folderFileFixture.uri,
+            linked: true,
+          }),
+        ]);
+        const folderSharingModule = createMockFolderSharingModule();
+
+        const { result } = await renderHook(() =>
+          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
+        );
+        await act(async () => {
+          await result.current.loadLinkedFolder();
+        });
+
+        await act(async () => {
+          await result.current.toggleFolderFile(folderFileFixture);
+        });
+
+        expect(mockFileRepository.remove).toHaveBeenCalledWith('already-linked');
+        expect(mockFileRepository.linkFromUri).not.toHaveBeenCalled();
+        expect(result.current.isFolderFileEnabled(folderFileFixture.uri)).toBe(false);
+      });
+
+      it('propaga erro quando linkFromUri falha', async () => {
+        mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
+        mockFileRepository.list.mockResolvedValue([]);
+        mockFileRepository.linkFromUri.mockRejectedValue(new Error('link failed'));
+        const folderSharingModule = createMockFolderSharingModule();
+
+        const { result } = await renderHook(() =>
+          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
+        );
+        await act(async () => {
+          await result.current.loadLinkedFolder();
+        });
+
+        await expect(
+          act(async () => {
+            await result.current.toggleFolderFile(folderFileFixture);
+          }),
+        ).rejects.toThrow('link failed');
+      });
+    });
+  });
+
   describe('hook return', () => {
     it('deve retornar files, pickAndShareFiles, removeFile, loadSharedFiles', async () => {
       const { result } = await renderHook(() =>

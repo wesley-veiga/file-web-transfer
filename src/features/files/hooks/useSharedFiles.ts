@@ -1,8 +1,15 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import { useSharedFilesStore } from '../store/sharedFilesStore';
 import { createFileRepository } from '../services/fileRepositoryFactory';
 import type { FileRepository, FileSystemModule } from '../services/fileRepository';
+import {
+  createDefaultFolderSharingModule,
+  requestFolderAccess,
+  listFolderFiles,
+} from '../services/folderSharingService';
+import type { FolderSharingModule, FolderFile } from '../services/folderSharingService';
+import type { FileEntry } from '../types';
 
 /**
  * Hook que orquestra seleção de arquivos via document picker,
@@ -27,6 +34,8 @@ interface UseSharedFilesOptions {
   fileSystemModule?: FileSystemModule;
   /** Para injetar mock de DocumentPicker em testes. */
   documentPickerModule?: typeof DocumentPicker;
+  /** Para injetar mock de FolderSharingModule (SAF) em testes. */
+  folderSharingModule?: FolderSharingModule;
 }
 
 export function useSharedFiles(options?: UseSharedFilesOptions) {
@@ -49,6 +58,18 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
     [options?.fileRepository, options?.fileSystemModule],
   );
   const documentPickerModule = options?.documentPickerModule || DocumentPicker;
+  const folderSharingModule = useMemo(
+    () => options?.folderSharingModule ?? createDefaultFolderSharingModule(),
+    [options?.folderSharingModule],
+  );
+
+  // Estado da pasta vinculada (T-701 — compartilhar por pasta sem duplicar).
+  const [linkedFolderUri, setLinkedFolderUriState] = useState<string | null>(null);
+  const [folderFiles, setFolderFiles] = useState<FolderFile[]>([]);
+  // Entradas `linked: true` atuais (com `localUri`, para casar com `folderFiles`).
+  // Não vem do Zustand (`useSharedFilesStore`), que guarda só o DTO público (sem
+  // `localUri`, por design — ver `sharedFilesStore.ts`); vem direto do repositório.
+  const [linkedEntries, setLinkedEntries] = useState<FileEntry[]>([]);
 
   // Trava chamadas concorrentes ao picker nativo: `getDocumentAsync` rejeita com
   // "Different document picking in progress" se for chamado de novo antes da promise
@@ -126,6 +147,99 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
   );
 
   /**
+   * Carrega a URI da pasta vinculada (se houver) e lista seus arquivos
+   * (T-701 — compartilhar por pasta sem duplicar).
+   * Útil ao inicializar a tela.
+   */
+  const loadLinkedFolder = useCallback(async (): Promise<void> => {
+    try {
+      const [uri, sharedEntries] = await Promise.all([
+        fileRepository.getLinkedFolderUri(),
+        fileRepository.list('shared'),
+      ]);
+      setLinkedFolderUriState(uri);
+      setLinkedEntries(sharedEntries.filter((e) => e.linked));
+
+      if (!uri) {
+        setFolderFiles([]);
+        return;
+      }
+
+      const listed = await listFolderFiles(folderSharingModule, uri);
+      setFolderFiles(listed);
+    } catch (error) {
+      console.error('[useSharedFiles] Erro ao carregar pasta vinculada:', error);
+      throw error;
+    }
+  }, [fileRepository, folderSharingModule]);
+
+  /**
+   * Pede ao usuário para escolher uma pasta (SAF) e a vincula para
+   * compartilhamento, sem copiar nenhum arquivo dela.
+   * Não faz nada se o usuário negar/cancelar a permissão.
+   */
+  const pickFolder = useCallback(async (): Promise<void> => {
+    try {
+      const uri = await requestFolderAccess(folderSharingModule);
+      if (!uri) {
+        return;
+      }
+
+      await fileRepository.setLinkedFolderUri(uri);
+      setLinkedFolderUriState(uri);
+
+      const listed = await listFolderFiles(folderSharingModule, uri);
+      setFolderFiles(listed);
+    } catch (error) {
+      console.error('[useSharedFiles] Erro ao vincular pasta:', error);
+      throw error;
+    }
+  }, [fileRepository, folderSharingModule]);
+
+  /**
+   * `true` quando o arquivo da pasta vinculada já está habilitado para
+   * compartilhamento (existe uma entrada vinculada com o mesmo `localUri` —
+   * ver `toggleFolderFile`).
+   */
+  const isFolderFileEnabled = useCallback(
+    (fileUri: string): boolean => linkedEntries.some((e) => e.localUri === fileUri),
+    [linkedEntries],
+  );
+
+  /**
+   * Alterna o compartilhamento de um arquivo da pasta vinculada: se já
+   * habilitado, desvincula (`removeFile` — nunca apaga o arquivo real, ver
+   * `FileRepository.remove()`); senão, vincula via `linkFromUri` (sem copiar).
+   */
+  const toggleFolderFile = useCallback(
+    async (file: FolderFile): Promise<void> => {
+      const existing = linkedEntries.find((e) => e.localUri === file.uri);
+
+      try {
+        if (existing) {
+          await removeFile(existing.id);
+          setLinkedEntries((prev) => prev.filter((e) => e.id !== existing.id));
+          return;
+        }
+
+        const entry = await fileRepository.linkFromUri(
+          file.uri,
+          file.name,
+          file.mimeType,
+          file.sizeBytes,
+          'shared',
+        );
+        addFile(entry);
+        setLinkedEntries((prev) => [...prev, entry]);
+      } catch (error) {
+        console.error('[useSharedFiles] Erro ao alternar arquivo da pasta:', file.name, error);
+        throw error;
+      }
+    },
+    [linkedEntries, fileRepository, addFile, removeFile],
+  );
+
+  /**
    * Carrega os arquivos 'shared' do repositório e popula o store.
    * Útil ao inicializar a tela ou refresh manual.
    */
@@ -144,5 +258,11 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
     pickAndShareFiles,
     removeFile,
     loadSharedFiles,
+    linkedFolderUri,
+    folderFiles,
+    loadLinkedFolder,
+    pickFolder,
+    isFolderFileEnabled,
+    toggleFolderFile,
   };
 }

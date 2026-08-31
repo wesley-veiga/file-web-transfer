@@ -1,6 +1,14 @@
 # Tarefas — Transferir Arquivos
 
 **Derivado de:** [transferir.md](transferir.md) · **Regido por:** [constitution.md](constitution.md)
+**Revisão 1.4 (2026-08-31):** execução de T-701 (teste de fogo manual em dispositivo real) encontrou 7 bugs reais e 2 pedidos de melhoria de UX, corrigidos em sequência (ver PRs abaixo; todos referenciam T-701 no título/commit). Nova Fase 8 registra as duas melhorias maiores (compartilhar por pasta sem duplicar, local de recebidos configurável) como tarefas formais, ainda em andamento — T-701 continua `[ ]` até o roteiro completo estar executado e registrado em `docs/testes-manuais.md` (pendência já conhecida: o documento só tem a seção 1.1 preenchida, numa branch separada não mesclada).
+- Navegação por abas nunca conectada (app só tinha a Home) — PR #52.
+- `listen()` do servidor HTTP com callback no argumento errado (loading infinito), race de porta em `findAvailablePort`, retry travado no estado `error`, SSID morto em `useNetworkStatus`, `write()`/`destroy()` concorrentes derrubando conexões — PR #52.
+- Chamada concorrente ao document picker rejeitada pela lib nativa — PR #53.
+- Ícone quebrado (fallback `MissingIcon` do react-navigation) e depois emoji cortado (`includeFontPadding` do Android) na navbar — PRs #53 e #55.
+- Corrupção binária em upload e download (leitura/escrita usando UTF-8 por padrão em vez dos bytes exatos) — arquivos jpeg/mov não abriam no destino — PR #54.
+- "Transferências" virou botão flutuante + modal na tela Servidor em vez de aba fixa — PR #56.
+
 **Revisão 1.3 (2026-08-28):** nova T-405 — implementação nativa real do `HttpModule` (T-401–T-404 rodavam só contra mocks); ADR-001 revertido de `react-native-http-bridge-refurbished` para `react-native-tcp-socket` após leitura do código nativo revelar que a lib escolhida não suporta streaming (ver ADR-001 §8, emenda v1.2).
 **Revisão 1.2 (2026-08-27):** modo rede própria despriorizado e removido — T-206/T-207/T-208 marcadas como removidas (ver ADR-002, status Rejeitada); nova T-209 reverte a implementação de T-207; T-701 ajustada (cenário hotspot removido do roteiro).
 **Revisão 1.1 (2026-07-16):** validado contra as novas regras — Android 14+ (T-001 ajustada), modo rede própria HU-08 (novas T-206/T-207/T-208), governança de repositório (nova T-006), cenário hotspot no teste de fogo (T-701 ajustada).
@@ -176,6 +184,16 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Rodar o agente `validador` sobre o projeto inteiro: cobertura ≥ mínimos, zero `any`, boundaries respeitados, todos os critérios de aceite da spec marcados.
   *Pronto quando:* relatório do validador sem pendências.
 
+## Fase 8 — Melhorias pós-teste manual (achados de T-701)
+
+- [ ] **T-801 · Compartilhar por pasta sem duplicar (SAF)** ⬅ T-302
+  Botão "Vincular pasta" (convive com o document picker avulso existente): `StorageAccessFramework.requestDirectoryPermissionsAsync()` + `readDirectoryAsync()` listam o conteúdo da pasta escolhida; cada arquivo tem um toggle habilitar/desabilitar compartilhamento. Diferente do fluxo atual, o arquivo NÃO é copiado para a sandbox — `FileRepository.linkFromUri()` grava uma entrada com `localUri` apontando pro arquivo original (`linked: true`); `remove()`/desabilitar nunca apaga o arquivo real do usuário, só desvincula. A pasta escolhida é lembrada entre reinícios do app.
+  *Pronto quando:* arquivo de uma pasta vinculada aparece em "Baixar arquivos" do convidado e baixa corretamente sem nunca ter sido duplicado no armazenamento do host; desabilitar o toggle remove da lista sem apagar o arquivo original; testes cobrindo permissão negada e toggle nos dois sentidos.
+
+- [ ] **T-802 · Local de recebidos configurável (SAF)** ⬅ T-301, T-405
+  Tela/seção de configurações para escolher, via SAF, uma pasta externa onde os arquivos recebidos (`origin: 'received'`) devem ser salvos. O upload continua sendo escrito via streaming incremental no arquivo temporário da sandbox (**sem mudança** — API de SAF não suporta append, então mudar isso reintroduziria o problema de memória que a T-405 resolveu); só ao finalizar (`finish()`), se houver pasta configurada, o arquivo completo é movido para lá via cópia nativa arquivo-a-arquivo (`moveAsync`/`copyAsync`, nunca lendo o conteúdo pra uma string JS). Sem pasta configurada, comportamento atual é mantido (fica em `received/` da sandbox).
+  *Pronto quando:* upload de arquivo ≥ 1 GB com pasta configurada não estoura memória (streaming preservado) e o arquivo final aparece na pasta escolhida, achável pelo gerenciador de arquivos do celular; sem pasta configurada, nada muda.
+
 ---
 
 ## Ordem de execução sugerida
@@ -192,6 +210,7 @@ Fase 4: T-401 → T-402 · T-403 · T-404
 Fase 5: T-501 → T-502 · T-503
 Fase 6: T-601 → T-602 → T-603
 Fase 7: T-701 → T-702
+Fase 8: T-801 · T-802   (achados de T-701, paralelizáveis entre si)
 ```
 
 > **Maior risco:** T-202 (streaming da lib de servidor) — decisão finalizada (ver ADR-001). T-206 removida (rev. 1.2, ver ADR-002).

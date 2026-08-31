@@ -44,7 +44,9 @@ export function createMockFileInfo(overrides: Partial<MockFileInfo> = {}): MockF
   };
 }
 
-export const getInfoAsync = jest.fn(async (fileUri: string) => createMockFileInfo({ uri: fileUri }));
+export const getInfoAsync = jest.fn(async (fileUri: string) =>
+  createMockFileInfo({ uri: fileUri }),
+);
 
 export const readAsStringAsync = jest.fn(async (_fileUri: string) => '');
 
@@ -62,6 +64,15 @@ export const moveAsync = jest.fn(async (_options: { from: string; to: string }) 
 
 export const getFreeDiskStorageAsync = jest.fn(async () => Number.MAX_SAFE_INTEGER);
 
+// --- Stub de StorageAccessFramework (T-701 — compartilhar por pasta sem duplicar). ---
+// Só as funções realmente usadas por `folderSharingService.ts`; as demais (write/read/
+// delete/move/copyAsync) são aliases da API "clássica" acima na lib real, não precisam
+// de stub próprio aqui.
+export const StorageAccessFramework = {
+  requestDirectoryPermissionsAsync: jest.fn(async () => ({ granted: false }) as const),
+  readDirectoryAsync: jest.fn(async (_dirUri: string): Promise<string[]> => []),
+};
+
 // --- Stubs mínimos da API nova (File/Directory) — expandir quando alguma feature adotá-la. ---
 
 export class Directory {
@@ -69,7 +80,9 @@ export class Directory {
   exists = true;
 
   constructor(...segments: (string | Directory)[]) {
-    this.uri = segments.map((segment) => (segment instanceof Directory ? segment.uri : segment)).join('/');
+    this.uri = segments
+      .map((segment) => (segment instanceof Directory ? segment.uri : segment))
+      .join('/');
   }
 
   create = jest.fn();
@@ -84,7 +97,9 @@ export class File {
 
   constructor(...segments: (string | Directory | File)[]) {
     this.uri = segments
-      .map((segment) => (segment instanceof Directory || segment instanceof File ? segment.uri : segment))
+      .map((segment) =>
+        segment instanceof Directory || segment instanceof File ? segment.uri : segment,
+      )
       .join('/');
   }
 

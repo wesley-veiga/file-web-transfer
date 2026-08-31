@@ -36,6 +36,9 @@ export function createMockFileRepository(): jest.Mocked<FileRepository> {
   return {
     save: jest.fn(),
     saveFromUri: jest.fn(),
+    linkFromUri: jest.fn(),
+    getLinkedFolderUri: jest.fn().mockResolvedValue(null),
+    setLinkedFolderUri: jest.fn(),
     list: jest.fn(),
     remove: jest.fn(),
     toDto: jest.fn((entry: FileEntry) => ({

@@ -273,6 +273,37 @@ describe('FileRepository', () => {
         'File with id id-nao-existente not found',
       );
     });
+
+    it('entrada vinculada (linked: true): remove só o metadado, NUNCA chama deleteAsync no arquivo real (T-701)', async () => {
+      (mockFs.readAsStringAsync as jest.Mock).mockImplementation((uri: string) => {
+        if (uri.includes('shared') && uri.includes('.meta')) {
+          return Promise.resolve(
+            JSON.stringify([
+              {
+                id: 'linked-file',
+                name: 'foto.jpg',
+                sizeBytes: 100,
+                mimeType: 'image/jpeg',
+                localUri: 'content://com.android.externalstorage.documents/document/foto.jpg',
+                createdAt: 1000,
+                linked: true,
+              },
+            ]),
+          );
+        }
+        return Promise.resolve('[]');
+      });
+
+      await repository.remove('linked-file');
+
+      expect(mockFs.deleteAsync).not.toHaveBeenCalled();
+
+      const metaCalls = (mockFs.writeAsStringAsync as jest.Mock).mock.calls.filter((c) =>
+        c[0].includes('/shared/.meta.json'),
+      );
+      const updatedMeta = JSON.parse(metaCalls[metaCalls.length - 1][1]);
+      expect(updatedMeta).toEqual([]);
+    });
   });
 
   describe('toDto', () => {
@@ -1235,6 +1266,138 @@ describe('FileRepository', () => {
       expect(keys).not.toContain('localUri');
       expect(keys).not.toContain('origin');
       expect(keys).toEqual(['id', 'name', 'sizeBytes', 'mimeType', 'createdAt']);
+    });
+  });
+
+  describe('linkFromUri (T-701 — compartilhar por pasta sem duplicar)', () => {
+    beforeEach(() => {
+      (mockFs.getInfoAsync as jest.Mock).mockResolvedValue({ exists: true, isDirectory: true });
+      (mockFs.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
+      (mockFs.writeAsStringAsync as jest.Mock).mockResolvedValue(undefined);
+      (mockFs.readAsStringAsync as jest.Mock).mockResolvedValue('[]');
+    });
+
+    it('NUNCA copia o arquivo — localUri da entrada é o sourceUri original', async () => {
+      const entry = await repository.linkFromUri(
+        'content://com.android.externalstorage.documents/document/primary%3ADownload%2Ffoto.jpg',
+        'foto.jpg',
+        'image/jpeg',
+        2_000_000_000,
+        'shared',
+      );
+
+      expect(mockFs.copyAsync).not.toHaveBeenCalled();
+      expect(entry.localUri).toBe(
+        'content://com.android.externalstorage.documents/document/primary%3ADownload%2Ffoto.jpg',
+      );
+    });
+
+    it('marca a entrada criada com linked: true', async () => {
+      const entry = await repository.linkFromUri(
+        'content://.../video.mov',
+        'video.mov',
+        'video/quicktime',
+        500,
+        'shared',
+      );
+
+      expect(entry.linked).toBe(true);
+    });
+
+    it('persiste linked: true nos metadados (.meta.json)', async () => {
+      await repository.linkFromUri(
+        'content://.../doc.pdf',
+        'doc.pdf',
+        'application/pdf',
+        100,
+        'shared',
+      );
+
+      const metaCalls = (mockFs.writeAsStringAsync as jest.Mock).mock.calls.filter((c) =>
+        c[0].includes('/shared/.meta.json'),
+      );
+      const lastMetaCall = metaCalls[metaCalls.length - 1];
+      const savedMeta = JSON.parse(lastMetaCall[1]);
+
+      expect(savedMeta[0].linked).toBe(true);
+    });
+
+    it('sanitiza o nome desejado e resolve duplicata contra entradas já vinculadas', async () => {
+      // Uma entrada VINCULADA (sem arquivo físico em shared/) já existe com esse nome —
+      // getExistingNames precisa detectar a colisão via metadados, não via filesystem.
+      (mockFs.readAsStringAsync as jest.Mock).mockResolvedValue(
+        JSON.stringify([
+          {
+            id: 'existing',
+            name: 'foto.jpg',
+            sizeBytes: 100,
+            mimeType: 'image/jpeg',
+            localUri: 'content://.../outra-pasta/foto.jpg',
+            createdAt: 1000,
+            linked: true,
+          },
+        ]),
+      );
+
+      const entry = await repository.linkFromUri(
+        'content://.../nova-pasta/foto.jpg',
+        'foto.jpg',
+        'image/jpeg',
+        200,
+        'shared',
+      );
+
+      expect(entry.name).toBe('foto (1).jpg');
+    });
+  });
+
+  describe('getLinkedFolderUri / setLinkedFolderUri (T-701)', () => {
+    it('getLinkedFolderUri retorna null quando nenhuma pasta foi vinculada ainda', async () => {
+      (mockFs.readAsStringAsync as jest.Mock).mockRejectedValue(new Error('not found'));
+
+      await expect(repository.getLinkedFolderUri()).resolves.toBeNull();
+    });
+
+    it('setLinkedFolderUri persiste a URI, e getLinkedFolderUri a lê de volta', async () => {
+      (mockFs.getInfoAsync as jest.Mock).mockResolvedValue({ exists: true, isDirectory: true });
+      (mockFs.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
+      let saved = '';
+      (mockFs.writeAsStringAsync as jest.Mock).mockImplementation(
+        (uri: string, content: string) => {
+          if (uri.includes('.linked-folder.json')) {
+            saved = content;
+          }
+          return Promise.resolve(undefined);
+        },
+      );
+      (mockFs.readAsStringAsync as jest.Mock).mockImplementation((uri: string) => {
+        if (uri.includes('.linked-folder.json')) {
+          return Promise.resolve(saved);
+        }
+        return Promise.reject(new Error('unexpected path'));
+      });
+
+      await repository.setLinkedFolderUri('content://tree/primary%3ADownload');
+
+      expect(
+        (mockFs.writeAsStringAsync as jest.Mock).mock.calls.some((c) =>
+          c[0].includes('.linked-folder.json'),
+        ),
+      ).toBe(true);
+      await expect(repository.getLinkedFolderUri()).resolves.toBe(
+        'content://tree/primary%3ADownload',
+      );
+    });
+
+    it('setLinkedFolderUri(null) desvincula a pasta', async () => {
+      (mockFs.getInfoAsync as jest.Mock).mockResolvedValue({ exists: true, isDirectory: true });
+      (mockFs.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
+      (mockFs.writeAsStringAsync as jest.Mock).mockResolvedValue(undefined);
+      (mockFs.readAsStringAsync as jest.Mock).mockResolvedValue(JSON.stringify({ uri: null }));
+
+      await repository.setLinkedFolderUri(null);
+
+      await expect(repository.getLinkedFolderUri()).resolves.toBeNull();
     });
   });
 

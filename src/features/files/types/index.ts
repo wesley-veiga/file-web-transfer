@@ -30,6 +30,16 @@ export interface FileEntry {
 
   /** Timestamp da criação (epoch ms). */
   createdAt: number;
+
+  /**
+   * `true` quando `localUri` aponta para um arquivo que o app NÃO copiou para a
+   * sandbox (ex.: vinculado de uma pasta via Storage Access Framework, T-701) —
+   * o app não é dono do arquivo. `remove()` de uma entrada vinculada só apaga o
+   * registro de metadados (desvincula); nunca chama `deleteAsync` no arquivo
+   * real do usuário. Ausente/`false` para entradas normais (copiadas via
+   * `save()`/`saveFromUri()`/`beginStreamedWrite()`), que o app criou e possui.
+   */
+  linked?: boolean;
 }
 
 /** Reutiliza a definição exportada de shared/types/api (não duplicar). */
