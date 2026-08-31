@@ -16,8 +16,7 @@ import type {
 import type { FileRepository } from '../../features/files/services/fileRepository';
 import type { FileEntry } from '../../features/files/types';
 import { fileEntryDtoSchema, apiErrorSchema } from '../../shared/types/api';
-import { createFilesChangedAtTracker } from '../../shared/lib/filesChangedAtTracker';
-import { hashSha256, hashesEqual } from '../../shared/lib/hashUtils';
+import { createFilesChangedAtTracker, hashSha256, hashesEqual } from '../../shared/lib';
 import { createMockFileRepository, createMockHttpModule } from '../../__mocks__/testHelpers';
 import { WEB_UI_HTML } from '../../web-ui/webUiHtml';
 

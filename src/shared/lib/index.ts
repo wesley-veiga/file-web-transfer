@@ -5,4 +5,5 @@ export { sanitizeFileName } from './sanitizeFileName';
 export { resolveDuplicateName } from './resolveDuplicateName';
 export { generateSessionId } from './generateSessionId';
 export { createMultipartStreamParser, type MultipartEvent } from './multipartStreamParser';
+export { createFilesChangedAtTracker, type FilesChangedAtTracker } from './filesChangedAtTracker';
 export { hashSha256, hashesEqual } from './hashUtils';
