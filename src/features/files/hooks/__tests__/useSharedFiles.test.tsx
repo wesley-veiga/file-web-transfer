@@ -30,6 +30,8 @@ describe('useSharedFiles hook', () => {
   const resetStore = () => {
     useSharedFilesStore.setState({
       files: [],
+      linkedFolderUri: null,
+      linkedFolderEnabled: false,
     });
   };
 
@@ -565,7 +567,7 @@ describe('useSharedFiles hook', () => {
         expect(result.current.folderFiles).toEqual([folderFileFixture]);
       });
 
-      it('marca isFolderFileEnabled(uri) true quando já existe entrada linked com o mesmo localUri', async () => {
+      it('carrega estado de habilitação do store (linkedFolderEnabled)', async () => {
         mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
         mockFileRepository.list.mockResolvedValue([
           createMockFileEntry({
@@ -584,8 +586,8 @@ describe('useSharedFiles hook', () => {
           await result.current.loadLinkedFolder();
         });
 
-        expect(result.current.isFolderFileEnabled(folderFileFixture.uri)).toBe(true);
-        expect(result.current.isFolderFileEnabled('content://outro.jpg')).toBe(false);
+        // linkedFolderEnabled começa false por padrão
+        expect(result.current.linkedFolderEnabled).toBe(false);
       });
 
       it('propaga erro quando fileRepository.list falha', async () => {
@@ -646,18 +648,107 @@ describe('useSharedFiles hook', () => {
       });
     });
 
-    describe('toggleFolderFile', () => {
-      it('arquivo ainda não habilitado: vincula via linkFromUri e adiciona ao store', async () => {
+    describe('toggleLinkedFolder (T-801 — toggle global)', () => {
+      it('quando habilitando: vincula TODOS os arquivos da pasta ao store', async () => {
         mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
-        mockFileRepository.list.mockResolvedValue([]);
-        const linkedEntry = createMockFileEntry({
-          id: 'new-linked',
-          name: folderFileFixture.name,
+        mockFileRepository.list.mockResolvedValue([]); // Começa vazio
+        const linkedEntry1 = createMockFileEntry({
+          id: 'new-linked-1',
+          name: 'foto1.jpg',
+          localUri: 'content://file1.jpg',
+          linked: true,
+        });
+        const linkedEntry2 = createMockFileEntry({
+          id: 'new-linked-2',
+          name: 'foto2.jpg',
+          localUri: 'content://file2.jpg',
+          linked: true,
+        });
+        mockFileRepository.linkFromUri
+          .mockResolvedValueOnce(linkedEntry1)
+          .mockResolvedValueOnce(linkedEntry2);
+        const folderSharingModule = createMockFolderSharingModule();
+        // Mock de múltiplos arquivos na pasta
+        folderSharingModule.readDirectoryAsync.mockResolvedValue([
+          'content://file1.jpg',
+          'content://file2.jpg',
+        ]);
+        folderSharingModule.getInfoAsync
+          .mockResolvedValueOnce({
+            exists: true,
+            uri: 'content://file1.jpg',
+            isDirectory: false,
+            size: 1024,
+            modificationTime: 0,
+          })
+          .mockResolvedValueOnce({
+            exists: true,
+            uri: 'content://file2.jpg',
+            isDirectory: false,
+            size: 2048,
+            modificationTime: 0,
+          });
+
+        const { result } = await renderHook(() =>
+          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
+        );
+        await act(async () => {
+          await result.current.loadLinkedFolder();
+        });
+
+        // linkedFolderEnabled começa false
+        expect(result.current.linkedFolderEnabled).toBe(false);
+        expect(useSharedFilesStore.getState().files).toHaveLength(0);
+
+        // Habilitar
+        await act(async () => {
+          await result.current.toggleLinkedFolder();
+        });
+
+        // linkedFolderEnabled agora é true e arquivos foram vinculados
+        expect(result.current.linkedFolderEnabled).toBe(true);
+        expect(mockFileRepository.linkFromUri).toHaveBeenCalledTimes(2);
+        expect(useSharedFilesStore.getState().files).toHaveLength(2);
+      });
+
+      it('quando desabilitando: remove TODOS os arquivos da pasta do store', async () => {
+        mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
+        const linkedEntry1 = createMockFileEntry({
+          id: 'linked-1',
+          name: 'foto1.jpg',
           localUri: folderFileFixture.uri,
           linked: true,
         });
-        mockFileRepository.linkFromUri.mockResolvedValue(linkedEntry);
+        const linkedEntry2 = createMockFileEntry({
+          id: 'linked-2',
+          name: 'foto2.jpg',
+          localUri: 'content://outro.jpg',
+          linked: true,
+        });
+        mockFileRepository.list.mockResolvedValue([linkedEntry1, linkedEntry2]);
+        mockFileRepository.remove.mockResolvedValue(undefined);
         const folderSharingModule = createMockFolderSharingModule();
+
+        // Pré-popular o store com os arquivos
+        useSharedFilesStore.setState({
+          files: [
+            {
+              id: 'linked-1',
+              name: 'foto1.jpg',
+              sizeBytes: 1024,
+              mimeType: 'image/jpeg',
+              createdAt: 1000,
+            },
+            {
+              id: 'linked-2',
+              name: 'foto2.jpg',
+              sizeBytes: 2048,
+              mimeType: 'image/jpeg',
+              createdAt: 2000,
+            },
+          ],
+          linkedFolderEnabled: true,
+        });
 
         const { result } = await renderHook(() =>
           useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
@@ -666,53 +757,53 @@ describe('useSharedFiles hook', () => {
           await result.current.loadLinkedFolder();
         });
 
+        // Verificar estado inicial
+        expect(result.current.linkedFolderEnabled).toBe(true);
+        expect(useSharedFilesStore.getState().files).toHaveLength(2);
+
+        // Desabilitar
         await act(async () => {
-          await result.current.toggleFolderFile(folderFileFixture);
+          await result.current.toggleLinkedFolder();
         });
 
-        expect(mockFileRepository.linkFromUri).toHaveBeenCalledWith(
-          folderFileFixture.uri,
-          folderFileFixture.name,
-          folderFileFixture.mimeType,
-          folderFileFixture.sizeBytes,
-          'shared',
-        );
-        expect(useSharedFilesStore.getState().files.some((f) => f.id === 'new-linked')).toBe(true);
-        expect(result.current.isFolderFileEnabled(folderFileFixture.uri)).toBe(true);
+        // linkedFolderEnabled agora é false e arquivos foram removidos
+        expect(result.current.linkedFolderEnabled).toBe(false);
+        expect(mockFileRepository.remove).toHaveBeenCalledTimes(2);
+        expect(useSharedFilesStore.getState().files).toHaveLength(0);
       });
 
-      it('arquivo já habilitado: desvincula via removeFile (não chama linkFromUri de novo)', async () => {
-        mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
-        mockFileRepository.list.mockResolvedValue([
-          createMockFileEntry({
-            id: 'already-linked',
-            localUri: folderFileFixture.uri,
-            linked: true,
-          }),
-        ]);
-        const folderSharingModule = createMockFolderSharingModule();
-
-        const { result } = await renderHook(() =>
-          useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
-        );
-        await act(async () => {
-          await result.current.loadLinkedFolder();
-        });
-
-        await act(async () => {
-          await result.current.toggleFolderFile(folderFileFixture);
-        });
-
-        expect(mockFileRepository.remove).toHaveBeenCalledWith('already-linked');
-        expect(mockFileRepository.linkFromUri).not.toHaveBeenCalled();
-        expect(result.current.isFolderFileEnabled(folderFileFixture.uri)).toBe(false);
-      });
-
-      it('propaga erro quando linkFromUri falha', async () => {
+      it('continua com próximo arquivo se um falhar ao vincular (habilitando)', async () => {
         mockFileRepository.getLinkedFolderUri.mockResolvedValue(folderUri);
         mockFileRepository.list.mockResolvedValue([]);
-        mockFileRepository.linkFromUri.mockRejectedValue(new Error('link failed'));
+        const linkedEntry = createMockFileEntry({
+          id: 'new-linked-1',
+          name: 'foto1.jpg',
+          localUri: 'content://file1.jpg',
+          linked: true,
+        });
+        mockFileRepository.linkFromUri
+          .mockRejectedValueOnce(new Error('Permission denied'))
+          .mockResolvedValueOnce(linkedEntry);
         const folderSharingModule = createMockFolderSharingModule();
+        folderSharingModule.readDirectoryAsync.mockResolvedValue([
+          'content://file1.jpg',
+          'content://file2.jpg',
+        ]);
+        folderSharingModule.getInfoAsync
+          .mockResolvedValueOnce({
+            exists: true,
+            uri: 'content://file1.jpg',
+            isDirectory: false,
+            size: 1024,
+            modificationTime: 0,
+          })
+          .mockResolvedValueOnce({
+            exists: true,
+            uri: 'content://file2.jpg',
+            isDirectory: false,
+            size: 2048,
+            modificationTime: 0,
+          });
 
         const { result } = await renderHook(() =>
           useSharedFiles({ fileRepository: mockFileRepository, folderSharingModule }),
@@ -721,17 +812,21 @@ describe('useSharedFiles hook', () => {
           await result.current.loadLinkedFolder();
         });
 
-        await expect(
-          act(async () => {
-            await result.current.toggleFolderFile(folderFileFixture);
-          }),
-        ).rejects.toThrow('link failed');
+        // Habilitar
+        await act(async () => {
+          await result.current.toggleLinkedFolder();
+        });
+
+        // Primeiro falhou, mas segundo foi adicionado
+        expect(mockFileRepository.linkFromUri).toHaveBeenCalledTimes(2);
+        expect(useSharedFilesStore.getState().files).toHaveLength(1);
+        expect(result.current.linkedFolderEnabled).toBe(true);
       });
     });
   });
 
   describe('hook return', () => {
-    it('deve retornar files, pickAndShareFiles, removeFile, loadSharedFiles', async () => {
+    it('deve retornar files, pickAndShareFiles, removeFile, loadSharedFiles, e pasta vinculada', async () => {
       const { result } = await renderHook(() =>
         useSharedFiles({ fileRepository: mockFileRepository }),
       );
@@ -740,11 +835,19 @@ describe('useSharedFiles hook', () => {
       expect(result.current).toHaveProperty('pickAndShareFiles');
       expect(result.current).toHaveProperty('removeFile');
       expect(result.current).toHaveProperty('loadSharedFiles');
+      expect(result.current).toHaveProperty('linkedFolderUri');
+      expect(result.current).toHaveProperty('linkedFolderEnabled');
+      expect(result.current).toHaveProperty('folderFiles');
+      expect(result.current).toHaveProperty('loadLinkedFolder');
+      expect(result.current).toHaveProperty('pickFolder');
+      expect(result.current).toHaveProperty('toggleLinkedFolder');
 
       expect(typeof result.current.pickAndShareFiles).toBe('function');
       expect(typeof result.current.removeFile).toBe('function');
       expect(typeof result.current.loadSharedFiles).toBe('function');
+      expect(typeof result.current.toggleLinkedFolder).toBe('function');
       expect(Array.isArray(result.current.files)).toBe(true);
+      expect(Array.isArray(result.current.folderFiles)).toBe(true);
     });
   });
 });

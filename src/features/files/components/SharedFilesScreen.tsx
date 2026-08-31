@@ -37,11 +37,11 @@ export function SharedFilesScreen({
     removeFile,
     loadSharedFiles,
     linkedFolderUri,
+    linkedFolderEnabled,
     folderFiles,
     loadLinkedFolder,
     pickFolder,
-    isFolderFileEnabled,
-    toggleFolderFile,
+    toggleLinkedFolder,
   } = useSharedFiles({
     fileRepository,
     fileSystemModule,
@@ -50,7 +50,7 @@ export function SharedFilesScreen({
   const files = useSharedFilesStore((state) => state.files);
   const [isPicking, setIsPicking] = useState(false);
   const [isPickingFolder, setIsPickingFolder] = useState(false);
-  const [togglingFileUri, setTogglingFileUri] = useState<string | null>(null);
+  const [isTogglingFolder, setIsTogglingFolder] = useState(false);
 
   // Carregar arquivos compartilhados e pasta vinculada ao montar a tela
   useEffect(() => {
@@ -104,15 +104,15 @@ export function SharedFilesScreen({
     }
   };
 
-  const handleToggleFolderFilePress = async (file: (typeof folderFiles)[number]) => {
-    setTogglingFileUri(file.uri);
+  const handleToggleFolderPress = async () => {
+    setIsTogglingFolder(true);
     try {
-      await toggleFolderFile(file);
+      await toggleLinkedFolder();
     } catch (error) {
-      console.error('[SharedFilesScreen] Erro ao alternar arquivo da pasta:', error);
-      Alert.alert('Erro', 'Não foi possível atualizar o compartilhamento deste arquivo.');
+      console.error('[SharedFilesScreen] Erro ao alternar pasta vinculada:', error);
+      Alert.alert('Erro', 'Não foi possível atualizar o compartilhamento da pasta.');
     } finally {
-      setTogglingFileUri(null);
+      setIsTogglingFolder(false);
     }
   };
 
@@ -159,9 +159,20 @@ export function SharedFilesScreen({
 
           {linkedFolderUri && (
             <View className="mb-6">
-              <Text className="text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-2 uppercase">
-                Arquivos da pasta vinculada
-              </Text>
+              <View className="mb-4 flex-row items-center justify-between">
+                <Text className="text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark uppercase">
+                  Arquivos da pasta vinculada
+                </Text>
+                <Button
+                  label={
+                    isTogglingFolder ? '...' : linkedFolderEnabled ? 'Desabilitar' : 'Habilitar'
+                  }
+                  variant={linkedFolderEnabled ? 'success' : 'secondary'}
+                  size="sm"
+                  disabled={isTogglingFolder}
+                  onPress={handleToggleFolderPress}
+                />
+              </View>
 
               {folderFiles.length === 0 ? (
                 <Card className="bg-surface-light dark:bg-surface-dark items-center justify-center py-8">
@@ -170,39 +181,21 @@ export function SharedFilesScreen({
                   </Text>
                 </Card>
               ) : (
-                folderFiles.map((file) => {
-                  const enabled = isFolderFileEnabled(file.uri);
-                  return (
-                    <Card key={file.uri} className="mb-3 flex-row items-center justify-between">
-                      <View className="flex-1">
-                        <Text
-                          className="text-base font-medium text-text-light dark:text-text-dark"
-                          numberOfLines={1}
-                        >
-                          {file.name}
-                        </Text>
-                        <Text className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-1">
-                          {formatBytes(file.sizeBytes)}
-                        </Text>
-                      </View>
-
-                      <Button
-                        label={
-                          togglingFileUri === file.uri
-                            ? '...'
-                            : enabled
-                              ? 'Habilitado'
-                              : 'Habilitar'
-                        }
-                        variant={enabled ? 'success' : 'secondary'}
-                        size="sm"
-                        disabled={togglingFileUri === file.uri}
-                        onPress={() => handleToggleFolderFilePress(file)}
-                        className="ml-3"
-                      />
-                    </Card>
-                  );
-                })
+                folderFiles.map((file) => (
+                  <Card key={file.uri} className="mb-3 flex-row items-center justify-between">
+                    <View className="flex-1">
+                      <Text
+                        className="text-base font-medium text-text-light dark:text-text-dark"
+                        numberOfLines={1}
+                      >
+                        {file.name}
+                      </Text>
+                      <Text className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-1">
+                        {formatBytes(file.sizeBytes)}
+                      </Text>
+                    </View>
+                  </Card>
+                ))
               )}
             </View>
           )}

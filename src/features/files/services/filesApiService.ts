@@ -35,7 +35,7 @@ export async function listFilesForApi(
  *
  * @param fileRepository - Repositório de arquivos
  * @param id - ID do arquivo a baixar
- * @returns Objeto com localUri, name, mimeType, sizeBytes; null se não encontrado
+ * @returns Objeto com localUri, name, mimeType, sizeBytes, linked; null se não encontrado
  */
 export async function getFileForDownload(
   fileRepository: FileRepository,
@@ -45,6 +45,7 @@ export async function getFileForDownload(
   name: string;
   mimeType: string;
   sizeBytes: number;
+  linked: boolean;
 } | null> {
   // Buscar arquivo em ambos os origins
   const allEntries = await fileRepository.list();
@@ -59,5 +60,6 @@ export async function getFileForDownload(
     name: entry.name,
     mimeType: entry.mimeType,
     sizeBytes: entry.sizeBytes,
+    linked: entry.linked ?? false,
   };
 }

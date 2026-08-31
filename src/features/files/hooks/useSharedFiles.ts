@@ -63,13 +63,18 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
     [options?.folderSharingModule],
   );
 
-  // Estado da pasta vinculada (T-701 — compartilhar por pasta sem duplicar).
-  const [linkedFolderUri, setLinkedFolderUriState] = useState<string | null>(null);
+  // Estado da pasta vinculada (T-801 — compartilhar por pasta sem duplicar).
   const [folderFiles, setFolderFiles] = useState<FolderFile[]>([]);
   // Entradas `linked: true` atuais (com `localUri`, para casar com `folderFiles`).
   // Não vem do Zustand (`useSharedFilesStore`), que guarda só o DTO público (sem
   // `localUri`, por design — ver `sharedFilesStore.ts`); vem direto do repositório.
   const [linkedEntries, setLinkedEntries] = useState<FileEntry[]>([]);
+
+  // Selecionar a URI da pasta do store (compartilhada entre instâncias do hook)
+  const linkedFolderUri = useSharedFilesStore((state) => state.linkedFolderUri);
+  const linkedFolderEnabled = useSharedFilesStore((state) => state.linkedFolderEnabled);
+  const setLinkedFolderUri = useSharedFilesStore((state) => state.setLinkedFolderUri);
+  const toggleLinkedFolderEnabled = useSharedFilesStore((state) => state.toggleLinkedFolderEnabled);
 
   // Trava chamadas concorrentes ao picker nativo: `getDocumentAsync` rejeita com
   // "Different document picking in progress" se for chamado de novo antes da promise
@@ -148,7 +153,7 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
 
   /**
    * Carrega a URI da pasta vinculada (se houver) e lista seus arquivos
-   * (T-701 — compartilhar por pasta sem duplicar).
+   * (T-801 — compartilhar por pasta sem duplicar).
    * Útil ao inicializar a tela.
    */
   const loadLinkedFolder = useCallback(async (): Promise<void> => {
@@ -157,7 +162,7 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
         fileRepository.getLinkedFolderUri(),
         fileRepository.list('shared'),
       ]);
-      setLinkedFolderUriState(uri);
+      setLinkedFolderUri(uri);
       setLinkedEntries(sharedEntries.filter((e) => e.linked));
 
       if (!uri) {
@@ -171,12 +176,13 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
       console.error('[useSharedFiles] Erro ao carregar pasta vinculada:', error);
       throw error;
     }
-  }, [fileRepository, folderSharingModule]);
+  }, [fileRepository, folderSharingModule, setLinkedFolderUri]);
 
   /**
    * Pede ao usuário para escolher uma pasta (SAF) e a vincula para
    * compartilhamento, sem copiar nenhum arquivo dela.
    * Não faz nada se o usuário negar/cancelar a permissão.
+   * Nova pasta desabilita automaticamente a anterior (se houvesse).
    */
   const pickFolder = useCallback(async (): Promise<void> => {
     try {
@@ -185,59 +191,79 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
         return;
       }
 
+      // Persistir no repositório
       await fileRepository.setLinkedFolderUri(uri);
-      setLinkedFolderUriState(uri);
+      // Atualizar store
+      setLinkedFolderUri(uri);
 
       const listed = await listFolderFiles(folderSharingModule, uri);
       setFolderFiles(listed);
+
+      // Nova pasta começa desabilitada (requer toggle explícito do usuário)
+      // Se não houver ainda arquivos vinculados, linkedEntries fica vazio
+      setLinkedEntries([]);
     } catch (error) {
       console.error('[useSharedFiles] Erro ao vincular pasta:', error);
       throw error;
     }
-  }, [fileRepository, folderSharingModule]);
+  }, [fileRepository, folderSharingModule, setLinkedFolderUri]);
 
   /**
-   * `true` quando o arquivo da pasta vinculada já está habilitado para
-   * compartilhamento (existe uma entrada vinculada com o mesmo `localUri` —
-   * ver `toggleFolderFile`).
+   * Alterna o estado de habilitação da pasta vinculada como um todo (T-801).
+   *
+   * Se desabilitando: remove TODOS os arquivos da pasta da lista de
+   * compartilhados (via `removeFile` — nunca apaga os arquivos reais).
+   *
+   * Se habilitando: adiciona TODOS os arquivos da pasta à lista de
+   * compartilhados (via `linkFromUri` — sem copiar).
    */
-  const isFolderFileEnabled = useCallback(
-    (fileUri: string): boolean => linkedEntries.some((e) => e.localUri === fileUri),
-    [linkedEntries],
-  );
+  const toggleLinkedFolder = useCallback(async (): Promise<void> => {
+    try {
+      // Alternar estado no store
+      toggleLinkedFolderEnabled();
 
-  /**
-   * Alterna o compartilhamento de um arquivo da pasta vinculada: se já
-   * habilitado, desvincula (`removeFile` — nunca apaga o arquivo real, ver
-   * `FileRepository.remove()`); senão, vincula via `linkFromUri` (sem copiar).
-   */
-  const toggleFolderFile = useCallback(
-    async (file: FolderFile): Promise<void> => {
-      const existing = linkedEntries.find((e) => e.localUri === file.uri);
-
-      try {
-        if (existing) {
-          await removeFile(existing.id);
-          setLinkedEntries((prev) => prev.filter((e) => e.id !== existing.id));
-          return;
+      // Se desabilitando
+      if (linkedFolderEnabled) {
+        // Remove todos os arquivos vinculados da pasta
+        for (const entry of linkedEntries) {
+          await removeFile(entry.id);
         }
-
-        const entry = await fileRepository.linkFromUri(
-          file.uri,
-          file.name,
-          file.mimeType,
-          file.sizeBytes,
-          'shared',
-        );
-        addFile(entry);
-        setLinkedEntries((prev) => [...prev, entry]);
-      } catch (error) {
-        console.error('[useSharedFiles] Erro ao alternar arquivo da pasta:', file.name, error);
-        throw error;
+        setLinkedEntries([]);
+        return;
       }
-    },
-    [linkedEntries, fileRepository, addFile, removeFile],
-  );
+
+      // Se habilitando: vincular todos os arquivos da pasta
+      const newEntries: FileEntry[] = [];
+      for (const file of folderFiles) {
+        try {
+          const entry = await fileRepository.linkFromUri(
+            file.uri,
+            file.name,
+            file.mimeType,
+            file.sizeBytes,
+            'shared',
+          );
+          addFile(entry);
+          newEntries.push(entry);
+        } catch (error) {
+          console.error('[useSharedFiles] Erro ao vincular arquivo da pasta:', file.name, error);
+          // Continuar com próximo arquivo em caso de erro
+        }
+      }
+      setLinkedEntries(newEntries);
+    } catch (error) {
+      console.error('[useSharedFiles] Erro ao alternar pasta vinculada:', error);
+      throw error;
+    }
+  }, [
+    linkedFolderEnabled,
+    linkedEntries,
+    folderFiles,
+    fileRepository,
+    addFile,
+    removeFile,
+    toggleLinkedFolderEnabled,
+  ]);
 
   /**
    * Carrega os arquivos 'shared' do repositório e popula o store.
@@ -259,10 +285,10 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
     removeFile,
     loadSharedFiles,
     linkedFolderUri,
+    linkedFolderEnabled,
     folderFiles,
     loadLinkedFolder,
     pickFolder,
-    isFolderFileEnabled,
-    toggleFolderFile,
+    toggleLinkedFolder,
   };
 }
