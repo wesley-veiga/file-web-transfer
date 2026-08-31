@@ -14,6 +14,8 @@ interface SharedFilesScreenProps {
   fileSystemModule?: FileSystemModule;
   /** Para injetar mock de DocumentPicker em testes. */
   documentPickerModule?: typeof DocumentPicker;
+  /** T-801: status do servidor (passado como prop via composição em src/app/) */
+  isServerRunning?: boolean;
 }
 
 /**
@@ -31,6 +33,7 @@ export function SharedFilesScreen({
   fileRepository,
   fileSystemModule,
   documentPickerModule,
+  isServerRunning = true, // default true para compatibilidade com testes existentes
 }: SharedFilesScreenProps) {
   const {
     pickAndShareFiles,
@@ -165,14 +168,30 @@ export function SharedFilesScreen({
                 </Text>
                 <Button
                   label={
-                    isTogglingFolder ? '...' : linkedFolderEnabled ? 'Desabilitar' : 'Habilitar'
+                    isTogglingFolder
+                      ? '...'
+                      : !isServerRunning
+                        ? 'Iniciar servidor'
+                        : linkedFolderEnabled
+                          ? 'Desabilitar'
+                          : 'Habilitar'
                   }
-                  variant={linkedFolderEnabled ? 'success' : 'secondary'}
+                  variant={
+                    !isServerRunning ? 'secondary' : linkedFolderEnabled ? 'success' : 'secondary'
+                  }
                   size="sm"
-                  disabled={isTogglingFolder}
+                  disabled={isTogglingFolder || !isServerRunning}
                   onPress={handleToggleFolderPress}
                 />
               </View>
+
+              {!isServerRunning && (
+                <Card className="bg-surface-light dark:bg-surface-dark border border-warning-light dark:border-warning-dark mb-4 px-3 py-2">
+                  <Text className="text-xs text-warning-light dark:text-warning-dark">
+                    Inicie o servidor para compartilhar arquivos desta pasta
+                  </Text>
+                </Card>
+              )}
 
               {folderFiles.length === 0 ? (
                 <Card className="bg-surface-light dark:bg-surface-dark items-center justify-center py-8">

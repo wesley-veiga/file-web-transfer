@@ -4,8 +4,11 @@
  * `SharedFilesScreen` (@/features/files/components/SharedFilesScreen) já tem
  * suíte própria e aprovada em `T-302` (ver
  * `src/features/files/components/__tests__/SharedFilesScreen.test.tsx`); este
- * arquivo cobre apenas o fio de ligação entre a rota `/compartilhados`
+ * arquivo cove apenas o fio de ligação entre a rota `/compartilhados`
  * (grupo `(tabs)`) e o componente de tela, sem duplicar sua lógica interna.
+ *
+ * T-801: CompartilhadosTab agora compõe useServerStore (via composição em src/app/)
+ * e passa isServerRunning como prop para SharedFilesScreen.
  */
 
 import React from 'react';
@@ -33,10 +36,13 @@ describe('CompartilhadosTab ((tabs)/compartilhados.tsx)', () => {
     await expect(render(<CompartilhadosTab />)).resolves.toBeDefined();
   });
 
-  it('renderiza o SharedFilesScreen (T-302) sem props extras', async () => {
+  it('renderiza o SharedFilesScreen (T-302) passando o status do servidor (T-801)', async () => {
     await render(<CompartilhadosTab />);
 
     expect(mockedSharedFilesScreen).toHaveBeenCalledTimes(1);
-    expect(mockedSharedFilesScreen).toHaveBeenCalledWith({}, undefined);
+    // Verifica que isServerRunning foi passado como prop
+    const callArgs = mockedSharedFilesScreen.mock.calls[0];
+    expect(callArgs[0]).toHaveProperty('isServerRunning');
+    expect(typeof callArgs[0].isServerRunning).toBe('boolean');
   });
 });
