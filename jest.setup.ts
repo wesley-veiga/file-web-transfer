@@ -27,6 +27,28 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+// Mock expo-crypto for hashSha256 (T-801) and randomUUID (T-601)
+jest.mock('expo-crypto', () => {
+  const crypto = require('crypto');
+  return {
+    CryptoDigestAlgorithm: {
+      SHA256: 'sha256',
+    },
+    CryptoEncoding: {
+      BASE64: 'base64',
+      HEX: 'hex',
+    },
+    digestStringAsync: async (algorithm: string, data: string, options?: { encoding?: string }) => {
+      const hash = crypto
+        .createHash(algorithm)
+        .update(data)
+        .digest(options?.encoding || 'hex');
+      return hash;
+    },
+    randomUUID: () => crypto.randomUUID(),
+  };
+});
+
 // Mock expo-router for Stack and ThemeProvider
 jest.mock('expo-router', () => ({
   Stack: (props: any) => {
