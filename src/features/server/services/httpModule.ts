@@ -9,6 +9,8 @@
  * Baseado no ADR 001 (Seção 4): uso de interface injetável para desacoplamento.
  */
 
+import type { Buffer } from 'buffer';
+
 export interface HttpServerRequest {
   method: string;
   path: string;
@@ -31,7 +33,13 @@ export interface HttpServerRequest {
 export interface HttpServerResponse {
   statusCode: number;
   headers?: Record<string, string>;
-  body?: string | ArrayBuffer;
+  /**
+   * `Buffer` é o tipo correto para corpo binário exato (ex.: download de arquivo,
+   * T-701): `nativeHttpModule.ts` já trata `Buffer.isBuffer(body)` como caso
+   * dedicado em `writeResponse`, escrevendo os bytes sem qualquer conversão de
+   * texto — ao contrário de `string`, que é sempre serializada como UTF-8.
+   */
+  body?: string | ArrayBuffer | Buffer;
 }
 
 export type HttpServerRequestHandler = (request: HttpServerRequest) => Promise<HttpServerResponse>;

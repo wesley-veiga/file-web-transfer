@@ -10,6 +10,7 @@
  * Respeita as boundaries arquiteturais: features nunca se importam entre si.
  */
 
+import { Buffer } from 'buffer';
 import type {
   HttpServerRequest,
   HttpServerResponse,
@@ -60,7 +61,9 @@ const PROGRESS_REPORT_THROTTLE_MS = 500;
 export function registerFileRoutes(
   apiRouter: ApiRouter,
   fileRepository: FileRepository,
-  fsModule: { readAsStringAsync: (uri: string) => Promise<string> },
+  fsModule: {
+    readAsStringAsync: (uri: string, options?: { encoding?: 'utf8' | 'base64' }) => Promise<string>;
+  },
   transferStore: TransferStoreActions = useTransferStore.getState(),
 ): void {
   // GET /api/files — Listar arquivos disponíveis para download
@@ -132,10 +135,21 @@ export function registerFileRoutes(
       });
       transferStore.start(transferId);
 
-      // Ler conteúdo do arquivo
-      let fileContent: string;
+      // Ler conteúdo do arquivo como base64 e decodificar para bytes reais.
+      //
+      // Achado em T-701 (teste manual em dispositivo real): ler com
+      // `readAsStringAsync(uri)` sem `encoding` usa UTF-8 por padrão
+      // (`expo-file-system/legacy`) — qualquer byte que não forme uma sequência
+      // UTF-8 válida (a maioria dos bytes de um arquivo binário real, como
+      // jpeg/mov) é substituído/perdido na decodificação, corrompendo o arquivo
+      // antes mesmo de sair pela rede. `{ encoding: 'base64' }` lê os bytes
+      // exatos sem reinterpretá-los como texto.
+      let fileBuffer: Buffer;
       try {
-        fileContent = await fsModule.readAsStringAsync(fileInfo.localUri);
+        const base64Content = await fsModule.readAsStringAsync(fileInfo.localUri, {
+          encoding: 'base64',
+        });
+        fileBuffer = Buffer.from(base64Content, 'base64');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Erro desconhecido';
         console.error(`[FileRoutes] Erro ao ler arquivo ${fileId} (${fileInfo.localUri}):`, error);
@@ -153,9 +167,10 @@ export function registerFileRoutes(
       transferStore.reportProgress(transferId, fileInfo.sizeBytes);
       transferStore.complete(transferId);
 
-      // Retornar arquivo com headers corretos
-      // Nota: simulando streaming via base64, já que HttpServerResponse não suporta stream real
-      // (este é um trade-off de escopo mencionado no relatório final)
+      // Retornar arquivo com headers corretos.
+      // Nota: lê o arquivo inteiro em memória (sem streaming real — ver nota de
+      // escopo acima); `body` é o Buffer de bytes exatos decodificado acima,
+      // nunca uma string re-interpretada como texto (T-701).
       return {
         statusCode: 200,
         headers: {
@@ -163,7 +178,7 @@ export function registerFileRoutes(
           'Content-Length': String(fileInfo.sizeBytes),
           'Content-Disposition': contentDisposition,
         },
-        body: fileContent,
+        body: fileBuffer,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';

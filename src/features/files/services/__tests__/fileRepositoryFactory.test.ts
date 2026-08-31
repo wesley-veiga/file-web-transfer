@@ -85,6 +85,51 @@ describe('fileRepositoryFactory - comprehensive coverage', () => {
     await expect(handle.writeChunk('world')).resolves.toBeUndefined();
   });
 
+  it('appendToFileAsync do módulo padrão converte a string binária em bytes exatos antes de escrever (T-701)', async () => {
+    // Bug real encontrado em teste manual em dispositivo (jpeg/mov corrompidos ao
+    // chegar no host): sem essa conversão para Uint8Array, o nativo Android grava
+    // `content.toByteArray()` usando UTF-8 por padrão, reescrevendo todo byte ≥ 0x80
+    // (a maioria dos bytes de um arquivo binário real) como uma sequência multi-byte.
+    // `nativeHttpModule.ts` entrega o corpo do upload como string "binary" (latin1,
+    // 1 char = 1 byte) — este teste garante que `appendToFileAsync` passa os bytes
+    // exatos para `File.write`, nunca a string crua.
+    let capturedArgs: unknown[] = [];
+
+    let repo: ReturnType<typeof createFileRepository>;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const isolatedFileSystem = require('expo-file-system') as { File: typeof File };
+      const OriginalFile = isolatedFileSystem.File;
+      isolatedFileSystem.File = class extends OriginalFile {
+        constructor(...args: ConstructorParameters<typeof File>) {
+          super(...args);
+          const originalWrite = this.write;
+          this.write = (...writeArgs: Parameters<typeof originalWrite>) => {
+            capturedArgs = writeArgs;
+            return originalWrite.apply(this, writeArgs);
+          };
+        }
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createFileRepository: isolatedCreate } = require('../fileRepositoryFactory');
+      repo = isolatedCreate();
+    });
+
+    const handle = await repo!.beginStreamedWrite('img.jpg', 'image/jpeg', 'received');
+
+    // Magic bytes de JPEG — inclui valores ≥ 0x80, que é exatamente o que a codificação
+    // UTF-8 padrão do nativo corrompia.
+    const rawBytes = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10];
+    const binaryString = String.fromCharCode(...rawBytes);
+
+    await handle.writeChunk(binaryString);
+
+    const [writtenContent] = capturedArgs;
+    expect(writtenContent).toBeInstanceOf(Uint8Array);
+    expect(Array.from(writtenContent as Uint8Array)).toEqual(rawBytes);
+  });
+
   describe('appendToFileAsync - new File API (SDK 57+)', () => {
     it('should use File.write() with append:true to append content to file', async () => {
       const mockFs = createMockFileSystemModule();
