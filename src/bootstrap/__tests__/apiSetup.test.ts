@@ -320,6 +320,205 @@ describe('apiSetup — registerFileRoutes', () => {
     });
   });
 
+  describe('T-801 — LINKED_FILE_READ_ERROR em arquivo vinculado', () => {
+    it('retorna 500 LINKED_FILE_READ_ERROR quando falha ler arquivo vinculado (linked: true)', async () => {
+      const linkedEntry: FileEntry = {
+        id: 'linked-file-1',
+        name: 'arquivo-vinculado.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'content://external/primary/Documents/arquivo.pdf', // URI externa
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true, // Marcado como vinculado
+      };
+
+      mockFileRepository.list.mockResolvedValue([linkedEntry]);
+      mockFsModule.readAsStringAsync.mockRejectedValueOnce(new Error('Permission denied'));
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-1'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/linked-file-1/download', headers: {} },
+        { id: 'linked-file-1' },
+        {},
+      );
+
+      expect(response.statusCode).toBe(500);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('LINKED_FILE_READ_ERROR');
+      expect(body.error.message).toContain('arquivo vinculado');
+      expect(body.error.message).toContain('Permission denied');
+
+      // Verificar que transferStore.fail foi chamado
+      expect(mockTransferStore.fail).toHaveBeenCalledWith('transfer-1', 'Permission denied');
+
+      // Validar contra schema
+      const parsed = apiErrorSchema.safeParse(body);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('retorna 500 INTERNAL_ERROR quando falha ler arquivo não-vinculado (linked: false)', async () => {
+      const unlinkedEntry: FileEntry = {
+        id: 'shared-file-1',
+        name: 'arquivo-compartilhado.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///data/user/0/app/files/arquivo.pdf', // URI local sandbox
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: false, // Copiado para sandbox, não vinculado
+      };
+
+      mockFileRepository.list.mockResolvedValue([unlinkedEntry]);
+      mockFsModule.readAsStringAsync.mockRejectedValueOnce(new Error('File not found'));
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-1'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/shared-file-1/download', headers: {} },
+        { id: 'shared-file-1' },
+        {},
+      );
+
+      expect(response.statusCode).toBe(500);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      // Arquivo não-vinculado retorna INTERNAL_ERROR, não LINKED_FILE_READ_ERROR
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+      expect(body.error.message).toContain('Erro ao ler arquivo');
+
+      // Validar contra schema
+      const parsed = apiErrorSchema.safeParse(body);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('retorna 500 LINKED_FILE_READ_ERROR com mensagem descritiva do erro de leitura', async () => {
+      const linkedEntry: FileEntry = {
+        id: 'linked-file-2',
+        name: 'documento-vinculado.docx',
+        sizeBytes: 2048,
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        localUri:
+          'content://com.android.externalstorage.documents/document/primary:Documents/doc.docx',
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockFileRepository.list.mockResolvedValue([linkedEntry]);
+      const readError = new Error('Disco removido ou permissão revogada');
+      mockFsModule.readAsStringAsync.mockRejectedValueOnce(readError);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-2'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/linked-file-2/download', headers: {} },
+        { id: 'linked-file-2' },
+        {},
+      );
+
+      expect(response.statusCode).toBe(500);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('LINKED_FILE_READ_ERROR');
+      expect(body.error.message).toContain('Disco removido ou permissão revogada');
+    });
+
+    it('nunca serve arquivo truncado/parcial silenciosamente (falha no read é erro explícito)', async () => {
+      const linkedEntry: FileEntry = {
+        id: 'linked-file-3',
+        name: 'arquivo-grande.zip',
+        sizeBytes: 104857600, // 100 MB
+        mimeType: 'application/zip',
+        localUri: 'content://storage/emulated/0/Download/grande.zip',
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockFileRepository.list.mockResolvedValue([linkedEntry]);
+      // Simular leitura parcial (erro após alguns bytes)
+      mockFsModule.readAsStringAsync.mockRejectedValueOnce(new Error('Leitura interrompida'));
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-3'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/linked-file-3/download', headers: {} },
+        { id: 'linked-file-3' },
+        {},
+      );
+
+      // Não pode servir arquivo truncado — retorna erro explícito
+      expect(response.statusCode).toBe(500);
+      expect(response.body).toBeDefined();
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('LINKED_FILE_READ_ERROR');
+
+      // Verificar que NOT foi tentado um send com conteúdo truncado
+      // (a resposta nunca chega até return { statusCode: 200, body: fileBuffer } abaixo)
+      expect(response.statusCode).not.toBe(200);
+    });
+  });
+
   describe('casos de borda e segurança — GET /api/files', () => {
     it('rejeita origin=received válido também', async () => {
       const now = Date.now();
