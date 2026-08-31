@@ -16,7 +16,7 @@ import type {
 import type { FileRepository } from '../../features/files/services/fileRepository';
 import type { FileEntry } from '../../features/files/types';
 import { fileEntryDtoSchema, apiErrorSchema } from '../../shared/types/api';
-import { createFilesChangedAtTracker } from '../../shared/lib/filesChangedAtTracker';
+import { createFilesChangedAtTracker, hashSha256, hashesEqual } from '../../shared/lib';
 import { createMockFileRepository, createMockHttpModule } from '../../__mocks__/testHelpers';
 import { WEB_UI_HTML } from '../../web-ui/webUiHtml';
 
@@ -317,6 +317,370 @@ describe('apiSetup — registerFileRoutes', () => {
       const body400 = JSON.parse(typeof response400.body === 'string' ? response400.body : '');
       const parsed400 = apiErrorSchema.safeParse(body400);
       expect(parsed400.success).toBe(true);
+    });
+  });
+
+  describe('T-801 — validação de integridade SHA-256 na rota de download', () => {
+    it('arquivo vinculado baixado com sucesso tem hash idêntico ao original (caminho real de download)', async () => {
+      // Buffer com bytes que não formam UTF-8 válido (tipo JPEG real, bytes altos)
+      // Isso exercita o fix do bug de corrupção binária (PR #54/T-701)
+      const originalBinary = Buffer.from([
+        0xff,
+        0xd8,
+        0xff,
+        0xe0,
+        0x00,
+        0x10,
+        0x4a,
+        0x46,
+        0x49,
+        0x46, // JPEG magic bytes
+        0x00,
+        0x01,
+        0x01,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x01,
+        0x00,
+        0x00, // JFIF header
+        0x8a,
+        0x9f,
+        0xb3,
+        0xc7,
+        0xde,
+        0xef,
+        0x01,
+        0x7f,
+        0x80,
+        0xff, // bytes altos (não UTF-8)
+      ]);
+
+      const linkedEntry: FileEntry = {
+        id: 'integrity-test-1',
+        name: 'imagem-vinculada.jpg',
+        sizeBytes: originalBinary.length,
+        mimeType: 'image/jpeg',
+        localUri: 'content://external/DCIM/imagem.jpg',
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockFileRepository.list.mockResolvedValue([linkedEntry]);
+      // Mockar readAsStringAsync retornando o buffer em base64 (como a rota espera)
+      mockFsModule.readAsStringAsync.mockResolvedValueOnce(originalBinary.toString('base64'));
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-integrity-1'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/integrity-test-1/download', headers: {} },
+        { id: 'integrity-test-1' },
+        {},
+      );
+
+      // Download bem-sucedido
+      expect(response.statusCode).toBe(200);
+      expect(Buffer.isBuffer(response.body)).toBe(true);
+      const downloadedBinary = response.body as Buffer;
+
+      // Verificar que o binário foi preservado exatamente (não corrompido)
+      expect(downloadedBinary).toEqual(originalBinary);
+
+      // Validação de integridade SHA-256: hash do original === hash do baixado
+      // NOTA: esse é o teste que o critério de pronto de T-801 pede especificamente:
+      // "teste automatizado compara hash do arquivo original com o hash do arquivo
+      //  recebido pelo convidado"
+      const originalHash = await hashSha256(originalBinary);
+      const downloadedHash = await hashSha256(downloadedBinary);
+
+      expect(hashesEqual(originalHash, downloadedHash)).toBe(true);
+      expect(originalHash).toBe(downloadedHash);
+
+      // Verificar que transferStore foi instrumentado corretamente
+      expect(mockTransferStore.enqueue).toHaveBeenCalled();
+      expect(mockTransferStore.start).toHaveBeenCalled();
+      expect(mockTransferStore.reportProgress).toHaveBeenCalledWith(
+        'transfer-integrity-1',
+        originalBinary.length,
+      );
+      expect(mockTransferStore.complete).toHaveBeenCalledWith('transfer-integrity-1');
+    });
+
+    it('detecção de corrupção: hash diferente para arquivo alterado em 1 byte', async () => {
+      const originalBinary = Buffer.from([
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x8a, 0x9f, 0xb3, 0xc7, 0xde,
+        0xef, 0x01, 0x7f, 0x80, 0xff,
+      ]);
+
+      const corruptedBinary = Buffer.from(originalBinary); // Cópia
+      corruptedBinary[5] = 0xff; // Alterar 1 byte (antes era 0x10)
+
+      const linkedEntry: FileEntry = {
+        id: 'corruption-test-1',
+        name: 'imagem-corrompida.jpg',
+        sizeBytes: originalBinary.length,
+        mimeType: 'image/jpeg',
+        localUri: 'content://external/DCIM/imagem.jpg',
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockFileRepository.list.mockResolvedValue([linkedEntry]);
+      // Retornar binário corrompido
+      mockFsModule.readAsStringAsync.mockResolvedValueOnce(corruptedBinary.toString('base64'));
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-corruption-1'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/corruption-test-1/download', headers: {} },
+        { id: 'corruption-test-1' },
+        {},
+      );
+
+      // Download aparenta sucesso, mas conteúdo é corrompido
+      expect(response.statusCode).toBe(200);
+      const downloadedBinary = response.body as Buffer;
+
+      // Verificar que os binários são diferentes
+      expect(downloadedBinary).not.toEqual(originalBinary);
+
+      // SHA-256 detecta a alteração (hashes devem ser diferentes)
+      const originalHash = await hashSha256(originalBinary);
+      const downloadedHash = await hashSha256(downloadedBinary);
+
+      // CRITICAL: hashes devem ser DIFERENTES para detectar a corrupção
+      expect(hashesEqual(originalHash, downloadedHash)).toBe(false);
+      expect(originalHash).not.toBe(downloadedHash);
+    });
+  });
+
+  describe('T-801 — LINKED_FILE_READ_ERROR em arquivo vinculado', () => {
+    it('retorna 500 LINKED_FILE_READ_ERROR quando falha ler arquivo vinculado (linked: true)', async () => {
+      const linkedEntry: FileEntry = {
+        id: 'linked-file-1',
+        name: 'arquivo-vinculado.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'content://external/primary/Documents/arquivo.pdf', // URI externa
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true, // Marcado como vinculado
+      };
+
+      mockFileRepository.list.mockResolvedValue([linkedEntry]);
+      mockFsModule.readAsStringAsync.mockRejectedValueOnce(new Error('Permission denied'));
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-1'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/linked-file-1/download', headers: {} },
+        { id: 'linked-file-1' },
+        {},
+      );
+
+      expect(response.statusCode).toBe(500);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('LINKED_FILE_READ_ERROR');
+      expect(body.error.message).toContain('arquivo vinculado');
+      expect(body.error.message).toContain('Permission denied');
+
+      // Verificar que transferStore.fail foi chamado
+      expect(mockTransferStore.fail).toHaveBeenCalledWith('transfer-1', 'Permission denied');
+
+      // Validar contra schema
+      const parsed = apiErrorSchema.safeParse(body);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('retorna 500 INTERNAL_ERROR quando falha ler arquivo não-vinculado (linked: false)', async () => {
+      const unlinkedEntry: FileEntry = {
+        id: 'shared-file-1',
+        name: 'arquivo-compartilhado.pdf',
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        localUri: 'file:///data/user/0/app/files/arquivo.pdf', // URI local sandbox
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: false, // Copiado para sandbox, não vinculado
+      };
+
+      mockFileRepository.list.mockResolvedValue([unlinkedEntry]);
+      mockFsModule.readAsStringAsync.mockRejectedValueOnce(new Error('File not found'));
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-1'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/shared-file-1/download', headers: {} },
+        { id: 'shared-file-1' },
+        {},
+      );
+
+      expect(response.statusCode).toBe(500);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      // Arquivo não-vinculado retorna INTERNAL_ERROR, não LINKED_FILE_READ_ERROR
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+      expect(body.error.message).toContain('Erro ao ler arquivo');
+
+      // Validar contra schema
+      const parsed = apiErrorSchema.safeParse(body);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('retorna 500 LINKED_FILE_READ_ERROR com mensagem descritiva do erro de leitura', async () => {
+      const linkedEntry: FileEntry = {
+        id: 'linked-file-2',
+        name: 'documento-vinculado.docx',
+        sizeBytes: 2048,
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        localUri:
+          'content://com.android.externalstorage.documents/document/primary:Documents/doc.docx',
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockFileRepository.list.mockResolvedValue([linkedEntry]);
+      const readError = new Error('Disco removido ou permissão revogada');
+      mockFsModule.readAsStringAsync.mockRejectedValueOnce(readError);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-2'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/linked-file-2/download', headers: {} },
+        { id: 'linked-file-2' },
+        {},
+      );
+
+      expect(response.statusCode).toBe(500);
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('LINKED_FILE_READ_ERROR');
+      expect(body.error.message).toContain('Disco removido ou permissão revogada');
+    });
+
+    it('nunca serve arquivo truncado/parcial silenciosamente (falha no read é erro explícito)', async () => {
+      const linkedEntry: FileEntry = {
+        id: 'linked-file-3',
+        name: 'arquivo-grande.zip',
+        sizeBytes: 104857600, // 100 MB
+        mimeType: 'application/zip',
+        localUri: 'content://storage/emulated/0/Download/grande.zip',
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockFileRepository.list.mockResolvedValue([linkedEntry]);
+      // Simular leitura parcial (erro após alguns bytes)
+      mockFsModule.readAsStringAsync.mockRejectedValueOnce(new Error('Leitura interrompida'));
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-3'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/linked-file-3/download', headers: {} },
+        { id: 'linked-file-3' },
+        {},
+      );
+
+      // Não pode servir arquivo truncado — retorna erro explícito
+      expect(response.statusCode).toBe(500);
+      expect(response.body).toBeDefined();
+
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('LINKED_FILE_READ_ERROR');
+
+      // Verificar que NOT foi tentado um send com conteúdo truncado
+      // (a resposta nunca chega até return { statusCode: 200, body: fileBuffer } abaixo)
+      expect(response.statusCode).not.toBe(200);
     });
   });
 

@@ -19,6 +19,11 @@ import type { FileEntryDto } from '../../types';
 jest.mock('../../hooks/useSharedFiles', () => ({
   useSharedFiles: jest.fn(),
 }));
+jest.mock('@/shared/components', () => ({
+  ...jest.requireActual('@/shared/components'),
+  FileItemThumbnail: () => null,
+}));
+
 const mockUseSharedFiles = useSharedFiles as jest.MockedFunction<typeof useSharedFiles>;
 
 const createMockDto = (overrides?: Partial<FileEntryDto>): FileEntryDto => ({
@@ -49,11 +54,11 @@ describe('SharedFilesScreen handlers (T-302)', () => {
       removeFile: mockRemoveFile,
       loadSharedFiles: mockLoadSharedFiles,
       linkedFolderUri: null,
+      linkedFolderEnabled: false,
       folderFiles: [],
       loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
       pickFolder: jest.fn().mockResolvedValue(undefined),
-      isFolderFileEnabled: jest.fn().mockReturnValue(false),
-      toggleFolderFile: jest.fn().mockResolvedValue(undefined),
+      toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
     });
 
     useSharedFilesStore.setState({ files: [] });
@@ -100,11 +105,11 @@ describe('SharedFilesScreen handlers (T-302)', () => {
         removeFile: mockRemoveFile,
         loadSharedFiles: mockLoadSharedFiles,
         linkedFolderUri: null,
+        linkedFolderEnabled: false,
         folderFiles: [],
         loadLinkedFolder: mockLoadLinkedFolder,
         pickFolder: jest.fn().mockResolvedValue(undefined),
-        isFolderFileEnabled: jest.fn().mockReturnValue(false),
-        toggleFolderFile: jest.fn().mockResolvedValue(undefined),
+        toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
       });
 
       await render(<SharedFilesScreen />);
@@ -197,7 +202,7 @@ describe('SharedFilesScreen handlers (T-302)', () => {
     });
   });
 
-  describe('pasta vinculada (T-701 — compartilhar por pasta sem duplicar)', () => {
+  describe('pasta vinculada (T-801 — compartilhar por pasta sem duplicar)', () => {
     const folderFile = {
       uri: 'content://.../foto.jpg',
       name: 'foto.jpg',
@@ -218,11 +223,11 @@ describe('SharedFilesScreen handlers (T-302)', () => {
         removeFile: mockRemoveFile,
         loadSharedFiles: mockLoadSharedFiles,
         linkedFolderUri: 'content://tree/primary%3ADownload',
+        linkedFolderEnabled: false,
         folderFiles: [],
         loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
         pickFolder: jest.fn().mockResolvedValue(undefined),
-        isFolderFileEnabled: jest.fn().mockReturnValue(false),
-        toggleFolderFile: jest.fn().mockResolvedValue(undefined),
+        toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
       });
 
       const { getByText } = await render(<SharedFilesScreen />);
@@ -238,11 +243,11 @@ describe('SharedFilesScreen handlers (T-302)', () => {
         removeFile: mockRemoveFile,
         loadSharedFiles: mockLoadSharedFiles,
         linkedFolderUri: null,
+        linkedFolderEnabled: false,
         folderFiles: [],
         loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
         pickFolder: mockPickFolder,
-        isFolderFileEnabled: jest.fn().mockReturnValue(false),
-        toggleFolderFile: jest.fn().mockResolvedValue(undefined),
+        toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
       });
 
       const { getByText } = await render(<SharedFilesScreen />);
@@ -261,11 +266,11 @@ describe('SharedFilesScreen handlers (T-302)', () => {
         removeFile: mockRemoveFile,
         loadSharedFiles: mockLoadSharedFiles,
         linkedFolderUri: null,
+        linkedFolderEnabled: false,
         folderFiles: [],
         loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
         pickFolder: mockPickFolder,
-        isFolderFileEnabled: jest.fn().mockReturnValue(false),
-        toggleFolderFile: jest.fn().mockResolvedValue(undefined),
+        toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
       });
 
       const { getByText } = await render(<SharedFilesScreen />);
@@ -282,93 +287,26 @@ describe('SharedFilesScreen handlers (T-302)', () => {
       expect(queryByText('Arquivos da pasta vinculada')).toBeNull();
     });
 
-    it('lista os arquivos da pasta vinculada com o rótulo "Habilitar" quando desabilitados', async () => {
+    it('lista os arquivos da pasta vinculada quando existe (T-801)', async () => {
       mockUseSharedFiles.mockReturnValue({
         files: [],
         pickAndShareFiles: mockPickAndShareFiles,
         removeFile: mockRemoveFile,
         loadSharedFiles: mockLoadSharedFiles,
         linkedFolderUri: 'content://tree/primary%3ADownload',
+        linkedFolderEnabled: false,
         folderFiles: [folderFile],
         loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
         pickFolder: jest.fn().mockResolvedValue(undefined),
-        isFolderFileEnabled: jest.fn().mockReturnValue(false),
-        toggleFolderFile: jest.fn().mockResolvedValue(undefined),
+        toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
       });
 
-      const { getByText } = await render(<SharedFilesScreen />);
+      const { getByText, queryByText } = await render(<SharedFilesScreen />);
 
       expect(getByText('Arquivos da pasta vinculada')).toBeTruthy();
       expect(getByText('foto.jpg')).toBeTruthy();
-      expect(getByText('Habilitar')).toBeTruthy();
-    });
-
-    it('mostra "Habilitado" quando o arquivo já está habilitado', async () => {
-      mockUseSharedFiles.mockReturnValue({
-        files: [],
-        pickAndShareFiles: mockPickAndShareFiles,
-        removeFile: mockRemoveFile,
-        loadSharedFiles: mockLoadSharedFiles,
-        linkedFolderUri: 'content://tree/primary%3ADownload',
-        folderFiles: [folderFile],
-        loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
-        pickFolder: jest.fn().mockResolvedValue(undefined),
-        isFolderFileEnabled: jest.fn().mockReturnValue(true),
-        toggleFolderFile: jest.fn().mockResolvedValue(undefined),
-      });
-
-      const { getByText } = await render(<SharedFilesScreen />);
-
-      expect(getByText('Habilitado')).toBeTruthy();
-    });
-
-    it('chama toggleFolderFile com o arquivo certo ao pressionar o toggle', async () => {
-      const mockToggleFolderFile = jest.fn().mockResolvedValue(undefined);
-      mockUseSharedFiles.mockReturnValue({
-        files: [],
-        pickAndShareFiles: mockPickAndShareFiles,
-        removeFile: mockRemoveFile,
-        loadSharedFiles: mockLoadSharedFiles,
-        linkedFolderUri: 'content://tree/primary%3ADownload',
-        folderFiles: [folderFile],
-        loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
-        pickFolder: jest.fn().mockResolvedValue(undefined),
-        isFolderFileEnabled: jest.fn().mockReturnValue(false),
-        toggleFolderFile: mockToggleFolderFile,
-      });
-
-      const { getByText } = await render(<SharedFilesScreen />);
-      fireEvent.press(getByText('Habilitar').parent!);
-
-      await waitFor(() => expect(mockToggleFolderFile).toHaveBeenCalledWith(folderFile));
-    });
-
-    it('loga erro e mostra Alert quando toggleFolderFile rejeita', async () => {
-      const alertSpy = jest.spyOn(Alert, 'alert');
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      const mockToggleFolderFile = jest.fn().mockRejectedValue(new Error('link failed'));
-      mockUseSharedFiles.mockReturnValue({
-        files: [],
-        pickAndShareFiles: mockPickAndShareFiles,
-        removeFile: mockRemoveFile,
-        loadSharedFiles: mockLoadSharedFiles,
-        linkedFolderUri: 'content://tree/primary%3ADownload',
-        folderFiles: [folderFile],
-        loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
-        pickFolder: jest.fn().mockResolvedValue(undefined),
-        isFolderFileEnabled: jest.fn().mockReturnValue(false),
-        toggleFolderFile: mockToggleFolderFile,
-      });
-
-      const { getByText } = await render(<SharedFilesScreen />);
-      fireEvent.press(getByText('Habilitar').parent!);
-
-      await waitFor(() => expect(consoleErrorSpy).toHaveBeenCalled());
-      expect(alertSpy).toHaveBeenCalledWith(
-        'Erro',
-        'Não foi possível atualizar o compartilhamento deste arquivo.',
-      );
-      consoleErrorSpy.mockRestore();
+      // T-801: o botão de toggle é renderizado (seu label depende do status do servidor)
+      expect(queryByText(/Habilitar|Desabilitar|Iniciar servidor/)).toBeTruthy();
     });
 
     it('mostra estado vazio quando a pasta vinculada não tem arquivos', async () => {
@@ -378,16 +316,193 @@ describe('SharedFilesScreen handlers (T-302)', () => {
         removeFile: mockRemoveFile,
         loadSharedFiles: mockLoadSharedFiles,
         linkedFolderUri: 'content://tree/primary%3ADownload',
+        linkedFolderEnabled: false,
         folderFiles: [],
         loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
         pickFolder: jest.fn().mockResolvedValue(undefined),
-        isFolderFileEnabled: jest.fn().mockReturnValue(false),
-        toggleFolderFile: jest.fn().mockResolvedValue(undefined),
+        toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
       });
 
       const { getByText } = await render(<SharedFilesScreen />);
 
       expect(getByText('Nenhum arquivo encontrado nessa pasta.')).toBeTruthy();
+    });
+
+    describe('gate de servidor (T-801 — isServerRunning prop)', () => {
+      it('deve desabilitar o toggle quando servidor não está rodando e exibir aviso', async () => {
+        const mockToggleLinkedFolder = jest.fn().mockResolvedValue(undefined);
+        mockUseSharedFiles.mockReturnValue({
+          files: [],
+          pickAndShareFiles: mockPickAndShareFiles,
+          removeFile: mockRemoveFile,
+          loadSharedFiles: mockLoadSharedFiles,
+          linkedFolderUri: 'content://tree/primary%3ADownload',
+          linkedFolderEnabled: false,
+          folderFiles: [folderFile],
+          loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
+          pickFolder: jest.fn().mockResolvedValue(undefined),
+          toggleLinkedFolder: mockToggleLinkedFolder,
+        });
+
+        const { getByText, queryByText } = await render(
+          <SharedFilesScreen isServerRunning={false} />,
+        );
+
+        // Deve exibir botão "Iniciar servidor" quando servidor não está rodando
+        expect(getByText('Iniciar servidor')).toBeTruthy();
+
+        // Deve exibir aviso sobre iniciar servidor
+        expect(getByText('Inicie o servidor para compartilhar arquivos desta pasta')).toBeTruthy();
+
+        // toggleLinkedFolder não deve ter sido chamado (botão desabilitado)
+        expect(mockToggleLinkedFolder).not.toHaveBeenCalled();
+      });
+
+      it('deve habilitar toggle quando servidor está rodando', async () => {
+        const mockToggleLinkedFolder = jest.fn().mockResolvedValue(undefined);
+        mockUseSharedFiles.mockReturnValue({
+          files: [],
+          pickAndShareFiles: mockPickAndShareFiles,
+          removeFile: mockRemoveFile,
+          loadSharedFiles: mockLoadSharedFiles,
+          linkedFolderUri: 'content://tree/primary%3ADownload',
+          linkedFolderEnabled: false,
+          folderFiles: [folderFile],
+          loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
+          pickFolder: jest.fn().mockResolvedValue(undefined),
+          toggleLinkedFolder: mockToggleLinkedFolder,
+        });
+
+        const { getByText, queryByText } = await render(
+          <SharedFilesScreen isServerRunning={true} />,
+        );
+
+        // Deve exibir botão "Habilitar" quando servidor está rodando e pasta vinculada existe
+        expect(getByText('Habilitar')).toBeTruthy();
+
+        // Não deve exibir aviso quando servidor está rodando
+        expect(queryByText('Inicie o servidor para compartilhar arquivos desta pasta')).toBeNull();
+      });
+
+      it('chama handleToggleFolderPress ao pressionar o botão de toggle com servidor ativo', async () => {
+        const mockToggleLinkedFolder = jest.fn().mockResolvedValue(undefined);
+        mockUseSharedFiles.mockReturnValue({
+          files: [],
+          pickAndShareFiles: mockPickAndShareFiles,
+          removeFile: mockRemoveFile,
+          loadSharedFiles: mockLoadSharedFiles,
+          linkedFolderUri: 'content://tree/primary%3ADownload',
+          linkedFolderEnabled: false,
+          folderFiles: [folderFile],
+          loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
+          pickFolder: jest.fn().mockResolvedValue(undefined),
+          toggleLinkedFolder: mockToggleLinkedFolder,
+        });
+
+        const { getByText } = await render(<SharedFilesScreen isServerRunning={true} />);
+
+        fireEvent.press(getByText('Habilitar').parent!);
+
+        await waitFor(() => expect(mockToggleLinkedFolder).toHaveBeenCalledTimes(1));
+      });
+
+      it('loga erro e mostra Alert quando toggleLinkedFolder rejeita', async () => {
+        const alertSpy = jest.spyOn(Alert, 'alert');
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const mockToggleLinkedFolder = jest.fn().mockRejectedValue(new Error('Toggle failed'));
+        mockUseSharedFiles.mockReturnValue({
+          files: [],
+          pickAndShareFiles: mockPickAndShareFiles,
+          removeFile: mockRemoveFile,
+          loadSharedFiles: mockLoadSharedFiles,
+          linkedFolderUri: 'content://tree/primary%3ADownload',
+          linkedFolderEnabled: false,
+          folderFiles: [folderFile],
+          loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
+          pickFolder: jest.fn().mockResolvedValue(undefined),
+          toggleLinkedFolder: mockToggleLinkedFolder,
+        });
+
+        const { getByText } = await render(<SharedFilesScreen isServerRunning={true} />);
+
+        fireEvent.press(getByText('Habilitar').parent!);
+
+        await waitFor(() => expect(consoleErrorSpy).toHaveBeenCalled());
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Erro',
+          'Não foi possível atualizar o compartilhamento da pasta.',
+        );
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('deve mostrar card de aviso quando servidor não está rodando e pasta vinculada existe', async () => {
+        mockUseSharedFiles.mockReturnValue({
+          files: [],
+          pickAndShareFiles: mockPickAndShareFiles,
+          removeFile: mockRemoveFile,
+          loadSharedFiles: mockLoadSharedFiles,
+          linkedFolderUri: 'content://tree/primary%3ADownload',
+          linkedFolderEnabled: false,
+          folderFiles: [folderFile],
+          loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
+          pickFolder: jest.fn().mockResolvedValue(undefined),
+          toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
+        });
+
+        const { getByText, queryByText } = await render(
+          <SharedFilesScreen isServerRunning={false} />,
+        );
+
+        // Deve exibir aviso sobre status do servidor
+        const aviso = getByText('Inicie o servidor para compartilhar arquivos desta pasta');
+        expect(aviso).toBeTruthy();
+
+        // O card deve estar visível (não null)
+        expect(queryByText(/Inicie o servidor/)).toBeTruthy();
+      });
+
+      it('não deve mostrar card de aviso quando servidor está rodando', async () => {
+        mockUseSharedFiles.mockReturnValue({
+          files: [],
+          pickAndShareFiles: mockPickAndShareFiles,
+          removeFile: mockRemoveFile,
+          loadSharedFiles: mockLoadSharedFiles,
+          linkedFolderUri: 'content://tree/primary%3ADownload',
+          linkedFolderEnabled: false,
+          folderFiles: [folderFile],
+          loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
+          pickFolder: jest.fn().mockResolvedValue(undefined),
+          toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
+        });
+
+        const { queryByText } = await render(<SharedFilesScreen isServerRunning={true} />);
+
+        // Não deve exibir aviso quando servidor está ativo
+        expect(queryByText('Inicie o servidor para compartilhar arquivos desta pasta')).toBeNull();
+      });
+
+      it('mostra "Desabilitar" quando linkedFolderEnabled é true e servidor está ativo', async () => {
+        mockUseSharedFiles.mockReturnValue({
+          files: [],
+          pickAndShareFiles: mockPickAndShareFiles,
+          removeFile: mockRemoveFile,
+          loadSharedFiles: mockLoadSharedFiles,
+          linkedFolderUri: 'content://tree/primary%3ADownload',
+          linkedFolderEnabled: true,
+          folderFiles: [folderFile],
+          loadLinkedFolder: jest.fn().mockResolvedValue(undefined),
+          pickFolder: jest.fn().mockResolvedValue(undefined),
+          toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
+        });
+
+        const { getByText, queryByText } = await render(
+          <SharedFilesScreen isServerRunning={true} />,
+        );
+
+        // Quando habilitada, deve mostrar "Desabilitar"
+        expect(getByText('Desabilitar')).toBeTruthy();
+        expect(queryByText('Habilitar')).toBeNull();
+      });
     });
   });
 });

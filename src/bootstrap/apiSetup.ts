@@ -154,6 +154,17 @@ export function registerFileRoutes(
         const message = error instanceof Error ? error.message : 'Erro desconhecido';
         console.error(`[FileRoutes] Erro ao ler arquivo ${fileId} (${fileInfo.localUri}):`, error);
         transferStore.fail(transferId, message);
+
+        // T-801: erro explícito para arquivo vinculado que falha na leitura
+        // (nunca stream truncado silencioso)
+        if (fileInfo.linked) {
+          return createErrorResponse(
+            500,
+            'LINKED_FILE_READ_ERROR',
+            `Não foi possível ler o arquivo vinculado. Verifique se ele ainda existe e tem permissão de acesso: ${message}`,
+          );
+        }
+
         return createErrorResponse(500, 'INTERNAL_ERROR', `Erro ao ler arquivo: ${message}`);
       }
 
