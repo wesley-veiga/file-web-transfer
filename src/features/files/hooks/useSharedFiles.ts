@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import { useSharedFilesStore } from '../store/sharedFilesStore';
 import { createFileRepository } from '../services/fileRepositoryFactory';
@@ -50,11 +50,23 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
   );
   const documentPickerModule = options?.documentPickerModule || DocumentPicker;
 
+  // Trava chamadas concorrentes ao picker nativo: `getDocumentAsync` rejeita com
+  // "Different document picking in progress" se for chamado de novo antes da promise
+  // anterior resolver (bug real encontrado em teste manual, T-701 — um segundo toque no
+  // botão "Compartilhar arquivos" antes do picker fechar disparava a chamada duas vezes).
+  // `useRef` (não state) porque não deve causar re-render, só servir de trava síncrona.
+  const isPickingRef = useRef(false);
+
   /**
    * Abre o document picker e salva os arquivos selecionados como 'shared'.
    * Cancelar o picker não altera a lista.
    */
   const pickAndShareFiles = useCallback(async (): Promise<void> => {
+    if (isPickingRef.current) {
+      return;
+    }
+    isPickingRef.current = true;
+
     try {
       const result = await documentPickerModule.getDocumentAsync({
         multiple: true,
@@ -86,6 +98,8 @@ export function useSharedFiles(options?: UseSharedFilesOptions) {
     } catch (error) {
       console.error('[useSharedFiles] Erro ao abrir document picker:', error);
       throw error;
+    } finally {
+      isPickingRef.current = false;
     }
   }, [fileRepository, documentPickerModule, addFile]);
 
