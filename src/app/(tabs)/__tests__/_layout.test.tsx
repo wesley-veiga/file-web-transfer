@@ -123,4 +123,24 @@ describe('TabsLayout ((tabs)/_layout.tsx)', () => {
       expect(icon?.props.symbol).toBeTruthy();
     });
   });
+
+  it('ícone usa `includeFontPadding: false` e `lineHeight` fixo, evitando o corte de emoji no Android (T-701)', async () => {
+    // Achado em teste manual em dispositivo real: sem esses ajustes, o padding
+    // vertical extra que o Android soma ao redor do texto por padrão cortava o
+    // topo/base do emoji dentro da caixa de tamanho fixo do ícone da aba.
+    const { container } = await render(<TabsLayout />);
+    const screens = findTabScreens(container);
+    const icon = screens[0].props.tabBarIcon?.({ focused: false, size: 24, color: '#000' }) as
+      React.ReactElement | undefined;
+
+    const { container: iconContainer } = await render(icon as React.ReactElement);
+    const textNodes = iconContainer.queryAll((instance) => instance.type === 'Text') as {
+      props: { style?: { includeFontPadding?: boolean; lineHeight?: number } };
+    }[];
+
+    expect(textNodes.length).toBeGreaterThan(0);
+    const style = textNodes[0].props.style;
+    expect(style?.includeFontPadding).toBe(false);
+    expect(style?.lineHeight).toBeGreaterThan(0);
+  });
 });
