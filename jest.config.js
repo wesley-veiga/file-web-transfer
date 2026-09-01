@@ -18,7 +18,7 @@ module.exports = {
       testEnvironment: 'node',
       transform: tsJestTransform,
       transformIgnorePatterns: [
-        'node_modules/(?!(expo|expo-router|expo-splash-screen|expo-font|expo-notifications|expo-modules-core|expo-device|expo-sharing|react-native|@react-native|react-native-screens|react-native-gesture-handler|react-native-reanimated|react-native-web|react-native-safe-area-context|react-native-tcp-socket)/)',
+        'node_modules/(?!(expo|expo-router|expo-splash-screen|expo-status-bar|expo-font|expo-notifications|expo-modules-core|expo-device|expo-sharing|react-native|@react-native|react-native-screens|react-native-gesture-handler|react-native-reanimated|react-native-web|react-native-safe-area-context|react-native-tcp-socket)/)',
       ],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',

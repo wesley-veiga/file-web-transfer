@@ -65,7 +65,7 @@ describe('TabsLayout ((tabs)/_layout.tsx)', () => {
   });
 
   it.each([
-    ['index', 'Servidor'],
+    ['index', 'Início'],
     ['compartilhados', 'Compartilhados'],
     ['recebidos', 'Recebidos'],
   ])('declara a aba "%s" com title "%s"', async (name, title) => {
@@ -77,7 +77,7 @@ describe('TabsLayout ((tabs)/_layout.tsx)', () => {
     expect(match?.props.title).toBe(title);
   });
 
-  it('mantém a ordem das abas: Servidor, Compartilhados, Recebidos', async () => {
+  it('mantém a ordem das abas: Início, Compartilhados, Recebidos', async () => {
     const { container } = await render(<TabsLayout />);
     const screens = findTabScreens(container);
 

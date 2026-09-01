@@ -75,12 +75,16 @@ export function ServerHomeScreen({ httpModule }: ServerHomeScreenProps) {
 
   return (
     <Screen className="flex-1 px-4">
-      <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+        contentContainerClassName="pb-8"
+      >
         <View className="flex-1 py-8">
           {/* Header */}
           <View className="mb-8">
             <Text className="text-3xl font-bold text-text-light dark:text-text-dark mb-2">
-              Servidor
+              Início
             </Text>
             <Text className="text-base text-text-secondary-light dark:text-text-secondary-dark">
               Compartilhe arquivos na rede local

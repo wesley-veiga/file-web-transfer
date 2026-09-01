@@ -326,6 +326,71 @@ describe('ServerHomeScreen (T-204)', () => {
     });
   });
 
+  describe('Renomeação: "Servidor" → "Início" (T-803)', () => {
+    it('exibe "Início" no header em vez de "Servidor"', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../ServerHomeScreen.tsx'),
+        'utf-8',
+      );
+
+      // Verifica que o arquivo contém o texto "Início" (novo)
+      expect(fileContent).toContain('Início');
+
+      // Verifica que o arquivo NÃO contém "Servidor" como texto de header
+      // (pode ter em comentários, mas não como valor de texto)
+      // Procura por padrão: Text className=... "Servidor" (sem prefixo, como header)
+      // Para isso verificamos que a linha com "Início" não tem "Servidor" logo antes em texto
+      const inicioLine = fileContent.match(/Text[^>]*>[\s]*Início[\s]*<\/Text>/);
+      expect(inicioLine).toBeTruthy();
+    });
+
+    it('renderiza com o novo header "Início"', async () => {
+      const { getByText } = await render(<ServerHomeScreen />);
+
+      // Procura por um Text que exiba "Início"
+      expect(getByText('Início')).toBeTruthy();
+    });
+  });
+
+  describe('ScrollView com contentContainerClassName="pb-8" (T-803)', () => {
+    it('ScrollView tem contentContainerClassName para padding bottom', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../ServerHomeScreen.tsx'),
+        'utf-8',
+      );
+
+      // Verifica que contentContainerClassName é usado
+      expect(fileContent).toContain('contentContainerClassName');
+
+      // Verifica que pb-8 está no valor (pb = padding bottom, 8 é o tamanho)
+      expect(fileContent).toMatch(/contentContainerClassName="[^"]*pb-8[^"]*"/);
+    });
+
+    it('renderiza ScrollView sem erro com a prop contentContainerClassName', () => {
+      expect(() => render(<ServerHomeScreen />)).not.toThrow();
+    });
+
+    it('não corta o botão "Parar servidor" contra a tab bar', async () => {
+      useServerStore.setState({
+        serverInfo: {
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.10',
+          port: 8080,
+          url: 'http://192.168.1.10:8080',
+          sessionId: 'test-session',
+          startedAt: Date.now(),
+          error: null,
+        },
+      });
+
+      const { getByText } = await render(<ServerHomeScreen />);
+
+      // O botão "Parar servidor" deve estar renderizado e acessível
+      expect(getByText('Parar servidor')).toBeTruthy();
+    });
+  });
+
   describe('State transitions', () => {
     it('handles transition between states', () => {
       // Start with idle

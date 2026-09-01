@@ -448,4 +448,67 @@ describe('HomeScreen (src/app/index.tsx)', () => {
       expect(fileContent).toContain('export default');
     });
   });
+
+  describe('Modal com SafeAreaView (T-803 — ajustes visuais diversos)', () => {
+    it('imports SafeAreaView from react-native-safe-area-context', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../index.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('SafeAreaView');
+      expect(fileContent).toContain('react-native-safe-area-context');
+    });
+
+    it('Modal component is present in the file', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../index.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('<Modal');
+      expect(fileContent).toContain('</Modal>');
+    });
+
+    it('Modal é envolvido em SafeAreaView para respeitar safe area no topo (T-803)', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../index.tsx'),
+        'utf-8',
+      );
+
+      // Procura pelo padrão: <Modal...><SafeAreaView... ou <SafeAreaView dentro de Modal
+      const modalMatch = fileContent.match(/<Modal[\s\S]*?<SafeAreaView/);
+      expect(modalMatch).toBeTruthy();
+    });
+
+    it('SafeAreaView dentro do Modal tem className para estilos de tema', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../index.tsx'),
+        'utf-8',
+      );
+
+      // Verifica se SafeAreaView dentro de Modal tem className com dark:
+      const safeAreaInModal = fileContent.match(
+        /<Modal[\s\S]*?<SafeAreaView\s+className="[^"]*(?:dark:|flex-1)[^"]*"/,
+      );
+      expect(safeAreaInModal).toBeTruthy();
+    });
+
+    it('Modal renderiza corretamente com SafeAreaView no teste', async () => {
+      const { getByTestId, queryByTestId } = await render(<HomeScreen />);
+
+      // Modal começa fechado
+      expect(queryByTestId('transfers-modal-close')).toBeNull();
+
+      // Abre o modal
+      await fireEvent.press(getByTestId('transfers-fab'));
+
+      // Agora o botão "Fechar" está visível (que está dentro de SafeAreaView)
+      expect(getByTestId('transfers-modal-close')).toBeTruthy();
+
+      // Fecha o modal
+      await fireEvent.press(getByTestId('transfers-modal-close'));
+
+      // Modal está fechado novamente
+      expect(queryByTestId('transfers-modal-close')).toBeNull();
+    });
+  });
 });

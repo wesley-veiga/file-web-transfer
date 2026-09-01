@@ -129,6 +129,59 @@ describe('RootLayout (_layout.tsx)', () => {
     });
   });
 
+  describe('StatusBar (T-803 — ajustes visuais diversos)', () => {
+    it('imports StatusBar from expo-status-bar', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('StatusBar');
+      expect(fileContent).toContain("from 'expo-status-bar'");
+    });
+
+    it('renders StatusBar component', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('<StatusBar');
+    });
+
+    it('StatusBar style prop reacts to colorScheme: "light" when dark mode', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toMatch(/style=\{colorScheme === 'dark' \? 'light' : 'dark'\}/);
+    });
+
+    it('StatusBar style prop reacts to colorScheme: "dark" when light mode', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      // Verifica que usa ternário com colorScheme === 'dark'
+      expect(fileContent).toMatch(/style=\{colorScheme === 'dark'/);
+      // E que o valor true é 'light' (mantém contraste no tema escuro)
+      expect(fileContent).toContain("colorScheme === 'dark' ? 'light' : 'dark'");
+    });
+
+    it('renders StatusBar inside ThemeProvider', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      const content = fileContent;
+      const themeProviderIndex = content.indexOf('<ThemeProvider');
+      const statusBarIndex = content.indexOf('<StatusBar');
+      const themeProviderCloseIndex = content.indexOf('</ThemeProvider>');
+
+      // StatusBar deve estar entre abertura e fechamento de ThemeProvider
+      expect(statusBarIndex).toBeGreaterThan(themeProviderIndex);
+      expect(statusBarIndex).toBeLessThan(themeProviderCloseIndex);
+    });
+  });
+
   describe('Stack Navigator Configuration', () => {
     it('imports Stack from expo-router', () => {
       const fileContent = require('fs').readFileSync(
