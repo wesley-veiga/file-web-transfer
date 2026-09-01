@@ -18,6 +18,18 @@ export interface ForegroundServiceModule {
   start: (title: string, body: string) => void;
   /** Para o foreground service e remove a notificação. */
   stop: () => void;
+  /**
+   * Indica se esta instância oferece proteção real de processo em segundo plano
+   * (Android com `startForeground()` nativo disponível) — `true` só quando o
+   * módulo nativo `TransferForegroundService` existe. O fallback no-op (iOS/web,
+   * ou Android sem o módulo nativo — Expo Go, build sem `expo prebuild`
+   * atualizado) sempre retorna `false`.
+   *
+   * T-808: `useAppLifecycle` usa isto para decidir se pode manter o servidor
+   * rodando quando o app sai de foreground — só é seguro fazer isso quando há
+   * proteção de processo de verdade, não apenas uma notificação cosmética.
+   */
+  isAvailable: () => boolean;
 }
 
 /** Formato do módulo nativo exposto pelo `TransferForegroundServiceModule.kt` gerado. */
@@ -31,6 +43,7 @@ function createNoopForegroundServiceModule(): ForegroundServiceModule {
   return {
     start: () => undefined,
     stop: () => undefined,
+    isAvailable: () => false,
   };
 }
 
@@ -56,5 +69,6 @@ export function createDefaultForegroundServiceModule(): ForegroundServiceModule 
   return {
     start: (title: string, body: string) => native.start(title, body),
     stop: () => native.stop(),
+    isAvailable: () => true,
   };
 }
