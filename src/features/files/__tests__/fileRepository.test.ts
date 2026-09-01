@@ -1835,7 +1835,21 @@ describe('FileRepository', () => {
         fileContents.delete(uri);
       });
 
-      (mockFs.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+      // T-805: hashFileSha256 chama getInfoAsync antes de ler o arquivo em blocos
+      // (precisa do tamanho total para saber quando parar de ler). O mock
+      // reflete o tamanho real do conteúdo simulado em `fileContents` (decodificado
+      // de base64), igual a um filesystem de verdade reportaria.
+      (mockFs.getInfoAsync as jest.Mock).mockImplementation(async (uri: string) => {
+        const content = fileContents.get(uri);
+        if (content === undefined) {
+          return { exists: false, isDirectory: false };
+        }
+        return {
+          exists: true,
+          isDirectory: false,
+          size: Buffer.from(content, 'base64').length,
+        };
+      });
     });
 
     it('arquivo de received sem pasta configurada permanece na sandbox', async () => {
