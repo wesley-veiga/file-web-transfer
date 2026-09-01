@@ -9,7 +9,7 @@
  * - Errors from notification/server-stop calls are swallowed (logged, not thrown)
  */
 
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useAppLifecycle } from '../useAppLifecycle';
 import { useServerStore } from '../../store/serverStore';
@@ -17,6 +17,7 @@ import { createServerService } from '../../services/serverServiceFactory';
 import { createNotificationService } from '../../services/notificationService';
 import type { NotificationService } from '../../services/notificationService';
 import type { HttpModule } from '../../services/httpModule';
+import type { ForegroundServiceModule } from '../../services/foregroundServiceModule';
 
 jest.mock('../../services/serverServiceFactory');
 jest.mock('../../services/notificationService');
@@ -278,6 +279,180 @@ describe('useAppLifecycle', () => {
 
     await waitFor(() => {
       expect(createNotificationService).toHaveBeenCalledWith(undefined);
+    });
+  });
+
+  // T-808 tests: novo comportamento condicional ao sair de foreground baseado em
+  // foregroundService.isAvailable()
+  describe('T-808: Servidor sobrevive ao sair de foreground com foreground service real', () => {
+    let mockForegroundService: jest.Mocked<ForegroundServiceModule>;
+
+    beforeEach(() => {
+      mockForegroundService = {
+        start: jest.fn(),
+        stop: jest.fn(),
+        isAvailable: jest.fn(),
+      };
+    });
+
+    it('no Android com foreground service disponível (isAvailable=true), sair de foreground NÃO para o servidor (T-808)', async () => {
+      (Platform as { OS: string }).OS = 'android';
+      mockForegroundService.isAvailable.mockReturnValue(true);
+
+      await renderHook(() =>
+        useAppLifecycle(undefined, mockNotificationService, mockForegroundService),
+      );
+
+      await startServer();
+      await waitFor(() => {
+        expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+      });
+
+      const handleAppStateChange = getAppStateChangeHandler();
+
+      await act(async () => {
+        await handleAppStateChange('background');
+      });
+
+      // No Android protegido pelo foreground service real, o servidor CONTINUA rodando
+      expect(mockServerServiceInstance.stop).not.toHaveBeenCalled();
+      expect(useServerStore.getState().serverInfo.status).toBe('running');
+      // Notificação permanece visível (não é descartada)
+      expect(mockNotificationService.dismissNotification).not.toHaveBeenCalled();
+    });
+
+    it('no Android sem foreground service (isAvailable=false), sair de foreground PARA o servidor (T-808, T-205)', async () => {
+      (Platform as { OS: string }).OS = 'android';
+      mockForegroundService.isAvailable.mockReturnValue(false);
+
+      await renderHook(() =>
+        useAppLifecycle(undefined, mockNotificationService, mockForegroundService),
+      );
+
+      await startServer();
+      await waitFor(() => {
+        expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+      });
+
+      const handleAppStateChange = getAppStateChangeHandler();
+
+      await act(async () => {
+        await handleAppStateChange('background');
+      });
+
+      // Android sem foreground service real continua com o comportamento antigo (T-205)
+      expect(mockServerServiceInstance.stop).toHaveBeenCalled();
+      expect(useServerStore.getState().serverInfo.status).toBe('idle');
+      expect(mockNotificationService.dismissNotification).toHaveBeenCalledWith(
+        'notification-id-123',
+      );
+    });
+
+    it('no iOS, sair de foreground PARA o servidor — iOS sem foreground service equivalente (T-808)', async () => {
+      (Platform as { OS: string }).OS = 'ios';
+      // iOS nunca tem isAvailable=true
+      mockForegroundService.isAvailable.mockReturnValue(false);
+
+      await renderHook(() =>
+        useAppLifecycle(undefined, mockNotificationService, mockForegroundService),
+      );
+
+      await startServer();
+      await waitFor(() => {
+        expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+      });
+
+      const handleAppStateChange = getAppStateChangeHandler();
+
+      await act(async () => {
+        await handleAppStateChange('background');
+      });
+
+      // iOS preserva o comportamento de T-205 (parar ao sair de foreground)
+      expect(mockServerServiceInstance.stop).toHaveBeenCalled();
+      expect(useServerStore.getState().serverInfo.status).toBe('idle');
+      expect(mockNotificationService.dismissNotification).toHaveBeenCalledWith(
+        'notification-id-123',
+      );
+    });
+
+    it('em web, sair de foreground PARA o servidor (T-808)', async () => {
+      (Platform as { OS: string }).OS = 'web';
+      mockForegroundService.isAvailable.mockReturnValue(false);
+
+      await renderHook(() =>
+        useAppLifecycle(undefined, mockNotificationService, mockForegroundService),
+      );
+
+      await startServer();
+      await waitFor(() => {
+        expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+      });
+
+      const handleAppStateChange = getAppStateChangeHandler();
+
+      await act(async () => {
+        await handleAppStateChange('background');
+      });
+
+      // Web não tem conceito de foreground service — continua parando
+      expect(mockServerServiceInstance.stop).toHaveBeenCalled();
+      expect(useServerStore.getState().serverInfo.status).toBe('idle');
+      expect(mockNotificationService.dismissNotification).toHaveBeenCalledWith(
+        'notification-id-123',
+      );
+    });
+
+    it('no Android protegido, fechar/matar o app continua liberando a porta (T-205 preservado)', async () => {
+      (Platform as { OS: string }).OS = 'android';
+      mockForegroundService.isAvailable.mockReturnValue(true);
+
+      await renderHook(() =>
+        useAppLifecycle(undefined, mockNotificationService, mockForegroundService),
+      );
+
+      await startServer();
+      await waitFor(() => {
+        expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+      });
+
+      // Fechar/matar o app transiciona por `inactive` então `background`, como parte
+      // normal do ciclo de vida. Apenas ao sair de foreground (background/inactive)
+      // com foreground service ativo é que o servidor continua — no caso de
+      // encerramento completo do processo, o SO libera a porta de qualquer forma.
+      // Este teste valida que uma sequência de transições que simula backgrounding
+      // ainda **não** para o servidor com foreground service ativo.
+      const handleAppStateChange = getAppStateChangeHandler();
+
+      await act(async () => {
+        await handleAppStateChange('inactive');
+        await handleAppStateChange('background');
+      });
+
+      // Servidor CONTINUA rodando com foreground service ativo
+      expect(mockServerServiceInstance.stop).not.toHaveBeenCalled();
+      expect(useServerStore.getState().serverInfo.status).toBe('running');
+    });
+
+    it('falls back to default foreground service module when none is injected (T-808)', async () => {
+      (Platform as { OS: string }).OS = 'web';
+
+      await renderHook(() => useAppLifecycle(undefined, mockNotificationService));
+
+      await startServer();
+      await waitFor(() => {
+        expect(mockNotificationService.showPersistentNotification).toHaveBeenCalled();
+      });
+
+      const handleAppStateChange = getAppStateChangeHandler();
+
+      // Sem injeção de módulo, usa o padrão que retorna isAvailable=false em web
+      await act(async () => {
+        await handleAppStateChange('background');
+      });
+
+      expect(mockServerServiceInstance.stop).toHaveBeenCalled();
+      expect(useServerStore.getState().serverInfo.status).toBe('idle');
     });
   });
 });

@@ -60,6 +60,16 @@ describe('createDefaultForegroundServiceModule', () => {
       expect(nativeStop).toHaveBeenCalledTimes(1);
       expect(nativeStart).not.toHaveBeenCalled();
     });
+
+    it('isAvailable() retorna true quando o módulo nativo está disponível (T-808)', () => {
+      (NativeModules as Record<string, unknown>).TransferForegroundService = {
+        start: jest.fn(),
+        stop: jest.fn(),
+      };
+
+      const module = createDefaultForegroundServiceModule();
+      expect(module.isAvailable()).toBe(true);
+    });
   });
 
   describe('no Android, sem o módulo nativo disponível (ex.: Expo Go)', () => {
@@ -76,6 +86,11 @@ describe('createDefaultForegroundServiceModule', () => {
 
       expect(() => module.start('Servidor ativo', 'Compartilhando arquivos')).not.toThrow();
       expect(() => module.stop()).not.toThrow();
+    });
+
+    it('isAvailable() retorna false quando o módulo nativo não está disponível (T-808)', () => {
+      const module = createDefaultForegroundServiceModule();
+      expect(module.isAvailable()).toBe(false);
     });
   });
 
@@ -101,6 +116,11 @@ describe('createDefaultForegroundServiceModule', () => {
       expect(nativeStart).not.toHaveBeenCalled();
       expect(nativeStop).not.toHaveBeenCalled();
     });
+
+    it('isAvailable() retorna false — iOS não tem foreground service equivalente (T-808)', () => {
+      const module = createDefaultForegroundServiceModule();
+      expect(module.isAvailable()).toBe(false);
+    });
   });
 
   describe('em outras plataformas (ex.: web)', () => {
@@ -113,6 +133,11 @@ describe('createDefaultForegroundServiceModule', () => {
 
       expect(() => module.start('Servidor ativo', 'Compartilhando arquivos')).not.toThrow();
       expect(() => module.stop()).not.toThrow();
+    });
+
+    it('isAvailable() retorna false — web não tem foreground service (T-808)', () => {
+      const module = createDefaultForegroundServiceModule();
+      expect(module.isAvailable()).toBe(false);
     });
   });
 });
