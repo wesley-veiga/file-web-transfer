@@ -38,6 +38,7 @@ describe('NotificationService', () => {
       mockForegroundServiceModule = {
         start: jest.fn(),
         stop: jest.fn(),
+        isAvailable: jest.fn().mockReturnValue(true),
       };
       service = new NotificationServiceImpl(mockForegroundServiceModule);
     });
