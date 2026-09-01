@@ -153,45 +153,52 @@ export class IncrementalSha256 {
 
     let hex = '';
     for (let i = 0; i < 8; i++) {
-      const word = this.h[i] ?? 0;
+      const word = this.h[i];
       hex += (word >>> 0).toString(16).padStart(8, '0');
     }
     return hex;
   }
 
-  /** Processa um único bloco de 64 bytes, atualizando o estado interno `h`. */
+  /**
+   * Processa um único bloco de 64 bytes, atualizando o estado interno `h`.
+   *
+   * Sem fallback `?? 0` nos acessos indexados abaixo, de propósito: os limites dos
+   * loops sempre casam com o tamanho fixo dos TypedArrays envolvidos (`block` tem
+   * exatamente 64 bytes, `w` e `h` têm tamanho fixo por construção), então o índice
+   * nunca sai do intervalo válido — `noUncheckedIndexedAccess` também não está
+   * habilitado neste projeto. Um fallback nesses pontos é código defensivo
+   * inalcançável que só bloqueava a cobertura de branch exigida pela constituição
+   * (achado do agente testador, T-805).
+   */
   private processBlock(block: Uint8Array): void {
     const w = this.w;
 
     for (let i = 0; i < 16; i++) {
       const base = i * 4;
       w[i] =
-        ((block[base] ?? 0) << 24) |
-        ((block[base + 1] ?? 0) << 16) |
-        ((block[base + 2] ?? 0) << 8) |
-        (block[base + 3] ?? 0);
+        (block[base] << 24) | (block[base + 1] << 16) | (block[base + 2] << 8) | block[base + 3];
     }
     for (let i = 16; i < 64; i++) {
-      const wim15 = w[i - 15] ?? 0;
-      const wim2 = w[i - 2] ?? 0;
+      const wim15 = w[i - 15];
+      const wim2 = w[i - 2];
       const s0 = rotr(wim15, 7) ^ rotr(wim15, 18) ^ (wim15 >>> 3);
       const s1 = rotr(wim2, 17) ^ rotr(wim2, 19) ^ (wim2 >>> 10);
-      w[i] = ((w[i - 16] ?? 0) + s0 + (w[i - 7] ?? 0) + s1) | 0;
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
     }
 
-    let a = this.h[0] ?? 0;
-    let b = this.h[1] ?? 0;
-    let c = this.h[2] ?? 0;
-    let d = this.h[3] ?? 0;
-    let e = this.h[4] ?? 0;
-    let f = this.h[5] ?? 0;
-    let g = this.h[6] ?? 0;
-    let hh = this.h[7] ?? 0;
+    let a = this.h[0];
+    let b = this.h[1];
+    let c = this.h[2];
+    let d = this.h[3];
+    let e = this.h[4];
+    let f = this.h[5];
+    let g = this.h[6];
+    let hh = this.h[7];
 
     for (let i = 0; i < 64; i++) {
       const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
       const ch = (e & f) ^ (~e & g);
-      const temp1 = (hh + S1 + ch + (SHA256_K[i] ?? 0) + (w[i] ?? 0)) | 0;
+      const temp1 = (hh + S1 + ch + SHA256_K[i] + w[i]) | 0;
       const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
       const maj = (a & b) ^ (a & c) ^ (b & c);
       const temp2 = (S0 + maj) | 0;
@@ -206,14 +213,14 @@ export class IncrementalSha256 {
       a = (temp1 + temp2) | 0;
     }
 
-    this.h[0] = ((this.h[0] ?? 0) + a) | 0;
-    this.h[1] = ((this.h[1] ?? 0) + b) | 0;
-    this.h[2] = ((this.h[2] ?? 0) + c) | 0;
-    this.h[3] = ((this.h[3] ?? 0) + d) | 0;
-    this.h[4] = ((this.h[4] ?? 0) + e) | 0;
-    this.h[5] = ((this.h[5] ?? 0) + f) | 0;
-    this.h[6] = ((this.h[6] ?? 0) + g) | 0;
-    this.h[7] = ((this.h[7] ?? 0) + hh) | 0;
+    this.h[0] = (this.h[0] + a) | 0;
+    this.h[1] = (this.h[1] + b) | 0;
+    this.h[2] = (this.h[2] + c) | 0;
+    this.h[3] = (this.h[3] + d) | 0;
+    this.h[4] = (this.h[4] + e) | 0;
+    this.h[5] = (this.h[5] + f) | 0;
+    this.h[6] = (this.h[6] + g) | 0;
+    this.h[7] = (this.h[7] + hh) | 0;
   }
 }
 
