@@ -21,6 +21,7 @@ import { File } from 'expo-file-system';
 
 import type { FileSystemModule, FileRepository } from './fileRepository';
 import { FileRepositoryImpl } from './fileRepository';
+import { binaryStringToBytes } from '../../../shared/lib';
 
 // Placeholder para o módulo FileSystem real (será setado durante inicialização)
 let realFileSystemModule: FileSystemModule | null = null;
@@ -76,12 +77,15 @@ function createDefaultFileSystemModule(): FileSystemModule {
   // multi-byte — corrompendo qualquer arquivo binário real. Convertendo para
   // `Uint8Array` antes de escrever, o nativo grava os bytes exatos
   // (`File.write(Uint8Array, ...)` não passa por nenhuma codificação de texto).
+  //
+  // A conversão em si (`binaryStringToBytes`, `shared/lib`) foi extraída para lá em
+  // T-806 (achado em uso real: UI travando + transferência lenta durante upload) — ver
+  // o comentário desse módulo para os números do benchmark e por que a troca óbvia
+  // (`Buffer.from(content, 'latin1')`) medida foi descartada por ser mais lenta, não
+  // mais rápida, que o loop manual, com o pacote `buffer` realmente empacotado neste app.
   async function appendToFileAsync(uri: string, content: string): Promise<void> {
     const file = new File(uri);
-    const bytes = new Uint8Array(content.length);
-    for (let i = 0; i < content.length; i++) {
-      bytes[i] = content.charCodeAt(i) & 0xff;
-    }
+    const bytes = binaryStringToBytes(content);
     await file.write(bytes, { append: true });
   }
 
