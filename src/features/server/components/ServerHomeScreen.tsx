@@ -75,7 +75,11 @@ export function ServerHomeScreen({ httpModule }: ServerHomeScreenProps) {
 
   return (
     <Screen className="flex-1 px-4">
-      <ScrollView showsVerticalScrollIndicator={false} className="flex-1 pb-8">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+        contentContainerClassName="pb-8"
+      >
         <View className="flex-1 py-8">
           {/* Header */}
           <View className="mb-8">

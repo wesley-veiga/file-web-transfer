@@ -59,9 +59,11 @@ export function SharedFilesScreen({
   useEffect(() => {
     loadSharedFiles().catch((error) => {
       console.error('[SharedFilesScreen] Erro ao carregar:', error);
+      Alert.alert('Erro', 'Não foi possível carregar os arquivos compartilhados.');
     });
     loadLinkedFolder().catch((error) => {
       console.error('[SharedFilesScreen] Erro ao carregar pasta vinculada:', error);
+      Alert.alert('Erro', 'Não foi possível carregar a pasta vinculada.');
     });
   }, [loadSharedFiles, loadLinkedFolder]);
 
