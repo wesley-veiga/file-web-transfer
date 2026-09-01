@@ -22,6 +22,10 @@ jest.mock('../../hooks/useReceivedFiles', () => ({
 }));
 const mockUseReceivedFiles = useReceivedFiles as jest.MockedFunction<typeof useReceivedFiles>;
 
+jest.mock('../ReceivedFolderConfigurationSection', () => ({
+  ReceivedFolderConfigurationSection: () => null,
+}));
+
 const createMockDto = (overrides?: Partial<FileEntryDto>): FileEntryDto => ({
   id: 'file-1',
   name: 'documento.pdf',

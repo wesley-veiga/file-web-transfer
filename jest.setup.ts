@@ -67,6 +67,8 @@ jest.mock('react-native', () => {
     View: ({ children, ...props }: any) => React.createElement('View', props, children),
     Text: ({ children, ...props }: any) => React.createElement('Text', props, children),
     Pressable: ({ children, ...props }: any) => React.createElement('Pressable', props, children),
+    TouchableOpacity: ({ children, ...props }: any) =>
+      React.createElement('TouchableOpacity', props, children),
     ScrollView: ({ children, ...props }: any) => React.createElement('ScrollView', props, children),
     FlatList: ({ data, renderItem, keyExtractor, ListEmptyComponent, ...props }: any) =>
       React.createElement(
