@@ -30,6 +30,23 @@ export interface HttpServerRequest {
   remoteAddress?: string;
 }
 
+/**
+ * Corpo de resposta entregue em pedaços (streaming), usado por rotas que não podem
+ * bufferizar o conteúdo inteiro em memória antes de responder (ex.: download de
+ * arquivo grande, T-804 — corrige `OutOfMemoryError` visto em uso real).
+ *
+ * `totalBytes` é exigido adiantado (e não inferido dos chunks) porque este servidor
+ * não implementa `Transfer-Encoding: chunked` (ver `nativeHttpModule.ts`): o header
+ * `Content-Length` precisa ser conhecido e escrito antes do primeiro byte do corpo
+ * ser enviado, então quem produz os chunks precisa saber o tamanho total de antemão
+ * (ex.: `fileInfo.sizeBytes`, já disponível sem ler o arquivo).
+ */
+export interface HttpStreamedBody {
+  kind: 'stream';
+  totalBytes: number;
+  chunks: AsyncIterable<Buffer>;
+}
+
 export interface HttpServerResponse {
   statusCode: number;
   headers?: Record<string, string>;
@@ -38,8 +55,11 @@ export interface HttpServerResponse {
    * T-701): `nativeHttpModule.ts` já trata `Buffer.isBuffer(body)` como caso
    * dedicado em `writeResponse`, escrevendo os bytes sem qualquer conversão de
    * texto — ao contrário de `string`, que é sempre serializada como UTF-8.
+   *
+   * `HttpStreamedBody` (T-804) é o caminho para corpos grandes demais para caber
+   * inteiros em memória de uma vez — ver comentário do tipo.
    */
-  body?: string | ArrayBuffer | Buffer;
+  body?: string | ArrayBuffer | Buffer | HttpStreamedBody;
 }
 
 export type HttpServerRequestHandler = (request: HttpServerRequest) => Promise<HttpServerResponse>;

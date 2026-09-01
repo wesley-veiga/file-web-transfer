@@ -16,6 +16,7 @@ import type {
   HttpServerResponse,
   HttpServerRequestHandler,
   HttpModule,
+  HttpStreamedBody,
   HttpUploadChunk,
 } from '../features/server/services/httpModule';
 import type { ApiRouter, ApiHandler } from '../features/server/services/apiRouter';
@@ -42,11 +43,58 @@ export type TransferStoreActions = Pick<
   'enqueue' | 'start' | 'reportProgress' | 'complete' | 'fail'
 >;
 
+/**
+ * Fatia de `expo-file-system` (API legacy) usada para ler conteúdo de arquivos.
+ * Injetável (em vez de importar o módulo real direto) para que testes rodem sem
+ * filesystem real — ver `serverBootstrap.ts`, que injeta `FileSystemLegacy.readAsStringAsync`.
+ *
+ * `position`/`length` (T-804) permitem ler um bloco específico do arquivo em vez do
+ * conteúdo inteiro — suportados pela API legacy quando `encoding: 'base64'` (ver
+ * `node_modules/expo-file-system/build/legacy/FileSystem.types.d.ts`, `ReadingOptions`).
+ */
+type FileSystemReader = {
+  readAsStringAsync: (
+    uri: string,
+    options?: { encoding?: 'utf8' | 'base64'; position?: number; length?: number },
+  ) => Promise<string>;
+};
+
+/**
+ * Lê um bloco específico do arquivo (`position`..`position+length`) como base64 e
+ * decodifica isoladamente para `Buffer` — nunca acumulando blocos anteriores. Usado
+ * por `handleDownloadFile` (T-804) para nunca manter mais que um bloco por vez em
+ * memória, ao contrário da leitura de arquivo inteiro que causava
+ * `OutOfMemoryError` em arquivos grandes (ver nota de escopo original de T-602,
+ * agora superada).
+ */
+async function readFileBlock(
+  fsModule: FileSystemReader,
+  uri: string,
+  position: number,
+  length: number,
+): Promise<Buffer> {
+  const base64Block = await fsModule.readAsStringAsync(uri, {
+    encoding: 'base64',
+    position,
+    length,
+  });
+  return Buffer.from(base64Block, 'base64');
+}
+
 /** IP de fallback quando o transporte não consegue determinar o IP remoto do peer. */
 const UNKNOWN_PEER_IP = 'desconhecido';
 
 /** Throttle mínimo entre chamadas a `reportProgress` durante um upload (T-602). */
 const PROGRESS_REPORT_THROTTLE_MS = 500;
+
+/**
+ * Tamanho de cada bloco lido do arquivo durante o download (T-804). 1 MiB mantém o
+ * pico de memória por request limitado a um múltiplo pequeno e constante desse
+ * valor (bloco base64 + `Buffer` decodificado), em vez de escalar com o tamanho do
+ * arquivo inteiro — a mesma ordem de grandeza usada em outros pontos do projeto
+ * para dimensionar transferências (ver `MAX_UPLOAD_BYTES` em `serverBootstrap.ts`).
+ */
+const DOWNLOAD_CHUNK_BYTES = 1024 * 1024;
 
 /**
  * Registra as rotas de listagem e download de arquivos no ApiRouter.
@@ -61,9 +109,7 @@ const PROGRESS_REPORT_THROTTLE_MS = 500;
 export function registerFileRoutes(
   apiRouter: ApiRouter,
   fileRepository: FileRepository,
-  fsModule: {
-    readAsStringAsync: (uri: string, options?: { encoding?: 'utf8' | 'base64' }) => Promise<string>;
-  },
+  fsModule: FileSystemReader,
   transferStore: TransferStoreActions = useTransferStore.getState(),
 ): void {
   // GET /api/files — Listar arquivos disponíveis para download
@@ -122,11 +168,7 @@ export function registerFileRoutes(
       }
 
       // Instrumentação T-602: enfileira a transferência assim que o arquivo é
-      // encontrado. NOTA DE ESCOPO: esta rota lê o arquivo inteiro de uma vez
-      // (`fsModule.readAsStringAsync`, sem streaming real — ver T-405); por isso
-      // não há progresso incremental possível aqui. `transferredBytes` só é
-      // conhecido de uma vez, no sucesso (= sizeBytes) ou na falha (= 0). Uma
-      // refatoração de streaming de download fica fora do escopo de T-602.
+      // encontrado.
       const transferId = transferStore.enqueue({
         direction: 'download',
         fileName: fileInfo.name,
@@ -135,24 +177,57 @@ export function registerFileRoutes(
       });
       transferStore.start(transferId);
 
-      // Ler conteúdo do arquivo como base64 e decodificar para bytes reais.
+      const totalBytes = fileInfo.sizeBytes;
+      // Extraído para uma `const` própria (em vez de `fileInfo.localUri` inline)
+      // porque o gerador `streamFileBlocks` abaixo é uma função aninhada: o
+      // TypeScript não preserva o narrowing de `fileInfo` (possibly null) dentro
+      // de closures/funções aninhadas, mesmo sendo `const` no escopo externo.
+      const localUri = fileInfo.localUri;
+
+      // Codificar nome do arquivo para RFC 5987 (UTF-8)
+      // Formato: filename*=UTF-8''<nome-encodado>
+      const encodedFileName = encodeURIComponent(fileInfo.name);
+      const contentDisposition = `attachment; filename*=UTF-8''${encodedFileName}`;
+      const responseHeaders = {
+        'Content-Type': fileInfo.mimeType,
+        'Content-Length': String(totalBytes),
+        'Content-Disposition': contentDisposition,
+      };
+
+      // Arquivo vazio: nada para ler nem para streamar — responde direto com um
+      // corpo vazio (evita chamar `readAsStringAsync` com `length: 0`, caso de
+      // borda não coberto de forma clara pela API legacy do expo-file-system).
+      if (totalBytes === 0) {
+        transferStore.reportProgress(transferId, 0);
+        transferStore.complete(transferId);
+        return { statusCode: 200, headers: responseHeaders, body: Buffer.alloc(0) };
+      }
+
+      // T-804: leitura em blocos (nunca o arquivo inteiro de uma vez — causava
+      // `OutOfMemoryError` real em dispositivo Android com arquivo de 41MB, já
+      // que a string base64 inteira + o `Buffer` decodificado ficavam em memória
+      // simultaneamente, escalando linearmente com o tamanho do arquivo).
       //
-      // Achado em T-701 (teste manual em dispositivo real): ler com
-      // `readAsStringAsync(uri)` sem `encoding` usa UTF-8 por padrão
-      // (`expo-file-system/legacy`) — qualquer byte que não forme uma sequência
-      // UTF-8 válida (a maioria dos bytes de um arquivo binário real, como
-      // jpeg/mov) é substituído/perdido na decodificação, corrompendo o arquivo
-      // antes mesmo de sair pela rede. `{ encoding: 'base64' }` lê os bytes
-      // exatos sem reinterpretá-los como texto.
-      let fileBuffer: Buffer;
+      // Lê o PRIMEIRO bloco de forma antecipada (fora do gerador abaixo, ainda
+      // dentro deste try/catch) para poder responder com um erro HTTP normal se a
+      // leitura falhar logo de cara (arquivo vinculado removido, sem permissão,
+      // etc.) — igual ao comportamento anterior. A partir do segundo bloco em
+      // diante, os headers HTTP 200 já foram entregues ao socket (ver
+      // `nativeHttpModule.ts`), então uma falha de leitura no meio do streaming
+      // não pode mais virar uma resposta de erro: só é possível abortar a conexão
+      // (ver comentário do gerador `streamFileBlocks` abaixo e de
+      // `writeStreamedBody` em `nativeHttpModule.ts`).
+      let firstBlock: Buffer;
       try {
-        const base64Content = await fsModule.readAsStringAsync(fileInfo.localUri, {
-          encoding: 'base64',
-        });
-        fileBuffer = Buffer.from(base64Content, 'base64');
+        firstBlock = await readFileBlock(
+          fsModule,
+          localUri,
+          0,
+          Math.min(DOWNLOAD_CHUNK_BYTES, totalBytes),
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Erro desconhecido';
-        console.error(`[FileRoutes] Erro ao ler arquivo ${fileId} (${fileInfo.localUri}):`, error);
+        console.error(`[FileRoutes] Erro ao ler arquivo ${fileId} (${localUri}):`, error);
         transferStore.fail(transferId, message);
 
         // T-801: erro explícito para arquivo vinculado que falha na leitura
@@ -168,29 +243,59 @@ export function registerFileRoutes(
         return createErrorResponse(500, 'INTERNAL_ERROR', `Erro ao ler arquivo: ${message}`);
       }
 
-      // Codificar nome do arquivo para RFC 5987 (UTF-8)
-      // Formato: filename*=UTF-8''<nome-encodado>
-      const encodedFileName = encodeURIComponent(fileInfo.name);
-      const contentDisposition = `attachment; filename*=UTF-8''${encodedFileName}`;
+      /**
+       * Gera os blocos do corpo da resposta em streaming: primeiro o bloco já lido
+       * acima, depois os blocos seguintes (lidos sob demanda, um de cada vez —
+       * nunca mais de um bloco decodificado em memória simultaneamente). Reporta
+       * progresso incremental real ao `transferStore` a cada bloco entregue
+       * (T-602/T-804), em vez de só no final.
+       *
+       * Se uma leitura falhar aqui (posição > 0), o erro é propagado (`throw`)
+       * para quem consome este iterável (`writeStreamedBody`,
+       * `nativeHttpModule.ts`), que destrói a conexão TCP em vez de tentar
+       * responder um erro HTTP — os headers 200 já foram escritos nesse ponto, e
+       * este servidor não implementa `Transfer-Encoding: chunked`, então não há
+       * como "desdizer" um 200 já iniciado. É a melhor aproximação possível, dentro
+       * do protocolo HTTP/1.1 sem chunked encoding, do requisito de T-801 de nunca
+       * entregar um stream truncado como se fosse um sucesso silencioso.
+       */
+      async function* streamFileBlocks(): AsyncGenerator<Buffer> {
+        let position = 0;
+        let block: Buffer = firstBlock;
 
-      // Leitura atômica bem-sucedida: reporta o total de uma vez (não há chunks
-      // incrementais nesta rota, ver nota de escopo acima) e conclui.
-      transferStore.reportProgress(transferId, fileInfo.sizeBytes);
-      transferStore.complete(transferId);
+        for (;;) {
+          position += block.length;
+          transferStore.reportProgress(transferId, position);
+          yield block;
 
-      // Retornar arquivo com headers corretos.
-      // Nota: lê o arquivo inteiro em memória (sem streaming real — ver nota de
-      // escopo acima); `body` é o Buffer de bytes exatos decodificado acima,
-      // nunca uma string re-interpretada como texto (T-701).
-      return {
-        statusCode: 200,
-        headers: {
-          'Content-Type': fileInfo.mimeType,
-          'Content-Length': String(fileInfo.sizeBytes),
-          'Content-Disposition': contentDisposition,
-        },
-        body: fileBuffer,
+          if (position >= totalBytes) {
+            break;
+          }
+
+          const length = Math.min(DOWNLOAD_CHUNK_BYTES, totalBytes - position);
+          try {
+            block = await readFileBlock(fsModule, localUri, position, length);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Erro desconhecido';
+            console.error(
+              `[FileRoutes] Erro ao ler arquivo ${fileId} (${localUri}) durante streaming (byte ${position}/${totalBytes}):`,
+              error,
+            );
+            transferStore.fail(transferId, message);
+            throw error instanceof Error ? error : new Error(message);
+          }
+        }
+
+        transferStore.complete(transferId);
+      }
+
+      const streamedBody: HttpStreamedBody = {
+        kind: 'stream',
+        totalBytes,
+        chunks: streamFileBlocks(),
       };
+
+      return { statusCode: 200, headers: responseHeaders, body: streamedBody };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
       console.error('[FileRoutes] Erro em GET /api/files/:id/download:', error);
