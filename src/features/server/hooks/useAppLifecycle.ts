@@ -37,6 +37,21 @@ export function useAppLifecycle(
     // Instanciar serviços (com possibilidade de injeção para testes)
     const notifService = createNotificationService(notificationService);
 
+    // T-807: no Android, `showPersistentNotification()`/`dismissNotification()` também
+    // iniciam/param o foreground service real que protege o processo do app (sem isso o
+    // Android pode matar o processo — e o servidor TCP junto — a qualquer momento em
+    // segundo plano). Este efeito, amarrado 1:1 a `serverInfo.status`, é hoje o único
+    // ponto que já reflete precisamente o ciclo de vida real do servidor — reaproveitado
+    // de propósito em vez de duplicar essa lógica em `ServerServiceImpl`.
+    //
+    // Ressalva importante (fora do escopo de T-807, ver relatório da tarefa): o efeito de
+    // AppState abaixo já PARA o servidor sempre que o app sai de foreground (não só ao
+    // encerrar o app) — inclusive durante o picker do SAF usado em "Vincular pasta". Isso
+    // significa que a proteção de foreground service adicionada aqui não impede esse
+    // stop deliberado; ela só evita que o Android mate o processo enquanto o app segue
+    // em foreground executando alguma operação demorada, ou nos poucos instantes antes
+    // desse stop ser processado.
+
     // Mostrar notificação quando servidor inicia
     if (serverInfo.status === 'running' && !notificationIdRef.current) {
       notifService
