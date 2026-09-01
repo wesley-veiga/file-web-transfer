@@ -3,6 +3,7 @@ import {
   resolveDuplicateName,
   generateSessionId,
   createMultipartStreamParser,
+  binaryStringToBytes,
 } from '../index';
 
 describe('shared/lib — barrel exports', () => {
@@ -59,5 +60,15 @@ describe('shared/lib — barrel exports', () => {
     const parser = createMultipartStreamParser('boundary');
     expect(typeof parser.feed).toBe('function');
     expect(typeof parser.finish).toBe('function');
+  });
+
+  it('should export binaryStringToBytes from barrel', () => {
+    expect(binaryStringToBytes).toBeDefined();
+    expect(typeof binaryStringToBytes).toBe('function');
+  });
+
+  it('should call binaryStringToBytes via barrel correctly', () => {
+    const result = binaryStringToBytes(String.fromCharCode(0x41, 0xff));
+    expect(Array.from(result)).toEqual([0x41, 0xff]);
   });
 });
