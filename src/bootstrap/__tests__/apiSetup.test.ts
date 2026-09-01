@@ -12,6 +12,7 @@ import type {
   HttpServerRequest,
   HttpServerRequestHandler,
   HttpServerResponse,
+  HttpStreamedBody,
 } from '../../features/server/services/httpModule';
 import type { FileRepository } from '../../features/files/services/fileRepository';
 import type { FileEntry } from '../../features/files/types';
@@ -19,6 +20,34 @@ import { fileEntryDtoSchema, apiErrorSchema } from '../../shared/types/api';
 import { createFilesChangedAtTracker, hashSha256, hashesEqual } from '../../shared/lib';
 import { createMockFileRepository, createMockHttpModule } from '../../__mocks__/testHelpers';
 import { WEB_UI_HTML } from '../../web-ui/webUiHtml';
+
+/**
+ * Drena o corpo de uma resposta de download para um único `Buffer`, suportando
+ * tanto o caminho legado (`Buffer` direto — hoje só usado para arquivo vazio)
+ * quanto o novo corpo em streaming (T-804, `HttpStreamedBody`): concatena, na
+ * ordem de chegada, todos os chunks entregues pelo `AsyncIterable`. Usado pelos
+ * testes que precisam validar o conteúdo byte-a-byte real do download (T-701/T-801),
+ * já que `response.body` deixou de ser sempre um `Buffer` puro.
+ */
+async function drainResponseBody(body: HttpServerResponse['body']): Promise<Buffer> {
+  if (Buffer.isBuffer(body)) {
+    return body;
+  }
+  if (
+    body !== undefined &&
+    body !== null &&
+    typeof body === 'object' &&
+    'kind' in body &&
+    body.kind === 'stream'
+  ) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of body.chunks) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
+  throw new Error(`Corpo de resposta inesperado para drenagem: ${typeof body}`);
+}
 
 describe('apiSetup — registerFileRoutes', () => {
   let mockApiRouter: jest.Mocked<ApiRouter>;
@@ -152,22 +181,22 @@ describe('apiSetup — registerFileRoutes', () => {
 
   describe('GET /api/files/:id/download', () => {
     it('retorna arquivo com headers corretos', async () => {
-      const entry: FileEntry = {
-        id: '550e8400-e29b-41d4-a716-446655440000',
-        name: 'document.pdf',
-        sizeBytes: 5000,
-        mimeType: 'application/pdf',
-        localUri: 'file:///path/document.pdf',
-        origin: 'shared',
-        createdAt: Date.now(),
-      };
-
       // Bytes reais de arquivo binário (magic bytes de JPEG, todos ≥ 0x80 incluídos de
       // propósito): regressão do bug real de T-701 onde ler/escrever esse tipo de
       // conteúdo como texto UTF-8 corrompia o arquivo antes mesmo de sair pela rede.
       const binaryContent = Buffer.from([
         0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
       ]);
+
+      const entry: FileEntry = {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        name: 'document.pdf',
+        sizeBytes: binaryContent.length,
+        mimeType: 'application/pdf',
+        localUri: 'file:///path/document.pdf',
+        origin: 'shared',
+        createdAt: Date.now(),
+      };
 
       mockFileRepository.list.mockResolvedValue([entry]);
       mockFsModule.readAsStringAsync.mockResolvedValue(binaryContent.toString('base64'));
@@ -188,15 +217,24 @@ describe('apiSetup — registerFileRoutes', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.headers?.['Content-Type']).toBe('application/pdf');
-      expect(response.headers?.['Content-Length']).toBe('5000');
+      expect(response.headers?.['Content-Length']).toBe(String(binaryContent.length));
       expect(response.headers?.['Content-Disposition']).toContain('attachment');
       expect(response.headers?.['Content-Disposition']).toContain('filename*=UTF-8');
-      // Lê como base64 (não UTF-8) e decodifica para os bytes exatos — T-701.
+      // Lê como base64 (não UTF-8) e decodifica para os bytes exatos — T-701. T-804:
+      // leitura em blocos — arquivo cabe inteiro no primeiro bloco de 1 MiB, então é
+      // uma única chamada com position/length explícitos.
       expect(mockFsModule.readAsStringAsync).toHaveBeenCalledWith('file:///path/document.pdf', {
         encoding: 'base64',
+        position: 0,
+        length: binaryContent.length,
       });
-      expect(Buffer.isBuffer(response.body)).toBe(true);
-      expect(response.body as Buffer).toEqual(binaryContent);
+      // T-804: response.body agora é um HttpStreamedBody ({ kind: 'stream', ... }),
+      // não mais um Buffer direto — drena o AsyncIterable antes de comparar bytes.
+      expect(response.body).toEqual(
+        expect.objectContaining({ kind: 'stream', totalBytes: binaryContent.length }),
+      );
+      const downloadedBuffer = await drainResponseBody(response.body);
+      expect(downloadedBuffer).toEqual(binaryContent);
     });
 
     it('retorna 404 para arquivo não encontrado', async () => {
@@ -396,8 +434,9 @@ describe('apiSetup — registerFileRoutes', () => {
 
       // Download bem-sucedido
       expect(response.statusCode).toBe(200);
-      expect(Buffer.isBuffer(response.body)).toBe(true);
-      const downloadedBinary = response.body as Buffer;
+      // T-804: response.body é um HttpStreamedBody — drena o AsyncIterable de
+      // chunks para obter o Buffer completo antes de validar a integridade.
+      const downloadedBinary = await drainResponseBody(response.body);
 
       // Verificar que o binário foi preservado exatamente (não corrompido)
       expect(downloadedBinary).toEqual(originalBinary);
@@ -470,7 +509,8 @@ describe('apiSetup — registerFileRoutes', () => {
 
       // Download aparenta sucesso, mas conteúdo é corrompido
       expect(response.statusCode).toBe(200);
-      const downloadedBinary = response.body as Buffer;
+      // T-804: drena o AsyncIterable de chunks do corpo em streaming.
+      const downloadedBinary = await drainResponseBody(response.body);
 
       // Verificar que os binários são diferentes
       expect(downloadedBinary).not.toEqual(originalBinary);
@@ -684,6 +724,243 @@ describe('apiSetup — registerFileRoutes', () => {
     });
   });
 
+  describe('T-804 — streaming real no download de arquivo', () => {
+    // 1 MiB — tamanho de bloco documentado no critério de pronto de T-804
+    // (`DOWNLOAD_CHUNK_BYTES` em `apiSetup.ts`).
+    const CHUNK_BYTES = 1024 * 1024;
+
+    it('arquivo maior que um bloco é entregue em múltiplos chunks byte-a-byte idênticos ao original, com Content-Length correto', async () => {
+      // ~2.5 blocos: força pelo menos 3 chunks entregues pelo AsyncIterable, nunca
+      // um único chunk gigante com o arquivo inteiro.
+      const totalBytes = CHUNK_BYTES * 2 + 500_000;
+      const originalContent = Buffer.alloc(totalBytes);
+      for (let i = 0; i < totalBytes; i++) {
+        originalContent[i] = i % 256;
+      }
+
+      const block1 = originalContent.subarray(0, CHUNK_BYTES);
+      const block2 = originalContent.subarray(CHUNK_BYTES, CHUNK_BYTES * 2);
+      const block3 = originalContent.subarray(CHUNK_BYTES * 2, totalBytes);
+
+      const entry: FileEntry = {
+        id: 'big-file-1',
+        name: 'arquivo-grande.bin',
+        sizeBytes: totalBytes,
+        mimeType: 'application/octet-stream',
+        localUri: 'file:///path/arquivo-grande.bin',
+        origin: 'shared',
+        createdAt: Date.now(),
+      };
+
+      mockFileRepository.list.mockResolvedValue([entry]);
+      mockFsModule.readAsStringAsync
+        .mockResolvedValueOnce(block1.toString('base64'))
+        .mockResolvedValueOnce(block2.toString('base64'))
+        .mockResolvedValueOnce(block3.toString('base64'));
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-big-1'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/big-file-1/download', headers: {} },
+        { id: 'big-file-1' },
+        {},
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers?.['Content-Length']).toBe(String(totalBytes));
+
+      // response.body é um HttpStreamedBody (T-804), não mais um Buffer/string único.
+      expect(response.body).toEqual(expect.objectContaining({ kind: 'stream', totalBytes }));
+      const streamedBody = response.body as HttpStreamedBody;
+
+      // Consome o AsyncIterable coletando cada chunk individualmente (sem concatenar
+      // ainda), para verificar que o streaming de fato entrega múltiplos pedaços.
+      const collectedChunks: Buffer[] = [];
+      for await (const chunk of streamedBody.chunks) {
+        collectedChunks.push(chunk);
+      }
+
+      expect(collectedChunks).toHaveLength(3);
+      expect(collectedChunks.map((c) => c.length)).toEqual([CHUNK_BYTES, CHUNK_BYTES, 500_000]);
+      // Nenhum chunk isolado contém o arquivo inteiro.
+      collectedChunks.forEach((chunk) => expect(chunk.length).toBeLessThan(totalBytes));
+
+      // Concatenado, o conteúdo é byte-a-byte idêntico ao original.
+      const reconstructed = Buffer.concat(collectedChunks);
+      expect(reconstructed.equals(originalContent)).toBe(true);
+
+      // Cada bloco foi lido isoladamente com position/length corretos (nunca o
+      // arquivo inteiro de uma vez).
+      expect(mockFsModule.readAsStringAsync).toHaveBeenCalledTimes(3);
+      expect(mockFsModule.readAsStringAsync).toHaveBeenNthCalledWith(1, entry.localUri, {
+        encoding: 'base64',
+        position: 0,
+        length: CHUNK_BYTES,
+      });
+      expect(mockFsModule.readAsStringAsync).toHaveBeenNthCalledWith(2, entry.localUri, {
+        encoding: 'base64',
+        position: CHUNK_BYTES,
+        length: CHUNK_BYTES,
+      });
+      expect(mockFsModule.readAsStringAsync).toHaveBeenNthCalledWith(3, entry.localUri, {
+        encoding: 'base64',
+        position: CHUNK_BYTES * 2,
+        length: 500_000,
+      });
+
+      // Progresso incremental real por bloco (T-602/T-804) — não só reportado uma
+      // vez no final com o total.
+      expect(mockTransferStore.reportProgress).toHaveBeenCalledTimes(3);
+      expect(mockTransferStore.reportProgress).toHaveBeenNthCalledWith(
+        1,
+        'transfer-big-1',
+        CHUNK_BYTES,
+      );
+      expect(mockTransferStore.reportProgress).toHaveBeenNthCalledWith(
+        2,
+        'transfer-big-1',
+        CHUNK_BYTES * 2,
+      );
+      expect(mockTransferStore.reportProgress).toHaveBeenNthCalledWith(
+        3,
+        'transfer-big-1',
+        totalBytes,
+      );
+      expect(mockTransferStore.complete).toHaveBeenCalledWith('transfer-big-1');
+      expect(mockTransferStore.fail).not.toHaveBeenCalled();
+    });
+
+    it('falha de leitura no meio do streaming (não no primeiro bloco) propaga erro e chama transferStore.fail, sem servir dado truncado como sucesso', async () => {
+      const totalBytes = CHUNK_BYTES * 2;
+      const block1 = Buffer.alloc(CHUNK_BYTES, 0xaa);
+
+      const entry: FileEntry = {
+        id: 'linked-big-1',
+        name: 'arquivo-vinculado-grande.bin',
+        sizeBytes: totalBytes,
+        mimeType: 'application/octet-stream',
+        localUri: 'content://external/DCIM/grande.bin',
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockFileRepository.list.mockResolvedValue([entry]);
+      const midStreamError = new Error('leitura falhou no meio do arquivo');
+      mockFsModule.readAsStringAsync
+        .mockResolvedValueOnce(block1.toString('base64'))
+        .mockRejectedValueOnce(midStreamError);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-fail-mid-1'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/linked-big-1/download', headers: {} },
+        { id: 'linked-big-1' },
+        {},
+      );
+
+      // O primeiro bloco leu com sucesso, então a rota já se comprometeu com 200 —
+      // igual ao comportamento real (headers HTTP já teriam sido escritos nesse
+      // ponto, ver nativeHttpModule.ts).
+      expect(response.statusCode).toBe(200);
+      const streamedBody = response.body as HttpStreamedBody;
+
+      const collected: Buffer[] = [];
+      let thrown: unknown = null;
+      try {
+        for await (const chunk of streamedBody.chunks) {
+          collected.push(chunk);
+        }
+      } catch (error) {
+        thrown = error;
+      }
+
+      // O primeiro bloco foi entregue, mas consumir o iterable até o bloco que
+      // falha lança exceção — nunca termina "silenciosamente" com dado truncado.
+      expect(collected).toHaveLength(1);
+      expect(collected[0].equals(block1)).toBe(true);
+      expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).toBe('leitura falhou no meio do arquivo');
+
+      expect(mockTransferStore.fail).toHaveBeenCalledWith(
+        'transfer-fail-mid-1',
+        'leitura falhou no meio do arquivo',
+      );
+      expect(mockTransferStore.complete).not.toHaveBeenCalled();
+    });
+
+    it('arquivo de 0 bytes responde com corpo vazio direto (não streamed) e conclui a transferência', async () => {
+      const entry: FileEntry = {
+        id: 'empty-file-1',
+        name: 'vazio.txt',
+        sizeBytes: 0,
+        mimeType: 'text/plain',
+        localUri: 'file:///path/vazio.txt',
+        origin: 'shared',
+        createdAt: Date.now(),
+      };
+
+      mockFileRepository.list.mockResolvedValue([entry]);
+
+      const handlers: Record<string, ApiHandler> = {};
+      mockApiRouter.addRoute.mockImplementation((method, pattern, handler) => {
+        handlers[`${method} ${pattern}`] = handler;
+      });
+
+      const mockTransferStore = {
+        enqueue: jest.fn().mockReturnValue('transfer-empty-1'),
+        start: jest.fn(),
+        reportProgress: jest.fn(),
+        complete: jest.fn(),
+        fail: jest.fn(),
+      };
+
+      registerFileRoutes(mockApiRouter, mockFileRepository, mockFsModule, mockTransferStore);
+
+      const handler = handlers['GET /api/files/:id/download'];
+      const response = await handler(
+        { method: 'GET', path: '/api/files/empty-file-1/download', headers: {} },
+        { id: 'empty-file-1' },
+        {},
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers?.['Content-Length']).toBe('0');
+      expect(Buffer.isBuffer(response.body)).toBe(true);
+      expect((response.body as Buffer).length).toBe(0);
+      expect(mockFsModule.readAsStringAsync).not.toHaveBeenCalled();
+      expect(mockTransferStore.complete).toHaveBeenCalledWith('transfer-empty-1');
+    });
+  });
+
   describe('casos de borda e segurança — GET /api/files', () => {
     it('rejeita origin=received válido também', async () => {
       const now = Date.now();
@@ -872,17 +1149,17 @@ describe('apiSetup — registerFileRoutes', () => {
     });
 
     it('nunca expõe localUri na resposta de download (no header ou body)', async () => {
+      const binaryContent = Buffer.from('PDF_CONTENT', 'utf8');
+
       const entry: FileEntry = {
         id: '550e8400-e29b-41d4-a716-446655440021',
         name: 'document.pdf',
-        sizeBytes: 5000,
+        sizeBytes: binaryContent.length,
         mimeType: 'application/pdf',
         localUri: 'file:///secret/path/document.pdf',
         origin: 'shared',
         createdAt: Date.now(),
       };
-
-      const binaryContent = Buffer.from('PDF_CONTENT', 'utf8');
 
       mockFileRepository.list.mockResolvedValue([entry]);
       mockFsModule.readAsStringAsync.mockResolvedValue(binaryContent.toString('base64'));
@@ -906,9 +1183,11 @@ describe('apiSetup — registerFileRoutes', () => {
       const headerStr = JSON.stringify(response.headers);
       expect(headerStr).not.toContain('localUri');
       expect(headerStr).not.toContain('/secret/path');
-      // Verificar body (conteúdo do arquivo, não expõe localUri)
-      expect(response.body as Buffer).toEqual(binaryContent);
-      expect((response.body as Buffer).toString('utf8')).not.toContain('localUri');
+      // Verificar body (conteúdo do arquivo, não expõe localUri) — T-804: drena o
+      // AsyncIterable de chunks do corpo em streaming antes de inspecionar bytes.
+      const downloadedBuffer = await drainResponseBody(response.body);
+      expect(downloadedBuffer).toEqual(binaryContent);
+      expect(downloadedBuffer.toString('utf8')).not.toContain('localUri');
     });
 
     it('retorna 500 quando falha ao ler arquivo do filesystem', async () => {

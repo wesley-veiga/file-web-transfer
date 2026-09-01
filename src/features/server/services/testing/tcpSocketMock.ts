@@ -39,12 +39,41 @@ export class MockSocket extends EventEmitter {
    */
   remoteAddress?: string;
 
+  /**
+   * Modo opt-in (T-804) que faz `write()` NÃO invocar seu callback de confirmação
+   * imediatamente — em vez disso, o callback fica em `pendingWriteCallbacks` até ser
+   * disparado manualmente via `flushNextWrite()`. Usado para testar que
+   * `writeStreamedBody` (`nativeHttpModule.ts`) respeita o contrato de backpressure
+   * real: nunca pede/escreve o próximo chunk antes do callback do `write()` anterior
+   * confirmar. Desligado por padrão — todo teste existente que não usa este modo
+   * continua vendo `write()` confirmar de forma síncrona, como sempre.
+   */
+  deferWriteCallbacks = false;
+  private pendingWriteCallbacks: (() => void)[] = [];
+
   write(data: string | Buffer, encodingOrCb?: string | (() => void), cb?: () => void): boolean {
     const encoding = typeof encodingOrCb === 'string' ? encodingOrCb : undefined;
     const callback = typeof encodingOrCb === 'function' ? encodingOrCb : cb;
     this.written.push({ data, encoding });
-    callback?.();
+    if (this.deferWriteCallbacks) {
+      if (callback) {
+        this.pendingWriteCallbacks.push(callback);
+      }
+    } else {
+      callback?.();
+    }
     return true;
+  }
+
+  /** Quantidade de callbacks de `write()` aguardando confirmação manual (modo `deferWriteCallbacks`). */
+  get pendingWriteCount(): number {
+    return this.pendingWriteCallbacks.length;
+  }
+
+  /** Dispara manualmente o callback do `write()` pendente mais antigo (modo `deferWriteCallbacks`). */
+  flushNextWrite(): void {
+    const callback = this.pendingWriteCallbacks.shift();
+    callback?.();
   }
 
   pause(): void {

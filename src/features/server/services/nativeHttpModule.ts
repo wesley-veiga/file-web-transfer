@@ -43,6 +43,7 @@ import type {
   HttpServerRequest,
   HttpServerResponse,
   HttpServerRequestHandler,
+  HttpStreamedBody,
   HttpUploadChunk,
   HttpUploadChunkHandler,
 } from './httpModule';
@@ -66,6 +67,11 @@ const STATUS_TEXTS: Record<number, string> = {
 type MatchedRoute =
   | { kind: 'plain'; handler: HttpServerRequestHandler }
   | { kind: 'upload'; handler: HttpUploadChunkHandler };
+
+/** Type guard para o corpo de resposta em streaming (T-804). */
+function isStreamedBody(body: HttpServerResponse['body']): body is HttpStreamedBody {
+  return typeof body === 'object' && body !== null && 'kind' in body && body.kind === 'stream';
+}
 
 /**
  * Extrai o pathname (sem query string) de um path de request.
@@ -159,15 +165,24 @@ export function createDefaultHttpModule(): HttpModule {
   ): void {
     const statusText = STATUS_TEXTS[response.statusCode] ?? 'Unknown';
 
-    let bodyBuffer: Buffer;
-    if (response.body === undefined) {
+    const streamedBody = isStreamedBody(response.body) ? response.body : null;
+
+    let bodyBuffer: Buffer | null = null;
+    let contentLength: number;
+    if (streamedBody) {
+      contentLength = streamedBody.totalBytes;
+    } else if (response.body === undefined) {
       bodyBuffer = Buffer.alloc(0);
+      contentLength = 0;
     } else if (Buffer.isBuffer(response.body)) {
       bodyBuffer = response.body as unknown as Buffer;
+      contentLength = bodyBuffer.length;
     } else if (response.body instanceof ArrayBuffer) {
       bodyBuffer = Buffer.from(response.body);
+      contentLength = bodyBuffer.length;
     } else {
       bodyBuffer = Buffer.from(String(response.body), 'utf8');
+      contentLength = bodyBuffer.length;
     }
 
     const headerLines = [`HTTP/1.1 ${response.statusCode} ${statusText}`];
@@ -177,7 +192,7 @@ export function createDefaultHttpModule(): HttpModule {
       }
       headerLines.push(`${key}: ${value}`);
     }
-    headerLines.push(`Content-Length: ${bodyBuffer.length}`);
+    headerLines.push(`Content-Length: ${contentLength}`);
     headerLines.push('Connection: close');
 
     const head = headerLines.join('\r\n') + '\r\n\r\n';
@@ -190,10 +205,75 @@ export function createDefaultHttpModule(): HttpModule {
       if (socket.destroyed) {
         return;
       }
-      socket.write(bodyBuffer, undefined, () => {
+      if (streamedBody) {
+        // Fire-and-forget deliberado: `writeStreamedBody` nunca rejeita (todo
+        // erro — de leitura dos chunks ou de escrita no socket — é tratado
+        // internamente, ver seu comentário). `writeResponse` continua síncrona
+        // para as chamadas existentes (corpo não-streaming).
+        void writeStreamedBody(socket, streamedBody.chunks, onFlushed);
+        return;
+      }
+      socket.write(bodyBuffer as Buffer, undefined, () => {
         onFlushed();
       });
     });
+  }
+
+  /**
+   * Escreve um corpo de resposta em streaming (T-804) chunk a chunk, respeitando o
+   * mesmo contrato de backpressure/confirmação do caminho não-streaming: cada
+   * `socket.write()` só é considerado concluído (e o próximo chunk só é lido/
+   * escrito) depois do callback nativo `'written'` confirmar — nunca antes (mesma
+   * corrida documentada em `writeResponse` acima, achado em T-701).
+   *
+   * `onFlushed` (que destrói o socket) só é chamado depois que TODOS os chunks
+   * forem confirmados. Se o socket for destruído no meio da iteração (conexão do
+   * cliente caiu), para de puxar chunks do iterável — nunca continua lendo disco
+   * para um socket morto — e nunca chama `onFlushed` (o socket já está destruído).
+   *
+   * Se o iterável falhar no meio (ex.: erro de leitura de arquivo vinculado a
+   * meio do streaming, T-804/T-801), os headers HTTP 200 já foram escritos e o
+   * `Content-Length` já anunciado — não há como voltar atrás e responder um erro
+   * dentro do protocolo HTTP sem `Transfer-Encoding: chunked` (que este servidor
+   * não implementa). A única opção correta é destruir a conexão abruptamente: o
+   * cliente recebe uma resposta truncada/incompleta (detectável) em vez de um
+   * arquivo corrompido servido como sucesso silencioso.
+   */
+  async function writeStreamedBody(
+    socket: Socket,
+    chunks: AsyncIterable<Buffer>,
+    onFlushed: () => void,
+  ): Promise<void> {
+    const iterator = chunks[Symbol.asyncIterator]();
+    try {
+      for (;;) {
+        if (socket.destroyed) {
+          await iterator.return?.();
+          return;
+        }
+
+        const { value, done } = await iterator.next();
+        if (done) {
+          break;
+        }
+
+        if (socket.destroyed) {
+          await iterator.return?.();
+          return;
+        }
+
+        await new Promise<void>((resolve) => {
+          socket.write(value, undefined, () => resolve());
+        });
+      }
+
+      onFlushed();
+    } catch (error) {
+      console.error('[NativeHttpModule] Erro ao ler/escrever corpo em streaming:', error);
+      if (!socket.destroyed) {
+        socket.destroy();
+      }
+    }
   }
 
   /**

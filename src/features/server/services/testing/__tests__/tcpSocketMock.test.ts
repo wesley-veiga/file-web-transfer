@@ -92,6 +92,56 @@ describe('MockSocket', () => {
     const socket = new MockSocket();
     expect(socket.write('x')).toBe(true);
   });
+
+  describe('deferWriteCallbacks (T-804)', () => {
+    it('não invoca o callback de write() imediatamente quando ligado, mas registra os dados escritos', () => {
+      const socket = new MockSocket();
+      socket.deferWriteCallbacks = true;
+      const cb = jest.fn();
+
+      socket.write('chunk-1', cb);
+
+      expect(cb).not.toHaveBeenCalled();
+      expect(socket.written).toHaveLength(1);
+      expect(socket.pendingWriteCount).toBe(1);
+    });
+
+    it('flushNextWrite() dispara os callbacks pendentes em ordem FIFO, um por vez', () => {
+      const socket = new MockSocket();
+      socket.deferWriteCallbacks = true;
+      const cb1 = jest.fn();
+      const cb2 = jest.fn();
+
+      socket.write('chunk-1', cb1);
+      socket.write('chunk-2', cb2);
+      expect(socket.pendingWriteCount).toBe(2);
+
+      socket.flushNextWrite();
+      expect(cb1).toHaveBeenCalledTimes(1);
+      expect(cb2).not.toHaveBeenCalled();
+      expect(socket.pendingWriteCount).toBe(1);
+
+      socket.flushNextWrite();
+      expect(cb2).toHaveBeenCalledTimes(1);
+      expect(socket.pendingWriteCount).toBe(0);
+    });
+
+    it('flushNextWrite() não lança quando não há callback pendente', () => {
+      const socket = new MockSocket();
+      socket.deferWriteCallbacks = true;
+
+      expect(() => socket.flushNextWrite()).not.toThrow();
+    });
+
+    it('write() sem callback em modo deferido não é enfileirado (nada para disparar depois)', () => {
+      const socket = new MockSocket();
+      socket.deferWriteCallbacks = true;
+
+      socket.write('sem-callback');
+
+      expect(socket.pendingWriteCount).toBe(0);
+    });
+  });
 });
 
 describe('MockServer', () => {
