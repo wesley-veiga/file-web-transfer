@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ServerHomeScreen } from '@/features/server/components';
 import { TransferListScreen } from '@/features/transfer/components';
 import { useTransferStore } from '@/features/transfer/store/transferStore';
@@ -59,7 +60,7 @@ export default function HomeScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setIsTransfersVisible(false)}
       >
-        <View className="flex-1 bg-background-light dark:bg-background-dark">
+        <SafeAreaView className="flex-1 bg-background-light dark:bg-background-dark">
           <View className="flex-row items-center justify-end px-4 pt-4">
             <Pressable
               onPress={() => setIsTransfersVisible(false)}
@@ -71,7 +72,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           <TransferListScreen />
-        </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );

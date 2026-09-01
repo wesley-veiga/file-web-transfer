@@ -51,7 +51,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Servidor',
+          title: 'Início',
           tabBarIcon: ({ size }) => <TabIcon symbol="🖥️" size={size} />,
         }}
       />

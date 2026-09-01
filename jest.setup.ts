@@ -12,6 +12,11 @@ jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn(() => Promise.resolve()),
 }));
 
+// Mock expo-status-bar for StatusBar component
+jest.mock('expo-status-bar', () => ({
+  StatusBar: (props: any) => React.createElement('StatusBar', props),
+}));
+
 // Mock react-native-qrcode-svg for unit tests
 jest.mock(
   'react-native-qrcode-svg',
