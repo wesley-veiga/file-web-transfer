@@ -116,6 +116,47 @@ describe('SharedFilesScreen handlers (T-302)', () => {
 
       await waitFor(() => expect(mockLoadLinkedFolder).toHaveBeenCalledTimes(1));
     });
+
+    it('loga erro e mostra Alert quando loadSharedFiles rejeita ao montar (T-803)', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert');
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockLoadSharedFiles.mockRejectedValueOnce(new Error('Load failed'));
+
+      await render(<SharedFilesScreen />);
+
+      await waitFor(() => expect(consoleErrorSpy).toHaveBeenCalled());
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Erro',
+        'Não foi possível carregar os arquivos compartilhados.',
+      );
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('loga erro e mostra Alert quando loadLinkedFolder rejeita ao montar (T-803)', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert');
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const mockLoadLinkedFolder = jest
+        .fn()
+        .mockRejectedValue(new Error('Load linked folder failed'));
+      mockUseSharedFiles.mockReturnValue({
+        files: [],
+        pickAndShareFiles: mockPickAndShareFiles,
+        removeFile: mockRemoveFile,
+        loadSharedFiles: mockLoadSharedFiles,
+        linkedFolderUri: null,
+        linkedFolderEnabled: false,
+        folderFiles: [],
+        loadLinkedFolder: mockLoadLinkedFolder,
+        pickFolder: jest.fn().mockResolvedValue(undefined),
+        toggleLinkedFolder: jest.fn().mockResolvedValue(undefined),
+      });
+
+      await render(<SharedFilesScreen />);
+
+      await waitFor(() => expect(consoleErrorSpy).toHaveBeenCalled());
+      expect(alertSpy).toHaveBeenCalledWith('Erro', 'Não foi possível carregar a pasta vinculada.');
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   describe('handleSharePress', () => {
