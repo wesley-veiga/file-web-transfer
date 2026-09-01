@@ -3,6 +3,7 @@ import {
   resolveDuplicateName,
   generateSessionId,
   createMultipartStreamParser,
+  binaryStringToBytes,
   hashFileSha256,
   IncrementalSha256,
   type HashableFileSystem,
@@ -62,6 +63,16 @@ describe('shared/lib — barrel exports', () => {
     const parser = createMultipartStreamParser('boundary');
     expect(typeof parser.feed).toBe('function');
     expect(typeof parser.finish).toBe('function');
+  });
+
+  it('should export binaryStringToBytes from barrel', () => {
+    expect(binaryStringToBytes).toBeDefined();
+    expect(typeof binaryStringToBytes).toBe('function');
+  });
+
+  it('should call binaryStringToBytes via barrel correctly', () => {
+    const result = binaryStringToBytes(String.fromCharCode(0x41, 0xff));
+    expect(Array.from(result)).toEqual([0x41, 0xff]);
   });
 
   it('should export IncrementalSha256 from barrel and compute a hash (T-805)', () => {
