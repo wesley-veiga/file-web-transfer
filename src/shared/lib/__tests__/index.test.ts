@@ -3,6 +3,9 @@ import {
   resolveDuplicateName,
   generateSessionId,
   createMultipartStreamParser,
+  hashFileSha256,
+  IncrementalSha256,
+  type HashableFileSystem,
 } from '../index';
 
 describe('shared/lib — barrel exports', () => {
@@ -59,5 +62,31 @@ describe('shared/lib — barrel exports', () => {
     const parser = createMultipartStreamParser('boundary');
     expect(typeof parser.feed).toBe('function');
     expect(typeof parser.finish).toBe('function');
+  });
+
+  it('should export IncrementalSha256 from barrel and compute a hash (T-805)', () => {
+    expect(IncrementalSha256).toBeDefined();
+
+    const hasher = new IncrementalSha256();
+    hasher.update(Buffer.from('abc', 'utf8'));
+
+    expect(hasher.digest()).toBe(
+      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+    );
+  });
+
+  it('should export hashFileSha256 from barrel and hash a mocked file (T-805)', async () => {
+    expect(hashFileSha256).toBeDefined();
+
+    const content = Buffer.from('conteúdo via barrel', 'utf8');
+    const fs: HashableFileSystem = {
+      getInfoAsync: async () => ({ exists: true, size: content.length }),
+      readAsStringAsync: async () => content.toString('base64'),
+    };
+
+    const hash = await hashFileSha256('file:///via-barrel.txt', fs);
+
+    expect(typeof hash).toBe('string');
+    expect(hash).toHaveLength(64);
   });
 });
