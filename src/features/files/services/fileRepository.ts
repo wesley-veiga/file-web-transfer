@@ -15,7 +15,7 @@ import * as Crypto from 'expo-crypto';
 import type * as FileSystem from 'expo-file-system/legacy'; // Tipos apenas; runtime usará expo-file-system via injeção
 
 import { sanitizeFileName, resolveDuplicateName } from '../../../shared/lib';
-import { hashSha256, hashesEqual } from '../../../shared/lib/hashUtils';
+import { hashFileSha256, hashesEqual } from '../../../shared/lib/hashUtils';
 import type { FileEntryDto } from '../../../shared/types/api';
 import type { FileEntry, FileOrigin } from '../types';
 
@@ -701,11 +701,12 @@ export class FileRepositoryImpl implements FileRepository {
     }
 
     try {
-      // 1. Calcular hash do arquivo original (ainda na sandbox)
-      const originalBase64 = await this.fsModule.readAsStringAsync(entry.localUri, {
-        encoding: 'base64',
-      });
-      const originalHash = await hashSha256(Buffer.from(originalBase64, 'base64'));
+      // 1. Calcular hash do arquivo original (ainda na sandbox).
+      // T-805: hash incremental/streaming (`hashFileSha256`, `shared/lib/hashUtils.ts`)
+      // lê o arquivo em blocos em vez de carregá-lo inteiro em memória de uma vez
+      // (via `readAsStringAsync(uri, { encoding: 'base64' })` sem `position`/`length`)
+      // — o padrão anterior causava `OutOfMemoryError` real em arquivo grande.
+      const originalHash = await hashFileSha256(entry.localUri, this.fsModule);
 
       // Construir URI de destino (concatenar nome do arquivo à pasta configurada)
       const destinationUri = targetFolderUri.replace(/\/$/, '') + '/' + entry.name;
@@ -722,11 +723,8 @@ export class FileRepositoryImpl implements FileRepository {
         throw new Error(`Falha ao copiar arquivo para pasta configurada: ${message}`);
       }
 
-      // 3. Calcular hash do arquivo copiado no destino
-      const copiedBase64 = await this.fsModule.readAsStringAsync(destinationUri, {
-        encoding: 'base64',
-      });
-      const copiedHash = await hashSha256(Buffer.from(copiedBase64, 'base64'));
+      // 3. Calcular hash do arquivo copiado no destino (também incremental/streaming)
+      const copiedHash = await hashFileSha256(destinationUri, this.fsModule);
 
       // 4. Verificar integridade: comparar hashes
       if (!hashesEqual(originalHash, copiedHash)) {
