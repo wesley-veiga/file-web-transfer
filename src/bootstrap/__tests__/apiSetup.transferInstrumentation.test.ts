@@ -30,6 +30,30 @@ import type { FileEntry } from '../../features/files/types';
 import { createFilesChangedAtTracker } from '../../shared/lib/filesChangedAtTracker';
 import { createMockFileRepository, createMockHttpModule } from '../../__mocks__/testHelpers';
 
+/**
+ * Drena por completo o corpo de uma resposta de download (T-804): quando é um
+ * `HttpStreamedBody`, consome todo o `AsyncIterable` de chunks (o que é o que
+ * dispara, chunk a chunk, as chamadas a `transferStore.reportProgress`/`complete`
+ * dentro do generator de `handleDownloadFile` — ver `apiSetup.ts`). Corpo não
+ * streamed (ex.: arquivo de 0 bytes) não precisa de nada além de já estar pronto.
+ */
+async function drainDownloadBody(body: HttpServerResponse['body']): Promise<void> {
+  if (
+    body !== undefined &&
+    body !== null &&
+    typeof body === 'object' &&
+    'kind' in body &&
+    body.kind === 'stream'
+  ) {
+    // Consome o AsyncIterable só pelo efeito colateral (dispara reportProgress/
+    // complete a cada bloco) — não há necessidade de reter os valores.
+    const iterator = body.chunks[Symbol.asyncIterator]();
+    while (!(await iterator.next()).done) {
+      // Intencionalmente vazio.
+    }
+  }
+}
+
 type UploadHandler = (
   chunk: HttpUploadChunk,
   request: Omit<HttpServerRequest, 'body'>,
@@ -700,6 +724,15 @@ describe('T-602 — download: instrumentação', () => {
       peerIp: '10.0.0.1',
     });
     expect(mockTransferStore.start).toHaveBeenCalledWith('transfer-id');
+
+    // T-804: response.body é um HttpStreamedBody — reportProgress/complete só
+    // acontecem conforme os chunks são de fato consumidos pelo AsyncIterable, não
+    // mais de forma síncrona antes do handler retornar.
+    expect(mockTransferStore.reportProgress).not.toHaveBeenCalled();
+    expect(mockTransferStore.complete).not.toHaveBeenCalled();
+
+    await drainDownloadBody(response.body);
+
     expect(mockTransferStore.reportProgress).toHaveBeenCalledWith('transfer-id', 42);
     expect(mockTransferStore.complete).toHaveBeenCalledWith('transfer-id');
     expect(mockTransferStore.fail).not.toHaveBeenCalled();

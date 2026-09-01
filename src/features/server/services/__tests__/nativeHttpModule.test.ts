@@ -13,6 +13,7 @@ import { createDefaultHttpModule } from '../nativeHttpModule';
 import type {
   HttpServerRequest,
   HttpServerResponse,
+  HttpStreamedBody,
   HttpUploadChunk,
   HttpModule,
 } from '../httpModule';
@@ -76,6 +77,26 @@ const jsonHandler =
   (response: HttpServerResponse): ((request: HttpServerRequest) => Promise<HttpServerResponse>) =>
   async () =>
     response;
+
+/**
+ * Cria um `AsyncIterable<Buffer>` (T-804) a partir de uma lista de chunks, registrando em
+ * `pulls` a ordem em que cada chunk foi de fato produzido pelo generator (ou seja, quando o
+ * consumidor — `writeStreamedBody` em `nativeHttpModule.ts` — de fato pediu o próximo valor).
+ * Usado para provar que os chunks são pedidos um de cada vez, nunca adiantados.
+ */
+function trackedChunkSource(chunksData: Buffer[]): {
+  chunks: AsyncIterable<Buffer>;
+  pulls: number[];
+} {
+  const pulls: number[] = [];
+  async function* generator(): AsyncGenerator<Buffer> {
+    for (let i = 0; i < chunksData.length; i++) {
+      pulls.push(i);
+      yield chunksData[i];
+    }
+  }
+  return { chunks: generator(), pulls };
+}
 
 describe('createDefaultHttpModule', () => {
   let module: HttpModule;
@@ -667,6 +688,216 @@ describe('createDefaultHttpModule', () => {
       const buffer = socket.writtenBuffer();
       const bodyStart = buffer.indexOf('\r\n\r\n') + 4;
       expect(Array.from(buffer.subarray(bodyStart))).toEqual([9, 8, 7]);
+    });
+  });
+
+  describe('corpo de resposta em streaming (T-804)', () => {
+    it('escreve múltiplos chunks em sequência, nunca pedindo/escrevendo o próximo antes do write() anterior confirmar', async () => {
+      const chunk1 = Buffer.from('AAAA');
+      const chunk2 = Buffer.from('BBBB');
+      const chunk3 = Buffer.from('CCCC');
+      const { chunks, pulls } = trackedChunkSource([chunk1, chunk2, chunk3]);
+      const totalBytes = chunk1.length + chunk2.length + chunk3.length;
+
+      const streamedBody: HttpStreamedBody = { kind: 'stream', totalBytes, chunks };
+      const handler = jest.fn(
+        jsonHandler({
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: streamedBody,
+        }),
+      );
+      module.addListener('/api', handler);
+      await startModule(module);
+      const socket = connect();
+      socket.deferWriteCallbacks = true;
+
+      await send(socket, buildHead('GET', '/api/session'));
+
+      // Só o head foi escrito até agora — a confirmação do head ainda não foi
+      // disparada, então writeStreamedBody nem começou a puxar chunks.
+      expect(socket.written).toHaveLength(1);
+      expect(socket.pendingWriteCount).toBe(1);
+      expect(pulls).toEqual([]);
+      const headText = Buffer.isBuffer(socket.written[0].data)
+        ? socket.written[0].data.toString('utf8')
+        : socket.written[0].data;
+      expect(headText).toContain(`Content-Length: ${totalBytes}`);
+
+      // Confirma o head -> writeStreamedBody pede e escreve o 1º chunk (mas sua
+      // confirmação também fica pendente).
+      socket.flushNextWrite();
+      await flush();
+      expect(pulls).toEqual([0]);
+      expect(socket.written).toHaveLength(2);
+      expect(socket.pendingWriteCount).toBe(1);
+
+      // Confirma o chunk 1 -> só agora o chunk 2 é pedido/escrito.
+      socket.flushNextWrite();
+      await flush();
+      expect(pulls).toEqual([0, 1]);
+      expect(socket.written).toHaveLength(3);
+      expect(socket.pendingWriteCount).toBe(1);
+
+      // Confirma o chunk 2 -> só agora o chunk 3 é pedido/escrito.
+      socket.flushNextWrite();
+      await flush();
+      expect(pulls).toEqual([0, 1, 2]);
+      expect(socket.written).toHaveLength(4);
+      expect(socket.pendingWriteCount).toBe(1);
+
+      // Confirma o chunk 3 -> loop termina, onFlushed() destrói a conexão.
+      expect(socket.destroyed).toBe(false);
+      socket.flushNextWrite();
+      await flush();
+
+      expect(socket.destroyed).toBe(true);
+      const fullBuffer = socket.writtenBuffer();
+      const bodyStart = fullBuffer.indexOf(Buffer.from('\r\n\r\n')) + 4;
+      const bodyBytes = fullBuffer.subarray(bodyStart);
+      expect(bodyBytes.equals(Buffer.concat([chunk1, chunk2, chunk3]))).toBe(true);
+    });
+
+    it('para de puxar chunks e não escreve mais nada se o socket for destruído no meio do streaming', async () => {
+      const chunk1 = Buffer.from('AAAA');
+      const chunk2 = Buffer.from('BBBB');
+      const { chunks, pulls } = trackedChunkSource([chunk1, chunk2]);
+      const streamedBody: HttpStreamedBody = { kind: 'stream', totalBytes: 8, chunks };
+
+      module.addListener('/api', jest.fn(jsonHandler({ statusCode: 200, body: streamedBody })));
+      await startModule(module);
+      const socket = connect();
+      socket.deferWriteCallbacks = true;
+
+      await send(socket, buildHead('GET', '/api/session'));
+      socket.flushNextWrite(); // confirma o head -> pede/escreve chunk1
+      await flush();
+
+      expect(pulls).toEqual([0]);
+      expect(socket.written).toHaveLength(2); // head + chunk1
+
+      // Cliente cai no meio do streaming, antes do chunk1 ser confirmado.
+      socket.destroy();
+      await flush();
+
+      // writeStreamedBody nunca deveria continuar puxando/escrevendo chunk2 para um
+      // socket morto.
+      expect(pulls).toEqual([0]);
+      expect(socket.written).toHaveLength(2);
+    });
+
+    it('se o socket for destruído enquanto o próximo chunk ainda está sendo lido, descarta o chunk (libera o iterator) sem escrevê-lo nem chamar onFlushed de novo', async () => {
+      const chunk1 = Buffer.from('AAAA');
+      const chunk2 = Buffer.from('BBBB');
+      const returnSpy = jest.fn(async () => ({ value: undefined, done: true }) as const);
+      // Objeto-holder (em vez de `let` capturado diretamente) para evitar que o
+      // TypeScript estreite `releaseChunk2Read` para `null` no ponto de leitura —
+      // a única atribuição visível fica dentro do closure assíncrono abaixo.
+      const gate: { release: (() => void) | null } = { release: null };
+      let step = 0;
+
+      // Iterable manual (em vez de `async function*`) para controlar com precisão
+      // quando a leitura do 2º chunk "termina" — simula uma leitura de disco lenta
+      // (ex.: bloco grande) que ainda está em andamento quando o cliente cai.
+      const chunks: AsyncIterable<Buffer> = {
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              if (step === 0) {
+                step = 1;
+                return { value: chunk1, done: false };
+              }
+              if (step === 1) {
+                step = 2;
+                await new Promise<void>((resolve) => {
+                  gate.release = resolve;
+                });
+                return { value: chunk2, done: false };
+              }
+              return { value: undefined, done: true };
+            },
+            return: returnSpy,
+          };
+        },
+      };
+      const streamedBody: HttpStreamedBody = { kind: 'stream', totalBytes: 8, chunks };
+
+      module.addListener('/api', jest.fn(jsonHandler({ statusCode: 200, body: streamedBody })));
+      await startModule(module);
+      const socket = connect();
+      const destroySpy = jest.spyOn(socket, 'destroy');
+
+      await send(socket, buildHead('GET', '/api/session'));
+      await flush();
+
+      // chunk1 já foi escrito e confirmado (write síncrono do mock); a leitura do
+      // chunk2 está em andamento (presa no gate controlado acima).
+      expect(socket.written).toHaveLength(2); // head + chunk1
+      expect(destroySpy).not.toHaveBeenCalled();
+
+      // Cliente cai enquanto a leitura do chunk2 ainda está pendente.
+      socket.destroy();
+      expect(destroySpy).toHaveBeenCalledTimes(1);
+
+      // A leitura "lenta" do chunk2 finalmente termina — mas o socket já está
+      // destruído nesse momento.
+      gate.release?.();
+      await flush();
+
+      // O chunk2, mesmo já lido, nunca é escrito num socket morto; o iterator é
+      // liberado corretamente (return()); e destroy() não é chamado de novo.
+      expect(socket.written).toHaveLength(2);
+      expect(returnSpy).toHaveBeenCalledTimes(1);
+      expect(destroySpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('destrói a conexão sem nunca fingir sucesso quando o AsyncIterable de chunks falha no meio do streaming', async () => {
+      const chunk1 = Buffer.from('OK--');
+      const streamError = new Error('falha simulada de leitura no meio do stream');
+
+      async function* failingChunks(): AsyncGenerator<Buffer> {
+        yield chunk1;
+        throw streamError;
+      }
+
+      // Content-Length anunciado (100) é bem maior do que o que de fato será
+      // entregue — replica o cenário real: os headers 200 já foram escritos
+      // anunciando o tamanho total antes da falha de leitura no meio do arquivo.
+      const streamedBody: HttpStreamedBody = {
+        kind: 'stream',
+        totalBytes: 100,
+        chunks: failingChunks(),
+      };
+
+      module.addListener('/api', jest.fn(jsonHandler({ statusCode: 200, body: streamedBody })));
+      await startModule(module);
+      const socket = connect();
+      const destroySpy = jest.spyOn(socket, 'destroy');
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      await send(socket, buildHead('GET', '/api/session'));
+      await flush();
+
+      // A conexão é destruída (única opção correta sem chunked encoding), mas
+      // nunca da forma "onFlushed" de sucesso normal — o catch de
+      // writeStreamedBody chama socket.destroy() diretamente.
+      expect(socket.destroyed).toBe(true);
+      expect(destroySpy).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Erro ao ler/escrever corpo em streaming'),
+        streamError,
+      );
+
+      const fullBuffer = socket.writtenBuffer();
+      const bodyStart = fullBuffer.indexOf(Buffer.from('\r\n\r\n')) + 4;
+      const bodyBytes = fullBuffer.subarray(bodyStart);
+      // Só o chunk confirmado antes da falha chegou ao socket — nunca os 100
+      // bytes anunciados em Content-Length, e nunca uma resposta completa "de
+      // sucesso" com dado inventado/truncado silenciosamente.
+      expect(bodyBytes.equals(chunk1)).toBe(true);
+      expect(bodyBytes.length).toBeLessThan(100);
+
+      consoleErrorSpy.mockRestore();
     });
   });
 
