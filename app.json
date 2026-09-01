@@ -36,7 +36,8 @@
           "imageWidth": 76
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "./plugins/withForegroundService"
     ],
     "experiments": {
       "typedRoutes": true,

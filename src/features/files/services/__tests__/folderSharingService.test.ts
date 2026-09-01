@@ -162,6 +162,85 @@ describe('listFolderFiles', () => {
     expect(files[0].name).toBe('ok.txt');
   });
 
+  it('dispara getInfoAsync de todos os itens em paralelo — não espera um terminar antes do próximo (T-807)', async () => {
+    // Prova de paralelismo real (não só que o resultado final bate): usa promises
+    // controláveis manualmente para observar que as N chamadas de getInfoAsync já foram
+    // TODAS disparadas (ficam pendentes ao mesmo tempo) antes de qualquer uma resolver. Um
+    // `for...of` sequencial com `await` dentro do loop teria disparado só a primeira
+    // chamada neste ponto — só chamaria a segunda depois da primeira resolver.
+    const uris = ['content://.../a.txt', 'content://.../b.txt', 'content://.../c.txt'];
+    const pendingResolvers: ((
+      info: Awaited<ReturnType<FolderSharingModule['getInfoAsync']>>,
+    ) => void)[] = [];
+    const getInfoAsync = jest.fn(
+      () =>
+        new Promise<Awaited<ReturnType<FolderSharingModule['getInfoAsync']>>>((resolve) => {
+          pendingResolvers.push(resolve);
+        }),
+    );
+    const module = makeModule({
+      readDirectoryAsync: jest.fn().mockResolvedValue(uris),
+      getInfoAsync,
+    });
+
+    const resultPromise = listFolderFiles(module, 'content://tree/x');
+
+    // Deixa todos os microtasks síncronos (resolução de readDirectoryAsync + o .map que
+    // dispara cada getInfoAsync) rodarem, sem resolver nenhum getInfoAsync ainda.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(getInfoAsync).toHaveBeenCalledTimes(3);
+    expect(pendingResolvers).toHaveLength(3);
+
+    // Resolve fora de ordem (b, depois c, depois a) — Promise.all preserva a ordem de
+    // entrada no array de resultado final, independentemente da ordem de resolução.
+    pendingResolvers[1](fakeFileInfo({ isDirectory: false, size: 20 })); // b.txt
+    pendingResolvers[2](fakeFileInfo({ isDirectory: false, size: 30 })); // c.txt
+    pendingResolvers[0](fakeFileInfo({ isDirectory: false, size: 10 })); // a.txt
+
+    const files = await resultPromise;
+
+    expect(files.map((f) => f.name)).toEqual(['a.txt', 'b.txt', 'c.txt']);
+    expect(files.map((f) => f.sizeBytes)).toEqual([10, 20, 30]);
+  });
+
+  it('item que rejeita no meio de outros pendentes não derruba a listagem paralela inteira', async () => {
+    // Complementa o teste de paralelismo acima: aqui a rejeição acontece enquanto as
+    // outras chamadas ainda estão pendentes (não resolvidas), confirmando que
+    // `Promise.all`/`resolveFolderFile` isola a falha de um item sem esperar (nem ser
+    // afetado por) o estado dos demais — o mesmo comportamento que já existia na versão
+    // sequencial, agora sob execução paralela real.
+    const uris = ['content://.../ok1.txt', 'content://.../quebrado.txt', 'content://.../ok2.txt'];
+    const pending: {
+      resolve: (info: Awaited<ReturnType<FolderSharingModule['getInfoAsync']>>) => void;
+      reject: (err: unknown) => void;
+    }[] = [];
+    const getInfoAsync = jest.fn(
+      () =>
+        new Promise<Awaited<ReturnType<FolderSharingModule['getInfoAsync']>>>((resolve, reject) => {
+          pending.push({ resolve, reject });
+        }),
+    );
+    const module = makeModule({
+      readDirectoryAsync: jest.fn().mockResolvedValue(uris),
+      getInfoAsync,
+    });
+
+    const resultPromise = listFolderFiles(module, 'content://tree/x');
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(pending).toHaveLength(3);
+
+    // Rejeita o item do meio primeiro, antes dos outros dois pendentes resolverem.
+    pending[1].reject(new Error('falhou'));
+    pending[0].resolve(fakeFileInfo({ isDirectory: false, size: 1 }));
+    pending[2].resolve(fakeFileInfo({ isDirectory: false, size: 2 }));
+
+    const files = await resultPromise;
+
+    expect(files.map((f) => f.name)).toEqual(['ok1.txt', 'ok2.txt']);
+  });
+
   it('ignora item cujo getInfoAsync retorna exists: false', async () => {
     const module = makeModule({
       readDirectoryAsync: jest.fn().mockResolvedValue(['content://.../sumiu.txt']),

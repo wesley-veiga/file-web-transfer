@@ -124,30 +124,51 @@ export async function requestFolderAccess(
  * silenciosamente — não devem derrubar a listagem inteira por causa de um
  * item problemático (ex.: link simbólico quebrado).
  */
+/**
+ * Consulta `getInfoAsync` para um único item, convertendo-o em `FolderFile`
+ * (ou `null` se for diretório/inexistente/erro). Isolado nesta função para
+ * poder ser disparado em paralelo por `listFolderFiles` sem perder o
+ * comportamento de "item problemático não derruba a listagem inteira".
+ */
+async function resolveFolderFile(
+  module: Pick<FolderSharingModule, 'getInfoAsync'>,
+  uri: string,
+): Promise<FolderFile | null> {
+  try {
+    const info = await module.getInfoAsync(uri);
+    if (!info.exists || info.isDirectory) {
+      return null;
+    }
+    const name = extractFileNameFromUri(uri);
+    return {
+      uri,
+      name,
+      mimeType: guessMimeTypeFromName(name),
+      sizeBytes: info.size,
+    };
+  } catch {
+    // Ignora item problemático; não propaga para o Promise.all.
+    return null;
+  }
+}
+
+/**
+ * Todas as chamadas de `getInfoAsync` disparam em paralelo (`Promise.all`),
+ * em vez de sequencialmente uma por vez. Uma pasta SAF com centenas/milhares
+ * de arquivos levava minutos no padrão sequencial anterior — tempo o
+ * suficiente para o app ficar em primeiro plano ocupado (ou passar por
+ * transição de estado) e o servidor cair (achado real em uso, T-807). Sem
+ * limite de concorrência deliberadamente: cada chamada é uma única
+ * invocação de método nativo via bridge (não abre socket/handle de arquivo
+ * persistente), e o próprio `readDirectoryAsync` já materializa a lista
+ * inteira de URIs em memória antes desta função rodar — não há razão para
+ * limitar quantas promessas ficam pendentes ao mesmo tempo.
+ */
 export async function listFolderFiles(
   module: Pick<FolderSharingModule, 'readDirectoryAsync' | 'getInfoAsync'>,
   directoryUri: string,
 ): Promise<FolderFile[]> {
   const uris = await module.readDirectoryAsync(directoryUri);
-  const files: FolderFile[] = [];
-
-  for (const uri of uris) {
-    try {
-      const info = await module.getInfoAsync(uri);
-      if (!info.exists || info.isDirectory) {
-        continue;
-      }
-      const name = extractFileNameFromUri(uri);
-      files.push({
-        uri,
-        name,
-        mimeType: guessMimeTypeFromName(name),
-        sizeBytes: info.size,
-      });
-    } catch {
-      // Ignora item problemático; segue para o próximo.
-    }
-  }
-
-  return files;
+  const results = await Promise.all(uris.map((uri) => resolveFolderFile(module, uri)));
+  return results.filter((file): file is FolderFile => file !== null);
 }

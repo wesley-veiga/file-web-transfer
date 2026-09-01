@@ -5,6 +5,8 @@ export { createServerService, setHttpModule } from './serverServiceFactory';
 export { createDefaultHttpModule } from './nativeHttpModule';
 export type { NotificationService } from './notificationService';
 export { NotificationServiceImpl, createNotificationService } from './notificationService';
+export type { ForegroundServiceModule } from './foregroundServiceModule';
+export { createDefaultForegroundServiceModule } from './foregroundServiceModule';
 export type { ApiRouter, ApiRouterConfig, ApiHandler } from './apiRouter';
 export { ApiRouterImpl } from './apiRouter';
 export { createApiRouter } from './apiRouterFactory';
