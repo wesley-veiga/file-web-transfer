@@ -90,22 +90,6 @@ export function setCurrentMode(mode: SessionMode): void {
 }
 
 /**
- * Retrocompatibilidade com código antigo.
- * @deprecated Use `setCurrentToken()` instead.
- */
-export function setCurrentSessionId(sessionId: string): void {
-  setCurrentToken(sessionId);
-}
-
-/**
- * Retrocompatibilidade com código antigo.
- * @deprecated Use `getCurrentToken()` instead.
- */
-export function getCurrentSessionId(): string {
-  return getCurrentToken();
-}
-
-/**
  * Inicializa o servidor HTTP embarcado: cria o `HttpModule` real, monta o `ApiRouter`
  * e registra todas as rotas. Idempotente — chamadas repetidas após a primeira são
  * ignoradas.

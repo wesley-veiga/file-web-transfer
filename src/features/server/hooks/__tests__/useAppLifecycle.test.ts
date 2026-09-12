@@ -61,7 +61,8 @@ describe('useAppLifecycle', () => {
         ip: '192.168.1.100',
         port: 8080,
         url: 'http://192.168.1.100:8080',
-        sessionId: 'test-123',
+        token: 'test-123',
+        mode: 'send',
         networkMode: 'wifi',
       });
     });
@@ -89,7 +90,7 @@ describe('useAppLifecycle', () => {
 
     // A no-op re-render with the same running status should not show a second notification
     await act(async () => {
-      useServerStore.getState().started({ sessionId: 'test-123' });
+      useServerStore.getState().started({ token: 'test-123', mode: 'send' });
     });
 
     expect(mockNotificationService.showPersistentNotification).toHaveBeenCalledTimes(1);
