@@ -34,7 +34,8 @@
       ],
       "expo-sharing",
       "./plugins/withForegroundService",
-      "./plugins/withShareIntent"
+      "./plugins/withShareIntent",
+      "./plugins/withShareIntentPayload"
     ],
     "experiments": {
       "typedRoutes": true,
