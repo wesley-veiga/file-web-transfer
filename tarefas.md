@@ -260,7 +260,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Nova tela, aberta automaticamente quando o app é invocado via compartilhamento do SO (T-903): inicia o servidor em modo `'send'` (T-902), exibe o token gerado como **título** da tela e um QR Code com a URL + `?token=<token>`; ao detectar download em andamento (reaproveita o store de transferências, T-601), exibe "Transferência em andamento" com progresso e mantém a tela ligada (`expo-keep-awake`) até concluir ou cancelar, desligando o keep-awake logo depois; erros de servidor reaproveitam o tratamento por `ServerErrorCode` já existente. Substitui, para este caso, o fluxo manual de iniciar servidor da antiga Home/Servidor (T-204, descontinuada).
   *Pronto quando:* critérios de aceite da HU-09/HU-11 (`transferir.md`) atendidos; teste garante que o keep-awake é sempre desligado ao sair da tela ou concluir (nunca fica travado ligado); testes de componente para os estados idle/iniciando/erro/transferindo.
 
-- [ ] **T-905 · Tela inicial (Home idle)** ⬅ T-005 **[P]**
+- [x] **T-905 · Tela inicial (Home idle)** ⬅ T-005 **[P]**
   Tela exibida quando o app é aberto diretamente (sem compartilhamento): título "Transfer Files", texto de apoio ("Para compartilhar, navegue até um arquivo, clique em compartilhar, selecione este aplicativo como destino.") e botão azul centralizado "Receber arquivo" que navega para a tela de Receber (T-906). Substitui a Home/Servidor antiga (T-204, descontinuada) como tela de entrada padrão do app.
   *Pronto quando:* critérios de aceite da HU-10 atendidos; teste de componente cobre título, texto de apoio e navegação do botão.
 
