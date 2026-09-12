@@ -1,6 +1,8 @@
 # Tarefas — Transferir Arquivos
 
 **Derivado de:** [transferir.md](transferir.md) · **Regido por:** [constitution.md](constitution.md)
+**Revisão 1.11 (2026-09-12):** decisão de produto — compatibilidade restrita definitivamente ao **Android**; suporte a iOS removido do escopo (deixa de ser uma decisão pendente da T-901). T-901 reescrita para focar só em share intent Android; T-701 ajustada (roteiro de teste de fogo não depende mais de dispositivo iOS); nota de risco da Fase 9 atualizada. Nenhuma tarefa já concluída/mesclada foi reaberta ou teve o texto histórico alterado — a mudança afeta apenas trabalho ainda não iniciado. Ver `transferir.md` rev. 2.1.0.
+**Revisão 1.10 (2026-09-11):** pivô de produto — a usabilidade do app é substituída por dois fluxos únicos disparados por evento (**Enviar**, aberto automaticamente ao compartilhar arquivo(s) pelo menu do SO; **Receber**, aberto ao tocar num botão na Home), pareados por token/QR Code. O token deixa de ser cosmético (como o antigo `sessionId`) e passa a ser controle de acesso real, validado pela API. Reaproveita os módulos de servidor/transferência/arquivos das Fases 0–8; a navegação por abas (Home/Servidor, Compartilhados, Recebidos, Transferências) é descontinuada. **T-204, T-302, T-303, T-603** e a UI de vínculo de pasta da **T-801** têm o título riscado abaixo — foram de fato concluídas e mescladas em sua época, só deixam de ser reaproveitadas por esta mudança de direção (checkbox mantido `[x]`, nada foi desfeito retroativamente); a técnica de acesso sem cópia da T-801 (`linkFromUri`) permanece em uso via nova T-903. **T-802** continua totalmente válida, apenas ganha uma tarefa (T-911) para reancorar seu ponto de entrada na navegação nova. Nova **Fase 9** (T-901–T-912) detalha a implementação, como continuação deste documento. Ver `transferir.md` rev. 2.0.0 para a spec completa da mudança.
 **Revisão 1.9 (2026-09-01):** T-808 aprovada com ressalva e mesclada — `useAppLifecycle.ts` não derruba mais o servidor Android ao sair de foreground quando o foreground service da T-807 está ativo. Duas pendências de validação manual em dispositivo físico registradas no item (ver nota na T-808), fora do alcance deste ambiente.
 **Revisão 1.8 (2026-09-01):** T-805 e T-807 aprovadas e mescladas (T-807 com ressalva registrada no próprio item). T-806 reprovada no critério de performance mas mesclada mesmo assim pelo código seguro/testável entregue — permanece `[ ]`, ver nota no item. Duas novas tarefas: **T-808** (decisão de produto — parar de derrubar o servidor ao sair de foreground, contando com o foreground service da T-807 para proteção) e **T-809** (investigar o gargalo real de performance do upload, provavelmente no round-trip base64 da bridge nativa, não no loop que a T-806 já investigou e descartou).
 **Revisão 1.7 (2026-09-01):** T-804 mesclada e concluída. Novos achados em uso real, mesmo dia: (1) o mesmo padrão de OOM da T-804 existe também na verificação de hash pós-upload (`moveReceivedFileToConfiguredFolder`, T-802) — nova T-805; (2) a UI trava e a transferência fica lenta durante upload por causa de um loop manual de conversão de bytes na thread JS (`appendToFileAsync`) — nova T-806; (3) o servidor desconecta ao vincular pasta com muitos arquivos — causa raiz dupla: listagem sequencial em `folderSharingService.ts` e, mais grave, ausência de foreground service Android de verdade protegendo o processo em segundo plano — nova T-807 (a mais arquitetural das três, requer Expo config plugin já que `android/` não é versionado).
@@ -92,10 +94,11 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   *Pronto quando:* testes com mock do módulo nativo cobrindo sucesso nos dois modos, `NO_NETWORK`, `PORT_UNAVAILABLE`.
   **Nota (rev. 1.2):** `networkMode` passou a ter valor único `'wifi'` após T-209 — descrição acima é histórica.
 
-- [x] **T-204 · Tela Home/Servidor** ⬅ T-203, T-005, T-104
+- [x] ~~**T-204 · Tela Home/Servidor**~~ ⬅ T-203, T-005, T-104
   UI dos estados `idle/starting/running/error` (HU-01, HU-02): botão iniciar/parar, spinner, URL + QR Code + sessionId, mensagens por `ServerErrorCode`, confirmação ao parar com transferências ativas. Estado `idle` sem rede exibe a ação "Criar rede" (fluxo completo na T-208).
   *Pronto quando:* critérios de aceite "Tela Home / Servidor" da spec todos atendidos, com testes de componente por estado.
   **Nota (rev. 1.2):** ação "Criar rede" removida por T-209 (T-208 cancelada) — descrição acima é histórica.
+  **Descontinuada (rev. 1.10, 2026-09-11):** UI substituída pela Home idle (T-905) e pelas telas Enviar/Receber (T-904/T-906) do pivô de usabilidade — ver Fase 9. Código removido de fato pela T-912.
 
 - [x] **T-205 · Notificação persistente / ciclo de vida** ⬅ T-204
   Notificação enquanto `running`; encerrar app → para servidor e libera porta (e desliga hotspot criado pelo app, se houver).
@@ -121,13 +124,15 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   `FileRepository` sobre `expo-file-system`: salvar em `received/`, listar, remover, mapear `FileEntry → FileEntryDto` (nunca expor `localUri`).
   *Pronto quando:* testes com mock de filesystem; teste garante que DTO não contém `localUri`.
 
-- [x] **T-302 · Compartilhar arquivos do host** ⬅ T-301, T-005
+- [x] ~~**T-302 · Compartilhar arquivos do host**~~ ⬅ T-301, T-005
   Document picker, lista "Compartilhados" com remoção (HU-06); store da feature.
   *Pronto quando:* critérios de aceite "Tela Arquivos Compartilhados" atendidos (exceto o item de 3 s, que depende de T-503).
+  **Descontinuada (rev. 1.10, 2026-09-11):** curadoria manual via picker + aba "Compartilhados" substituída pelo recebimento automático de arquivo(s) via compartilhamento do SO (T-903) — ver Fase 9. Código removido de fato pela T-912.
 
-- [x] **T-303 · Aba Recebidos + abrir/compartilhar** ⬅ T-301, T-005
+- [x] ~~**T-303 · Aba Recebidos + abrir/compartilhar**~~ ⬅ T-301, T-005
   Lista de recebidos com share sheet do SO (parte da HU-07).
   *Pronto quando:* abrir e compartilhar funcionam nos dois SOs.
+  **Descontinuada (rev. 1.10, 2026-09-11):** aba dedicada substituída pela ação inline "Abrir/Compartilhar" na tela Receber (T-906) — ver Fase 9. Código removido de fato pela T-912.
 
 ## Fase 4 — API HTTP (rotas sobre o servidor)
 
@@ -175,15 +180,17 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Upload/download reportam progresso ao store (mín. a cada 500 ms) sem bloquear a transferência.
   *Pronto quando:* testes garantem emissão de progresso e não-bloqueio (throttle testado).
 
-- [x] **T-603 · Tela Transferências** ⬅ T-601, T-005
+- [x] ~~**T-603 · Tela Transferências**~~ ⬅ T-601, T-005
   Lista em tempo real (direção, nome, %, velocidade, IP do peer), skeleton de loading, estado vazio ilustrado, item `failed` com mensagem (HU-07).
   *Pronto quando:* critérios de aceite "Tela Transferências" atendidos.
+  **Descontinuada (rev. 1.10, 2026-09-11):** tela/aba dedicada removida — progresso passa a aparecer embutido nas telas Enviar (T-904) e Receber (T-906) — ver Fase 9. Código removido de fato pela T-912.
 
 ## Fase 7 — Integração e Endurecimento
 
 - [ ] **T-701 · Teste de fogo E2E manual** ⬅ todas as anteriores
-  Roteiro: Android host ↔ iOS convidado e vice-versa; arquivo ≥ 1 GB nas duas direções sem crash de memória; parar servidor no meio da transferência → `cancelled` correto; nomes com acento/emoji.
+  Roteiro: app host em Android, convidado acessando via navegador (qualquer dispositivo/plataforma, já que o convidado usa a `web-ui`, não o app nativo); arquivo ≥ 1 GB nas duas direções sem crash de memória; parar servidor no meio da transferência → `cancelled` correto; nomes com acento/emoji.
   *Pronto quando:* roteiro executado e registrado em `docs/testes-manuais.md`.
+  **Nota (rev. 1.11, 2026-09-12):** roteiro original citava "iOS convidado" — removido; o app é Android-only (ver `transferir.md` rev. 2.1), o papel de convidado sempre foi via navegador, não via app nativo em outra plataforma.
 
 - [ ] **T-702 · Auditoria de conformidade final** ⬅ T-701
   Rodar o agente `validador` sobre o projeto inteiro: cobertura ≥ mínimos, zero `any`, boundaries respeitados, todos os critérios de aceite da spec marcados.
@@ -191,13 +198,15 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 
 ## Fase 8 — Melhorias pós-teste manual (achados de T-701)
 
-- [x] **T-801 · Compartilhar por pasta sem duplicar (SAF)** ⬅ T-302
+- [x] ~~**T-801 · Compartilhar por pasta sem duplicar (SAF)**~~ ⬅ T-302
   Botão "Vincular pasta" (convive com o document picker avulso existente): `StorageAccessFramework.requestDirectoryPermissionsAsync()` + `readDirectoryAsync()` listam o conteúdo da pasta escolhida. O toggle habilitar/desabilitar é **da funcionalidade como um todo** (compartilhar a pasta vinculada), não por arquivo individual — liga/desliga a exposição de toda a pasta de uma vez; a funcionalidade só tem efeito com o servidor ativo (com o servidor parado, o toggle fica desabilitado/indica que é preciso iniciar o servidor). Diferente do fluxo atual, o arquivo NÃO é copiado para a sandbox — `FileRepository.linkFromUri()` grava uma entrada com `localUri` apontando pro arquivo original (`linked: true`); desabilitar o compartilhamento da pasta nunca apaga os arquivos reais do usuário, só desvincula. Cada item da lista mostra thumbnail do arquivo quando possível (imagens/vídeos) ou um ícone padrão por tipo quando não for possível gerar thumbnail. A pasta escolhida é lembrada entre reinícios do app. A rota de download nunca serve um stream truncado/parcial silenciosamente: falha ao ler o arquivo vinculado (`localUri` externo) retorna erro explícito no `apiErrorSchema`.
   *Pronto quando:* com o servidor ativo, arquivos de uma pasta vinculada e habilitada aparecem em "Baixar arquivos" do convidado e baixam corretamente sem nunca terem sido duplicados no armazenamento do host, com o hash (SHA-256) do arquivo baixado pelo convidado idêntico ao do arquivo original vinculado (teste automatizado compara os hashes); desabilitar o toggle da pasta remove todos os seus arquivos da lista exposta sem apagar os arquivos originais; toggle fica indisponível/orienta iniciar o servidor quando ele está parado; lista exibe thumbnail quando possível e ícone padrão como fallback; testes cobrindo permissão negada, toggle nos dois sentidos, comportamento com servidor parado e erro explícito em leitura falha/parcial do arquivo vinculado.
+  **Descontinuada (rev. 1.10, 2026-09-11):** o toggle de "vincular pasta" e a aba "Compartilhados" que o hospedava somem com o pivô de usabilidade (ver T-302). A técnica de acesso sem cópia (`FileRepository.linkFromUri`, `linked: true`) continua em uso — é reaproveitada pela nova T-903 para lidar com arquivo(s) recebidos via compartilhamento do SO. Código de UI removido de fato pela T-912.
 
 - [x] **T-802 · Local de recebidos configurável (SAF)** ⬅ T-301, T-405
   Tela/seção de configurações para escolher, via SAF, uma pasta externa onde os arquivos recebidos (`origin: 'received'`) devem ser salvos. O upload continua sendo escrito via streaming incremental no arquivo temporário da sandbox (**sem mudança** — API de SAF não suporta append, então mudar isso reintroduziria o problema de memória que a T-405 resolveu); só ao finalizar (`finish()`), se houver pasta configurada, o arquivo completo é copiado para lá via cópia nativa arquivo-a-arquivo (`copyAsync`, nunca lendo o conteúdo pra uma string JS além do necessário pro hash — **nunca `moveAsync`**, de propósito: o original só é apagado da sandbox depois de confirmado o hash da cópia, para nunca ficar num estado sem nenhuma cópia íntegra do arquivo). Após a cópia, o hash (SHA-256) do arquivo na pasta configurada é comparado com o hash do arquivo recebido antes do move; se não conferir, a cópia corrompida é descartada, o original permanece intacto na sandbox, e a operação retorna erro explícito ao usuário (a transferência não é dada como concluída com sucesso). Sem pasta configurada, comportamento atual é mantido (fica em `received/` da sandbox).
   *Pronto quando:* upload de arquivo ≥ 1 GB com pasta configurada não estoura memória (streaming preservado) e o arquivo final aparece na pasta escolhida, achável pelo gerenciador de arquivos do celular, com hash SHA-256 idêntico ao do arquivo recebido antes do move; mismatch de hash simulado em teste gera erro explícito (arquivo original preservado na sandbox, usuário informado da falha) em vez de sucesso silencioso; sem pasta configurada, nada muda.
+  **Nota (rev. 1.10, 2026-09-11):** a funcionalidade continua totalmente válida, mas seu ponto de entrada na UI dependia da Home/Servidor (T-204), descontinuada pelo pivô de usabilidade — ver T-911 na Fase 9 para reancorar o acesso a esta configuração na navegação nova.
 
 - [x] **T-803 · Ajustes visuais diversos (achados de revisão de screenshots)** ⬅ T-204, T-603, T-302
   Corrige 4 bugs visuais encontrados em revisão de screenshots do app em uso (tema claro e escuro): (1) no tema claro, a status bar (área superior/notch) renderiza texto e ícones em branco sobre fundo branco, ilegível — a cor de conteúdo da status bar (`expo-status-bar`, `style`/`barStyle`) precisa reagir ao tema ativo em vez de fixa; (2) o modal de "Transferências" (popup introduzido na T-701/PR#56) invade e sobrepõe a área não clicável do sistema (status bar/notch) em vez de respeitar a safe area no topo; (3) na tela Servidor há dois espaçamentos indevidos cortando texto — um empurra/corta o título "Servidor" contra a status bar no topo, outro corta o botão "Parar servidor" contra a tab bar inferior; (4) o que parecia um toast/snackbar de erro sem texto (ex.: falha ao selecionar arquivo na tela Compartilhados) — investigação mostrou que não era um componente de toast do app (não existia nenhum); era o **LogBox nativo do React Native** disparado por `console.error` sem tratamento de UI nos `catch` do carregamento inicial da tela — corrigido com `Alert.alert` nesses pontos, não com um componente de toast novo. Inclui também renomear o texto do header e do label do botão/aba "Servidor" para "Início" (a tela e a rota continuam sendo a mesma, só muda o texto exibido).
@@ -230,6 +239,59 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Continuação da T-806: o loop de conversão de bytes foi descartado como causa raiz (extração + benchmark mostraram que ele já é rápido — ~190-330ms de CPU agregada para 200MB — e que a otimização óbvia seria pior). A hipótese não investigada e mais provável, documentada pelo implementador da T-806: o round-trip de cada chunk de 16KB do socket nativo (`react-native-tcp-socket`) passa por um encode/decode base64 pela bridge do React Native antes mesmo de `nativeHttpModule.ts` receber o dado, mais a conversão `chunk.toString('binary')` — isso multiplicado por milhares de chunks num arquivo grande é o suspeito real da lentidão/UI travando relatada pelo usuário. Investigar com profiling real (não só raciocínio): medir onde o tempo é gasto de fato durante um upload grande em dispositivo físico ou emulador (ex.: marks de tempo em pontos-chave do pipeline: chegada do chunk no socket nativo, entrega em JS, parsing multipart, escrita em disco). Se a bridge for confirmada como gargalo, avaliar a mudança maior que a T-806 decidiu não fazer: `nativeHttpModule.ts` entregando bytes crus (sem round-trip base64/string) e `multipartStreamParser.ts` trabalhando diretamente sobre `Buffer` em vez de `string` — mudança de maior risco, exige plano cuidadoso antes de embarcar (não é um one-shot como as tarefas anteriores).
   *Pronto quando:* causa raiz real da lentidão/UI travando durante upload identificada com evidência de profiling (não só hipótese); se a correção exigir a mudança maior de arquitetura (bridge/parser em Buffer), decisão tomada com o usuário antes de implementar, dado o risco maior; upload de arquivo grande (≥200MB) mensuravelmente mais rápido e UI responsiva, validado em dispositivo real, com números antes/depois registrados (o critério de performance que a T-806 não conseguiu cumprir).
 
+## Fase 9 — Reformulação de Usabilidade: Compartilhar via SO + Pareamento por Token (pivô rev. 2.0)
+
+> Contexto (rev. 1.10): pivô de produto que substitui a navegação por abas por dois fluxos únicos — Enviar (aberto ao compartilhar arquivo(s) pelo menu do SO) e Receber (aberto por um botão na Home) — pareados por token/QR Code, com o token virando controle de acesso real da API. Reaproveita os módulos de servidor/transferência/arquivos das Fases 0–8. Ver `transferir.md` rev. 2.0.0 para a spec completa (HU-09 a HU-16) e as notas de descontinuação em T-204, T-302, T-303, T-603 e T-801.
+
+- [ ] **T-901 · Spike: integração com o menu de compartilhar do SO (share intent, Android)** ⬅ T-001
+  Investigar, na versão do Expo em uso (ler `AGENTS.md` — documentação versionada do Expo antes de codar), como registrar o app como destino do menu de compartilhar do Android (`ACTION_SEND`/`ACTION_SEND_MULTIPLE`, aceitando qualquer tipo de arquivo). Verificar se alguma lib compatível com o Expo managed workflow (config plugin) já resolve isso, ou se é necessário um plugin customizado (`@expo/config-plugins`), como feito na T-807 para o foreground service Android. Registrar a decisão em `docs/adr/003-share-intent.md`.
+  *Pronto quando:* ADR escrito com prova de conceito real — outro app do sistema consegue compartilhar ao menos um arquivo para este app no Android. **(timebox: 1 dia)**
+  **Nota (rev. 1.11, 2026-09-12):** versão original desta tarefa também investigava a Share Extension do iOS e pedia uma decisão de viabilidade sobre a plataforma; removido — o app é Android-only (decisão de produto, ver `transferir.md` rev. 2.1).
+
+- [ ] **T-902 · Estender `ServerInfo` com `token` e `mode`** ⬅ T-201, T-104 **[P]**
+  Renomeia `sessionId` para `token` em `ServerInfo` (spec Seção 3, rev. 2.0) e adiciona o campo `mode: 'send' | 'receive' | null`. `ServerService.start()` passa a receber o modo da sessão como parâmetro e gera o token internamente (reaproveita `generateSessionId`, T-104); a `url` exposta já inclui `?token=<token>`. O token deixa de ser cosmético — passa a ser a credencial validada pela API (ver T-908).
+  *Pronto quando:* testes da máquina de estados (T-201) cobrindo o novo campo `mode` e a geração de token em `start(mode)`; nenhuma referência a `sessionId` resta no código do servidor.
+
+- [ ] **T-903 · Receber arquivo(s) via compartilhamento do SO** ⬅ T-901, T-301
+  App recebe um ou mais arquivos vindos do menu de compartilhar do SO (decisão desta revisão: suporta múltiplos, via `ACTION_SEND_MULTIPLE`). Os arquivos recebidos não são copiados para o sandbox do app quando possível — reaproveita a técnica de `FileRepository.linkFromUri` (`localUri` externo, `linked: true`) introduzida na T-801; o toggle de UI da T-801 foi descontinuado, mas a técnica de acesso sem cópia continua válida aqui.
+  *Pronto quando:* compartilhar 1 arquivo e depois vários arquivos de outro app entrega a este app a lista correta de arquivos vinculados sem duplicação em disco; testes cobrindo payload de compartilhamento único e múltiplo, e item inválido/inacessível isolado sem derrubar o restante.
+
+- [ ] **T-904 · Tela "Enviar": token, QR e progresso com tela sempre acesa** ⬅ T-903, T-902, T-601
+  Nova tela, aberta automaticamente quando o app é invocado via compartilhamento do SO (T-903): inicia o servidor em modo `'send'` (T-902), exibe o token gerado como **título** da tela e um QR Code com a URL + `?token=<token>`; ao detectar download em andamento (reaproveita o store de transferências, T-601), exibe "Transferência em andamento" com progresso e mantém a tela ligada (`expo-keep-awake`) até concluir ou cancelar, desligando o keep-awake logo depois; erros de servidor reaproveitam o tratamento por `ServerErrorCode` já existente. Substitui, para este caso, o fluxo manual de iniciar servidor da antiga Home/Servidor (T-204, descontinuada).
+  *Pronto quando:* critérios de aceite da HU-09/HU-11 (`transferir.md`) atendidos; teste garante que o keep-awake é sempre desligado ao sair da tela ou concluir (nunca fica travado ligado); testes de componente para os estados idle/iniciando/erro/transferindo.
+
+- [ ] **T-905 · Tela inicial (Home idle)** ⬅ T-005 **[P]**
+  Tela exibida quando o app é aberto diretamente (sem compartilhamento): título "Transfer Files", texto de apoio ("Para compartilhar, navegue até um arquivo, clique em compartilhar, selecione este aplicativo como destino.") e botão azul centralizado "Receber arquivo" que navega para a tela de Receber (T-906). Substitui a Home/Servidor antiga (T-204, descontinuada) como tela de entrada padrão do app.
+  *Pronto quando:* critérios de aceite da HU-10 atendidos; teste de componente cobre título, texto de apoio e navegação do botão.
+
+- [ ] **T-906 · Tela "Receber": gerar QR + token visível** ⬅ T-905, T-902, T-601
+  Ao tocar em "Receber arquivo" (T-905), inicia o servidor em modo `'receive'` (T-902) e exibe o QR Code (URL + `?token=<token>`) e também o **token como texto visível** (rótulo dedicado, diferente do uso do token como título na T-904). Mostra progresso de upload(s) em andamento (reaproveita T-601) e, ao concluir, ação inline "Abrir/Compartilhar" para o arquivo recebido, reaproveitando o comportamento da antiga aba Recebidos (T-303, descontinuada como aba).
+  *Pronto quando:* critérios de aceite da HU-12 atendidos; testes de componente para os estados idle/iniciando/erro/recebendo/concluído.
+
+- [ ] **T-907 · Encerrar sessão ativa (Enviar/Receber → Home)** ⬅ T-904, T-906
+  Ação de encerrar sessão disponível nas telas de Enviar (T-904) e Receber (T-906), reaproveitando `ServerService.stop()`; pede confirmação se houver transferência em andamento (comportamento herdado da antiga HU-02). Ao encerrar: token invalidado, servidor parado, porta liberada, app volta à Home idle (T-905). Fechar o app de verdade continua parando o servidor (T-205/T-808, sem mudança).
+  *Pronto quando:* critérios de aceite da HU-16 atendidos; testes cobrindo confirmação com/sem transferência ativa e retorno ao estado idle.
+
+- [ ] **T-908 · Middleware de validação de token na API** ⬅ T-401, T-902 **[P]**
+  Decisão desta revisão: o token deixa de ser cosmético (como o `sessionId` era) e passa a ser controle de acesso real. Middleware no roteador (T-401) valida o `token` de query em toda requisição às rotas de transferência (`GET /api/files`, `GET /api/files/:id/download`, `POST /api/upload`, `GET /api/events`) contra o token ativo da sessão (T-902); requisição sem token ou com token inválido recebe `401` no envelope `apiErrorSchema` com o novo código `INVALID_TOKEN`, em vez de servir o recurso. `GET /` e `GET /api/session` continuam públicos — `GET /api/session` passa a responder `{ mode, tokenValid, appVersion, maxUploadBytes }`, nunca ecoando o valor do token (spec Seção 4, rev. 2.0).
+  *Pronto quando:* testes de contrato cobrindo token ausente, inválido e válido nas quatro rotas gated; teste garante que `GET /api/session` nunca inclui o token na resposta.
+
+- [ ] **T-909 · Web-ui: renderização condicional por modo (download vs. upload)** ⬅ T-501, T-908
+  A página web deixa de assumir upload e download sempre disponíveis ao mesmo tempo: com um token na querystring, consulta `GET /api/session?token=...` e renderiza só a view correspondente ao `mode` ativo — lista de arquivo(s) para baixar (modo `send`, reaproveita T-503) ou área de upload (modo `receive`, reaproveita T-502). Upload passa a suportar seleção múltipla (decisão desta revisão), mantendo a fila sequencial já existente (T-502), com a transferência iniciando automaticamente ao selecionar o(s) arquivo(s), sem botão extra de confirmação.
+  *Pronto quando:* critérios de aceite da HU-13/HU-14 (lado convidado) atendidos; teste garante que a view do modo errado nunca aparece; upload de múltiplos arquivos inicia sem clique adicional.
+
+- [ ] **T-910 · Web-ui: caixa de confirmação de token** ⬅ T-908, T-909
+  Ao acessar a página sem `?token=` na URL, ou com `tokenValid: false`, a página exibe uma caixa de texto pedindo o token em vez do conteúdo de download/upload; ao confirmar um token válido, passa a exibir a view apropriada ao modo (T-909) sem precisar recarregar a página com a querystring correta. Token inválido exibe mensagem de erro e permite nova tentativa.
+  *Pronto quando:* critérios de aceite da HU-15 atendidos; teste cobre acesso sem token, com token inválido e com token válido digitado manualmente.
+
+- [ ] **T-911 · Reancorar configuração de pasta de recebidos na nova navegação** ⬅ T-802, T-906 **[P]**
+  A funcionalidade da T-802 (escolher pasta externa para arquivos recebidos via SAF) continua válida, mas seu ponto de entrada na UI dependia da antiga Home/Servidor (T-204), descontinuada por esta revisão. Adicionar um acesso discreto (ex.: ícone de configurações na Home idle, T-905, ou na tela Receber, T-906) que não contradiga o layout mínimo exigido para a Home (título + texto de apoio + botão "Receber arquivo").
+  *Pronto quando:* configuração de pasta de recebidos continua acessível e funcional, sem regressão em relação à T-802; layout da Home idle continua atendendo aos critérios da T-905/HU-10.
+
+- [ ] **T-912 · Remover navegação em abas e telas descontinuadas** ⬅ T-904, T-905, T-906, T-907, T-909, T-910, T-911
+  Remove a navegação por abas (Home/Servidor, Compartilhados, Recebidos, Transferências) e o código específico de T-204, T-302 (fluxo manual de picker + aba Compartilhados), T-303 (aba Recebidos) e T-603 (tela Transferências), substituídos pelas telas desta fase. O toggle de "vincular pasta" da T-801 (UI na aba Compartilhados) também é removido; a técnica de acesso sem cópia (`linkFromUri`) permanece em uso via T-903. Deve ser a última tarefa da fase, para não remover código ainda em uso pelas telas novas antes delas estarem prontas.
+  *Pronto quando:* nenhuma referência às telas/abas removidas resta em código, testes ou navegação; `tsc --noEmit`, lint e suíte de testes verdes; cobertura mantida nos mínimos da constituição.
+
 ---
 
 ## Ordem de execução sugerida
@@ -250,6 +312,11 @@ Fase 8: T-801 · T-802 · T-803   (achados de T-701, paralelizáveis entre si)
         T-804 (achado em uso real, depende de T-402/T-405)
         T-805 · T-806 · T-807   (achados em uso real pós-T-804, paralelizáveis entre si)
         T-808 (depende de T-807) · T-809 (depende de T-806)
+Fase 9: T-901 → T-902 [P] → T-903 → T-904
+        T-905 [P] → T-906 → T-907   (T-904 e T-906 alimentam T-907)
+        T-908 [P] → T-909 → T-910
+        T-911 [P]
+        T-912 (depende de T-904/905/906/907/909/910/911 — remove código antigo por último)
 ```
 
-> **Maior risco:** T-202 (streaming da lib de servidor) — decisão finalizada (ver ADR-001). T-206 removida (rev. 1.2, ver ADR-002).
+> **Maior risco:** T-202 (streaming da lib de servidor) — decisão finalizada (ver ADR-001). T-206 removida (rev. 1.2, ver ADR-002). T-901 (viabilidade de share intent no Android) é o maior risco da Fase 9 — spike primeiro, como o T-202 foi para a Fase 2. *(rev. 1.11: risco de iOS removido junto com o suporte à plataforma — ver `transferir.md` rev. 2.1.)*

@@ -10,7 +10,7 @@ interface AppConfig {
     icon: string;
     scheme: string;
     userInterfaceStyle: string;
-    ios: Record<string, unknown>;
+    ios?: Record<string, unknown>;
     android: {
       minSdkVersion: number;
       package: string;
@@ -69,8 +69,8 @@ describe('app.json configuration', () => {
     expect(appConfig.expo.orientation).toBe('portrait');
   });
 
-  it('has iOS configuration', () => {
-    expect(appConfig.expo.ios).toBeDefined();
+  it('has no iOS configuration (rev. 2.1 — Android-only)', () => {
+    expect(appConfig.expo.ios).toBeUndefined();
   });
 
   it('has web configuration', () => {

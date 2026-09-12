@@ -7,10 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "transferfiles",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.anonymous.transferfiles"
-    },
     "android": {
       "minSdkVersion": 34,
       "adaptiveIcon": {
