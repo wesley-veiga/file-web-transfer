@@ -74,7 +74,7 @@ describe('serverServiceFactory', () => {
       const customModule = { ...mockHttpModule };
       const service = createServerService(customModule);
 
-      await service.start('wifi');
+      await service.start('wifi', 'send');
 
       expect(customModule.start).toHaveBeenCalled();
     });
@@ -85,7 +85,7 @@ describe('serverServiceFactory', () => {
 
       const service = createServerService();
 
-      await service.start('wifi');
+      await service.start('wifi', 'send');
 
       expect(defaultModule.start).toHaveBeenCalled();
     });
@@ -98,7 +98,7 @@ describe('serverServiceFactory', () => {
 
       const service = createServerService(customModule);
 
-      await service.start('wifi');
+      await service.start('wifi', 'send');
 
       // customModule deve ter sido chamado, pois é o parâmetro
       expect(customModule.start).toHaveBeenCalled();
@@ -113,8 +113,8 @@ describe('serverServiceFactory', () => {
       const service1 = createServerService(module1);
       const service2 = createServerService(module2);
 
-      await service1.start('wifi');
-      await service2.start('wifi');
+      await service1.start('wifi', 'send');
+      await service2.start('wifi', 'receive');
 
       expect(module1.start).toHaveBeenCalled();
       expect(module2.start).toHaveBeenCalled();

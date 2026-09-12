@@ -12,7 +12,8 @@ import { ApiRouterImpl } from '../apiRouter';
 import type { ApiRouterConfig } from '../apiRouter';
 
 const config: ApiRouterConfig = {
-  getSessionId: () => 'test-123',
+  getToken: () => 'test-123',
+  getMode: () => 'send',
   appVersion: '1.0.0',
   maxUploadBytes: 4294967296,
 };
@@ -30,8 +31,8 @@ describe('createApiRouter', () => {
   });
 
   it('dois configs diferentes produzem instâncias independentes', () => {
-    const config1: ApiRouterConfig = { ...config, getSessionId: () => 'test-456' };
-    const config2: ApiRouterConfig = { ...config, getSessionId: () => 'test-789' };
+    const config1: ApiRouterConfig = { ...config, getToken: () => 'test-456' };
+    const config2: ApiRouterConfig = { ...config, getToken: () => 'test-789' };
 
     const router1 = createApiRouter(config1);
     const router2 = createApiRouter(config2);

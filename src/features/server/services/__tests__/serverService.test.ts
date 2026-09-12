@@ -85,7 +85,7 @@ describe('ServerService', () => {
       mockHttpModule.start.mockRejectedValue(new Error('Port already in use (EADDRINUSE)'));
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
@@ -124,7 +124,7 @@ describe('ServerService', () => {
       const serverError = new ServerServiceError('NO_NETWORK', 'Test error');
       mockHttpModule.start.mockRejectedValue(serverError);
 
-      await expect(serverService.start('wifi')).rejects.toThrow(serverError);
+      await expect(serverService.start('wifi', 'send')).rejects.toThrow(serverError);
     });
 
     it('deve tentar próxima porta quando error contém "port" (e depois falhar se todas estiverem ocupadas)', async () => {
@@ -132,7 +132,7 @@ describe('ServerService', () => {
       mockHttpModule.start.mockRejectedValue(new Error('Cannot bind to port'));
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
@@ -150,7 +150,7 @@ describe('ServerService', () => {
       mockHttpModule.start.mockRejectedValue(new Error('Address already in use'));
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
@@ -167,7 +167,7 @@ describe('ServerService', () => {
       mockHttpModule.start.mockRejectedValue(new Error('Network error'));
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
@@ -181,7 +181,7 @@ describe('ServerService', () => {
       mockHttpModule.start.mockRejectedValue(new Error('Device is offline'));
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
@@ -202,7 +202,7 @@ describe('ServerService', () => {
     });
 
     it('deve chamar httpModule.start com a porta 8080 uma única vez, sem stop()/restart (T-701)', async () => {
-      await serverService.start('wifi');
+      await serverService.start('wifi', 'send');
 
       // findAvailablePort() já deixa o servidor rodando na porta 8080 — nenhum
       // start()+stop()+start() redundante (ver comentário em serverService.ts:
@@ -259,7 +259,7 @@ describe('ServerService', () => {
       (Network.getNetworkStateAsync as jest.Mock).mockRejectedValue(new Error('Network error'));
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
@@ -273,7 +273,7 @@ describe('ServerService', () => {
       (Network.getIpAddressAsync as jest.Mock).mockRejectedValue(new Error('IP error'));
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
@@ -290,7 +290,7 @@ describe('ServerService', () => {
       (Network.getIpAddressAsync as jest.Mock).mockRejectedValue(new Error('IP error'));
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
@@ -306,7 +306,7 @@ describe('ServerService', () => {
       mockHttpModule.start.mockRejectedValue('string error');
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
