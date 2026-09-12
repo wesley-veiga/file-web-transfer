@@ -90,7 +90,7 @@ export class ShareIntentService {
     let uris: string[] = [];
     try {
       uris = await this.nativeModule.getShareIntentPayload();
-    } catch (e) {
+    } catch (_) {
       // Erro ao chamar o módulo nativo — provavelmente app não foi invocado via Intent
       // Retorna resultado vazio, não falha
       return result;
@@ -116,7 +116,7 @@ export class ShareIntentService {
     // Limpa o Intent nativo para evitar reprocessar ao trazer o app para foreground novamente
     try {
       await this.nativeModule.clearShareIntent();
-    } catch (e) {
+    } catch (_) {
       // Log silent — limpeza falhando não invalida o resultado já processado
     }
 
@@ -172,14 +172,17 @@ export class ShareIntentService {
     try {
       // Tenta obter info completa via filesystem
       // (nota: expo-file-system suporta tanto file:// quanto content:// URIs no Android)
-      const info = await (this.fileRepository as any).fsModule?.getInfoAsync?.(uri);
+      const repo = this.fileRepository as unknown;
+      const repoWithFs = repo as { fsModule?: { getInfoAsync?: (uri: string) => Promise<unknown> } };
+      const info = await repoWithFs.fsModule?.getInfoAsync?.(uri);
       if (info && typeof info === 'object') {
+        const infoObj = info as { size?: unknown; name?: unknown };
         return {
-          sizeBytes: typeof info.size === 'number' ? info.size : 0,
-          name: typeof info.name === 'string' ? info.name : undefined,
+          sizeBytes: typeof infoObj.size === 'number' ? infoObj.size : 0,
+          name: typeof infoObj.name === 'string' ? infoObj.name : undefined,
         };
       }
-    } catch (e) {
+    } catch (_) {
       // Falha ao obter info — nota de debug, não falha a vinculação
       // (alguns provedores SAF podem retornar size 0 ou info incompleta)
     }

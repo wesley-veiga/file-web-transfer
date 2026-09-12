@@ -8,7 +8,8 @@
  * - Factory function com módulo nativo real/mock
  */
 
-import { ShareIntentService, type ShareIntentPayloadModule } from '../services/shareIntentService';
+import { NativeModules } from 'react-native';
+import { ShareIntentService, type ShareIntentPayloadModule, createShareIntentService } from '../services/shareIntentService';
 import type { FileRepository } from '../services/fileRepository';
 import type { FileEntry } from '../types';
 
@@ -16,7 +17,10 @@ describe('ShareIntentService', () => {
   // Mocks do módulo nativo e repositório
   let mockNativeModule: jest.Mocked<ShareIntentPayloadModule>;
   let mockFileRepository: jest.Mocked<FileRepository>;
-  let mockFsModule: any;
+  interface MockFileSystemModule {
+    getInfoAsync: jest.Mock;
+  }
+  let mockFsModule: MockFileSystemModule;
   let service: ShareIntentService;
 
   beforeEach(() => {
@@ -35,7 +39,7 @@ describe('ShareIntentService', () => {
     mockFileRepository = {
       linkFromUri: jest.fn(),
       fsModule: mockFsModule,
-    } as any;
+    } as unknown as jest.Mocked<FileRepository>;
 
     service = new ShareIntentService(mockNativeModule, mockFileRepository);
   });
@@ -437,4 +441,190 @@ describe('ShareIntentService', () => {
       expect(result.hasSuccessfulItems).toBe(false);
     });
   });
+
+  describe('Cenários adicionais de cobertura', () => {
+    it('falha ao processar URI quando getInfoAsync lança exceção', async () => {
+      const uri = 'content://provider/file.txt';
+
+      mockNativeModule.getShareIntentPayload.mockResolvedValue([uri]);
+      // getInfoAsync lança erro — deve usar fallback (size: 0)
+      mockFsModule.getInfoAsync.mockRejectedValue(new Error('Acesso negado'));
+      mockFileRepository.linkFromUri.mockResolvedValue({
+        id: 'file-1',
+        name: 'file.txt',
+        sizeBytes: 0, // Fallback quando getInfoAsync falha
+        mimeType: 'text/plain',
+        localUri: uri,
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      });
+
+      const result = await service.processShareIntent();
+
+      // Processamento continua apesar do erro em getInfoAsync
+      expect(result.files).toHaveLength(1);
+      expect(result.files[0].sizeBytes).toBe(0); // Fallback de size
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('processa compartilhamento com componente URI sem extensão', async () => {
+      const uri = 'content://provider/1234'; // Sem extensão — usa fallback de nome
+
+      const mockEntry: FileEntry = {
+        id: 'file-1',
+        name: 'shared_file',
+        sizeBytes: 0,
+        mimeType: 'application/octet-stream',
+        localUri: uri,
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockNativeModule.getShareIntentPayload.mockResolvedValue([uri]);
+      mockFsModule.getInfoAsync.mockResolvedValue({ size: 0 });
+      mockFileRepository.linkFromUri.mockResolvedValue(mockEntry);
+
+      await service.processShareIntent();
+
+      // Verifica que nome foi extraído do fallback
+      expect(mockFileRepository.linkFromUri).toHaveBeenCalledWith(
+        uri,
+        'shared_file', // Fallback quando URI não tem componente com extensão
+        'application/octet-stream',
+        0,
+        'shared',
+      );
+    });
+
+    it('trata URI string vazia como inválida', async () => {
+      mockNativeModule.getShareIntentPayload.mockResolvedValue(['']);
+
+      const result = await service.processShareIntent();
+
+      // URI vazia é inválida e registrada como erro
+      expect(result.files).toHaveLength(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].success).toBe(false);
+    });
+
+    it('trata URI com apenas espaços em branco como inválida', async () => {
+      mockNativeModule.getShareIntentPayload.mockResolvedValue(['   ']);
+
+      const result = await service.processShareIntent();
+
+      expect(result.files).toHaveLength(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].success).toBe(false);
+    });
+
+    it('processa URI quando getInfoAsync retorna null ou undefined', async () => {
+      const uri = 'file:///data/file.pdf';
+      const mockEntry: FileEntry = {
+        id: 'file-1',
+        name: 'file.pdf',
+        sizeBytes: 0,
+        mimeType: 'application/pdf',
+        localUri: uri,
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockNativeModule.getShareIntentPayload.mockResolvedValue([uri]);
+      mockFsModule.getInfoAsync.mockResolvedValue(null); // getInfoAsync retorna null
+      mockFileRepository.linkFromUri.mockResolvedValue(mockEntry);
+
+      const result = await service.processShareIntent();
+
+      // Continua processando com fallback (size: 0)
+      expect(result.files).toHaveLength(1);
+      expect(result.files[0].sizeBytes).toBe(0);
+    });
+
+    it('processa URI quando getInfoAsync retorna objeto sem size', async () => {
+      const uri = 'content://provider/file.doc';
+      const mockEntry: FileEntry = {
+        id: 'file-1',
+        name: 'file.doc',
+        sizeBytes: 0,
+        mimeType: 'application/octet-stream',
+        localUri: uri,
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockNativeModule.getShareIntentPayload.mockResolvedValue([uri]);
+      // getInfoAsync retorna objeto válido mas sem size
+      mockFsModule.getInfoAsync.mockResolvedValue({ name: 'file.doc' });
+      mockFileRepository.linkFromUri.mockResolvedValue(mockEntry);
+
+      const result = await service.processShareIntent();
+
+      // size deve ser 0 (fallback), name extraído do objeto
+      expect(result.files).toHaveLength(1);
+      expect(result.files[0].sizeBytes).toBe(0);
+    });
+  });
+});
+
+describe('createShareIntentService factory', () => {
+  let mockFileRepository: jest.Mocked<FileRepository>;
+
+  beforeEach(() => {
+    mockFileRepository = {
+      linkFromUri: jest.fn(),
+      fsModule: {
+        getInfoAsync: jest.fn().mockResolvedValue({ size: 0 }),
+      },
+    } as unknown as jest.Mocked<FileRepository>;
+  });
+
+  it('retorna serviço com módulo nativo real quando disponível', () => {
+    const service = createShareIntentService(mockFileRepository);
+
+    expect(service).toBeInstanceOf(ShareIntentService);
+  });
+
+  it('retorna serviço com fallback mock quando módulo nativo não está disponível', async () => {
+    // Simular módulo nativo não disponível
+    const originalModule = NativeModules.ShareIntentPayload;
+    Object.defineProperty(NativeModules, 'ShareIntentPayload', {
+      value: undefined,
+      configurable: true,
+    });
+
+    const service = createShareIntentService(mockFileRepository);
+
+    expect(service).toBeInstanceOf(ShareIntentService);
+
+    // Verifica que o serviço pode ser usado mesmo com fallback
+    const mockEntry: FileEntry = {
+      id: 'file-1',
+      name: 'file.txt',
+      sizeBytes: 100,
+      mimeType: 'text/plain',
+      localUri: 'content://provider/file.txt',
+      origin: 'shared',
+      createdAt: Date.now(),
+      linked: true,
+    };
+
+    mockFileRepository.linkFromUri.mockResolvedValue(mockEntry);
+
+    const result = await service.processShareIntent();
+
+    // Com módulo nativo fallback (undefined), retorna empty (nenhum arquivo compartilhado)
+    expect(result.files).toHaveLength(0);
+    expect(result.hasSuccessfulItems).toBe(false);
+
+    // Restaurar original
+    Object.defineProperty(NativeModules, 'ShareIntentPayload', {
+      value: originalModule,
+      configurable: true,
+    });
+  });
+
 });

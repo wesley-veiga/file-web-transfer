@@ -49,8 +49,8 @@ describe('getMimeType', () => {
 
   it('retorna application/octet-stream para input inválido', () => {
     expect(getMimeType('')).toBe('application/octet-stream');
-    expect(getMimeType(null as any)).toBe('application/octet-stream');
-    expect(getMimeType(undefined as any)).toBe('application/octet-stream');
+    expect(getMimeType(null as unknown as string)).toBe('application/octet-stream');
+    expect(getMimeType(undefined as unknown as string)).toBe('application/octet-stream');
   });
 
   it('é case-insensitive para extensões', () => {
