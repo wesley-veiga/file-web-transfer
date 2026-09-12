@@ -25,7 +25,7 @@ jest.mock('../../hooks/useServer', () => ({
 }));
 const mockUseServer = useServer as jest.MockedFunction<
   (httpModule?: HttpModule) => {
-    start: (networkMode: 'wifi') => Promise<void>;
+    start: (networkMode: 'wifi', mode: 'send' | 'receive') => Promise<void>;
     stop: () => Promise<void>;
     reset: () => void;
   }
@@ -76,10 +76,10 @@ describe('ServerHomeScreen handlers (T-204)', () => {
   });
 
   describe('handleStartPress', () => {
-    it('chama start("wifi") ao pressionar o botão', async () => {
+    it('chama start("wifi", "send") ao pressionar o botão', async () => {
       const { getByText } = await render(<ServerHomeScreen />);
       fireEvent.press(getByText('Iniciar servidor').parent!);
-      expect(mockStartFn).toHaveBeenCalledWith('wifi');
+      expect(mockStartFn).toHaveBeenCalledWith('wifi', 'send');
     });
 
     it('loga erro quando start rejeita', async () => {
@@ -169,7 +169,7 @@ describe('ServerHomeScreen handlers (T-204)', () => {
   });
 
   describe('handleRetryPress', () => {
-    it('chama start("wifi") quando há rede', async () => {
+    it('chama start("wifi", "send") quando há rede', async () => {
       useServerStore.setState({
         serverInfo: {
           status: 'error',
@@ -187,10 +187,10 @@ describe('ServerHomeScreen handlers (T-204)', () => {
       mockUseNetworkStatus.mockReturnValue({ isConnected: true, ssid: 'MyWiFi' });
       const { getByText } = await render(<ServerHomeScreen />);
       fireEvent.press(getByText('Tentar novamente').parent!);
-      expect(mockStartFn).toHaveBeenCalledWith('wifi');
+      expect(mockStartFn).toHaveBeenCalledWith('wifi', 'send');
     });
 
-    it('chama start("wifi") mesmo sem rede (usuário deve conectar-se antes)', async () => {
+    it('chama start("wifi", "send") mesmo sem rede (usuário deve conectar-se antes)', async () => {
       useServerStore.setState({
         serverInfo: {
           status: 'error',
@@ -208,7 +208,7 @@ describe('ServerHomeScreen handlers (T-204)', () => {
       mockUseNetworkStatus.mockReturnValue({ isConnected: false, ssid: null });
       const { getByText } = await render(<ServerHomeScreen />);
       fireEvent.press(getByText('Tentar novamente').parent!);
-      expect(mockStartFn).toHaveBeenCalledWith('wifi');
+      expect(mockStartFn).toHaveBeenCalledWith('wifi', 'send');
     });
 
     it('loga erro quando start rejeita', async () => {

@@ -199,7 +199,7 @@ describe('serverBootstrap', () => {
         await httpModule.stop();
       });
 
-      it('GET /api/session → 200, com o sessionId real atualizado via setCurrentToken', async () => {
+      it('GET /api/session → 200, com token e mode reais (testados via setCurrentToken)', async () => {
         setCurrentToken('e2e-session-xyz');
         const socket = connect(server);
 
@@ -207,11 +207,13 @@ describe('serverBootstrap', () => {
 
         expect(statusLine(socket)).toBe('HTTP/1.1 200 OK');
         const body = jsonBody(socket) as {
-          sessionId: string;
+          mode: 'send' | 'receive' | null;
+          tokenValid: boolean;
           appVersion: string;
           maxUploadBytes: number;
         };
-        expect(body.sessionId).toBe('e2e-session-xyz');
+        expect(body.tokenValid).toBe(true);
+        expect(body.mode).toBeDefined();
         expect(body.appVersion).toEqual(expect.any(String));
         expect(body.maxUploadBytes).toBe(4 * 1024 * 1024 * 1024);
       });
