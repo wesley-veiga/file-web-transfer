@@ -264,7 +264,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Tela exibida quando o app é aberto diretamente (sem compartilhamento): título "Transfer Files", texto de apoio ("Para compartilhar, navegue até um arquivo, clique em compartilhar, selecione este aplicativo como destino.") e botão azul centralizado "Receber arquivo" que navega para a tela de Receber (T-906). Substitui a Home/Servidor antiga (T-204, descontinuada) como tela de entrada padrão do app.
   *Pronto quando:* critérios de aceite da HU-10 atendidos; teste de componente cobre título, texto de apoio e navegação do botão.
 
-- [ ] **T-906 · Tela "Receber": gerar QR + token visível** ⬅ T-905, T-902, T-601
+- [x] **T-906 · Tela "Receber": gerar QR + token visível** ⬅ T-905, T-902, T-601
   Ao tocar em "Receber arquivo" (T-905), inicia o servidor em modo `'receive'` (T-902) e exibe o QR Code (URL + `?token=<token>`) e também o **token como texto visível** (rótulo dedicado, diferente do uso do token como título na T-904). Mostra progresso de upload(s) em andamento (reaproveita T-601) e, ao concluir, ação inline "Abrir/Compartilhar" para o arquivo recebido, reaproveitando o comportamento da antiga aba Recebidos (T-303, descontinuada como aba).
   *Pronto quando:* critérios de aceite da HU-12 atendidos; testes de componente para os estados idle/iniciando/erro/recebendo/concluído.
 
