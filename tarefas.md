@@ -272,7 +272,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Ação de encerrar sessão disponível nas telas de Enviar (T-904) e Receber (T-906), reaproveitando `ServerService.stop()`; pede confirmação se houver transferência em andamento (comportamento herdado da antiga HU-02). Ao encerrar: token invalidado, servidor parado, porta liberada, app volta à Home idle (T-905). Fechar o app de verdade continua parando o servidor (T-205/T-808, sem mudança).
   *Pronto quando:* critérios de aceite da HU-16 atendidos; testes cobrindo confirmação com/sem transferência ativa e retorno ao estado idle.
 
-- [ ] **T-908 · Middleware de validação de token na API** ⬅ T-401, T-902 **[P]**
+- [x] **T-908 · Middleware de validação de token na API** ⬅ T-401, T-902 **[P]**
   Decisão desta revisão: o token deixa de ser cosmético (como o `sessionId` era) e passa a ser controle de acesso real. Middleware no roteador (T-401) valida o `token` de query em toda requisição às rotas de transferência (`GET /api/files`, `GET /api/files/:id/download`, `POST /api/upload`, `GET /api/events`) contra o token ativo da sessão (T-902); requisição sem token ou com token inválido recebe `401` no envelope `apiErrorSchema` com o novo código `INVALID_TOKEN`, em vez de servir o recurso. `GET /` e `GET /api/session` continuam públicos — `GET /api/session` passa a responder `{ mode, tokenValid, appVersion, maxUploadBytes }`, nunca ecoando o valor do token (spec Seção 4, rev. 2.0).
   *Pronto quando:* testes de contrato cobrindo token ausente, inválido e válido nas quatro rotas gated; teste garante que `GET /api/session` nunca inclui o token na resposta.
 

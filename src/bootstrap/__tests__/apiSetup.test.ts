@@ -1697,7 +1697,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
   describe('registro de rota', () => {
     it('registra POST /api/upload no módulo HTTP', () => {
-      registerUploadRoute(mockHttpModule, mockFileRepository, 1000000, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, 1000000, tracker, () => 'test-token');
 
       expect(mockHttpModule.addUploadListener).toHaveBeenCalledWith(
         '/api/upload',
@@ -1720,7 +1720,7 @@ describe('apiSetup — registerUploadRoute', () => {
         capturedHandler = handler as typeof capturedHandler;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440020',
@@ -1765,7 +1765,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const request = {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----WebKitFormBoundary' },
       };
 
@@ -1798,7 +1798,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -1840,7 +1840,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -1865,7 +1865,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440022',
@@ -1907,7 +1907,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -1941,7 +1941,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const chunk: HttpUploadChunk = {
         requestId: 'req-1',
@@ -1951,7 +1951,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data' }, // Sem boundary
       });
 
@@ -1976,7 +1976,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const uploadBody =
         `------boundary\r\n` +
@@ -1993,7 +1993,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2018,7 +2018,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       // Multipart sem boundary final válido
       const uploadBody =
@@ -2036,7 +2036,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2063,7 +2063,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -2090,7 +2090,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2118,7 +2118,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -2143,7 +2143,7 @@ describe('apiSetup — registerUploadRoute', () => {
         { requestId: 'req-1', data: chunk1, isLast: false },
         {
           method: 'POST',
-          path: '/api/upload',
+          path: '/api/upload?token=test-token',
           headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
         },
       );
@@ -2157,7 +2157,7 @@ describe('apiSetup — registerUploadRoute', () => {
         { requestId: 'req-1', data: chunk2, isLast: true },
         {
           method: 'POST',
-          path: '/api/upload',
+          path: '/api/upload?token=test-token',
           headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
         },
       );
@@ -2184,7 +2184,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       mockFileRepository.beginStreamedWrite.mockRejectedValue(
         new Error('Nome sanitizado vazio (INVALID_FILENAME)'),
@@ -2205,7 +2205,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2232,7 +2232,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -2259,7 +2259,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2287,7 +2287,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -2314,7 +2314,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2341,7 +2341,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const uuid1 = '550e8400-e29b-41d4-a716-446655440001';
       const uuid2 = '550e8400-e29b-41d4-a716-446655440002';
@@ -2407,7 +2407,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       await capturedHandler!(chunk1a, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2424,7 +2424,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       await capturedHandler!(chunk2a, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2437,7 +2437,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response1 = await capturedHandler!(chunk1b, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2450,7 +2450,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response2 = await capturedHandler!(chunk2b, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2481,7 +2481,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const uuid1 = '550e8400-e29b-41d4-a716-446655440001';
       const uuid2 = '550e8400-e29b-41d4-a716-446655440002';
@@ -2540,7 +2540,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response1 = await capturedHandler!(chunk1, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2558,7 +2558,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response2 = await capturedHandler!(chunk2, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2587,7 +2587,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const createdAt = Date.now();
       const testUuid = '550e8400-e29b-41d4-a716-446655440010';
@@ -2632,7 +2632,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2666,7 +2666,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       // Testar 400
       const chunk400: HttpUploadChunk = {
@@ -2677,7 +2677,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response400 = await capturedHandler!(chunk400, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data' }, // Sem boundary
       });
 
@@ -2704,7 +2704,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       mockFileRepository.beginStreamedWrite.mockRejectedValue(
         new Error('Nome sanitizado vazio (INVALID_FILENAME)'),
@@ -2725,7 +2725,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2750,7 +2750,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       mockFileRepository.beginStreamedWrite.mockRejectedValue(
         new Error('Nome sanitizado vazio (INVALID_FILENAME)'),
@@ -2771,7 +2771,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2794,7 +2794,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const testUuid = '550e8400-e29b-41d4-a716-446655440011';
       const createdAtTime = Date.now();
@@ -2839,7 +2839,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -2864,7 +2864,7 @@ describe('apiSetup — registerUploadRoute', () => {
         capturedHandler = handler as typeof capturedHandler;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const originalEntry: FileEntry = {
         id: '550e8400-e29b-41d4-a716-446655440021',
@@ -2917,7 +2917,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const request = {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----WebKitFormBoundary' },
       };
 
@@ -2947,7 +2947,7 @@ describe('apiSetup — registerUploadRoute', () => {
         capturedHandler = handler as typeof capturedHandler;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const originalEntry: FileEntry = {
         id: '550e8400-e29b-41d4-a716-446655440022',
@@ -2991,7 +2991,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const request = {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----WebKitFormBoundary' },
       };
 
@@ -3022,7 +3022,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       mockFileRepository.beginStreamedWrite.mockRejectedValue(
         new Error('Nome sanitizado vazio (INVALID_FILENAME)'),
@@ -3030,7 +3030,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const request = {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       };
 
@@ -3084,7 +3084,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       mockFileRepository.beginStreamedWrite.mockRejectedValue(
         new Error('Erro inesperado de disco'),
@@ -3103,7 +3103,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const response = await capturedHandler!(chunk, {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       });
 
@@ -3128,7 +3128,7 @@ describe('apiSetup — registerUploadRoute', () => {
         ) => Promise<HttpServerResponse>;
       });
 
-      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker);
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, () => 'test-token');
 
       const mockWriteHandle = {
         id: '550e8400-e29b-41d4-a716-446655440099',
@@ -3141,7 +3141,7 @@ describe('apiSetup — registerUploadRoute', () => {
 
       const request = {
         method: 'POST',
-        path: '/api/upload',
+        path: '/api/upload?token=test-token',
         headers: { 'content-type': 'multipart/form-data; boundary=----boundary' },
       };
 
@@ -3173,6 +3173,168 @@ describe('apiSetup — registerUploadRoute', () => {
       expect(response2.statusCode).toBe(400);
       const body2 = JSON.parse(typeof response2.body === 'string' ? response2.body : '');
       expect(body2.error.code).toBe('INVALID_MULTIPART');
+    });
+  });
+
+  describe('T-908 — Validação de token', () => {
+    it('retorna 401 INVALID_TOKEN quando token está ausente na query', async () => {
+      let capturedHandler: (
+        chunk: HttpUploadChunk,
+        request: Omit<HttpServerRequest, 'body'>,
+      ) => Promise<HttpServerResponse> = () => {
+        throw new Error('Handler não foi registrado');
+      };
+
+      mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
+        capturedHandler = handler as typeof capturedHandler;
+      });
+
+      const getToken = () => 'valid-token-123';
+      registerUploadRoute(mockHttpModule, mockFileRepository, 1000000, tracker, getToken);
+
+      const boundary = '----WebKitFormBoundary';
+      const uploadBody =
+        `------WebKitFormBoundary\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="test.txt"\r\n` +
+        `Content-Type: text/plain\r\n` +
+        `\r\n` +
+        `Hello World\r\n` +
+        `------WebKitFormBoundary--\r\n`;
+
+      const chunk: HttpUploadChunk = {
+        requestId: 'req-no-token',
+        data: uploadBody,
+        isLast: true,
+      };
+
+      const request = {
+        method: 'POST',
+        path: '/api/upload', // Sem token
+        headers: { 'content-type': 'multipart/form-data; boundary=----WebKitFormBoundary' },
+      };
+
+      const response = await capturedHandler(chunk, request);
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('INVALID_TOKEN');
+    });
+
+    it('retorna 401 INVALID_TOKEN quando token na query não bate com token ativo', async () => {
+      let capturedHandler: (
+        chunk: HttpUploadChunk,
+        request: Omit<HttpServerRequest, 'body'>,
+      ) => Promise<HttpServerResponse> = () => {
+        throw new Error('Handler não foi registrado');
+      };
+
+      mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
+        capturedHandler = handler as typeof capturedHandler;
+      });
+
+      const getToken = () => 'valid-token-123';
+      registerUploadRoute(mockHttpModule, mockFileRepository, 1000000, tracker, getToken);
+
+      const boundary = '----WebKitFormBoundary';
+      const uploadBody =
+        `------WebKitFormBoundary\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="test.txt"\r\n` +
+        `Content-Type: text/plain\r\n` +
+        `\r\n` +
+        `Hello World\r\n` +
+        `------WebKitFormBoundary--\r\n`;
+
+      const chunk: HttpUploadChunk = {
+        requestId: 'req-wrong-token',
+        data: uploadBody,
+        isLast: true,
+      };
+
+      const request = {
+        method: 'POST',
+        path: '/api/upload?token=wrong-token', // Token errado
+        headers: { 'content-type': 'multipart/form-data; boundary=----WebKitFormBoundary' },
+      };
+
+      const response = await capturedHandler(chunk, request);
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('INVALID_TOKEN');
+      // Garantir que o token errado não é ecoado na resposta
+      expect(response.body).not.toContain('wrong-token');
+    });
+
+    it('processa upload normalmente com token válido na query', async () => {
+      const maxUploadBytes = 1000000;
+
+      let capturedHandler: (
+        chunk: HttpUploadChunk,
+        request: Omit<HttpServerRequest, 'body'>,
+      ) => Promise<HttpServerResponse> = () => {
+        throw new Error('Handler não foi registrado');
+      };
+
+      mockHttpModule.addUploadListener.mockImplementation((path, handler) => {
+        capturedHandler = handler as typeof capturedHandler;
+      });
+
+      const getToken = () => 'valid-token-123';
+      registerUploadRoute(mockHttpModule, mockFileRepository, maxUploadBytes, tracker, getToken);
+
+      const mockWriteHandle = {
+        id: '550e8400-e29b-41d4-a716-446655440099',
+        finalName: 'token-test.txt',
+        writeChunk: jest.fn().mockResolvedValue(undefined),
+        finish: jest.fn().mockResolvedValue({
+          id: '550e8400-e29b-41d4-a716-446655440099',
+          name: 'token-test.txt',
+          sizeBytes: 11,
+          mimeType: 'text/plain',
+          localUri: 'file:///received/token-test.txt',
+          origin: 'received' as const,
+          createdAt: Date.now(),
+        }),
+        abort: jest.fn().mockResolvedValue(undefined),
+      };
+
+      mockFileRepository.beginStreamedWrite.mockResolvedValue(mockWriteHandle);
+      mockFileRepository.toDto.mockReturnValue({
+        id: '550e8400-e29b-41d4-a716-446655440099',
+        name: 'token-test.txt',
+        sizeBytes: 11,
+        mimeType: 'text/plain',
+        createdAt: Date.now(),
+      });
+
+      const boundary = '----WebKitFormBoundary';
+      const uploadBody =
+        `------WebKitFormBoundary\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="token-test.txt"\r\n` +
+        `Content-Type: text/plain\r\n` +
+        `\r\n` +
+        `Hello World\r\n` +
+        `------WebKitFormBoundary--\r\n`;
+
+      const chunk: HttpUploadChunk = {
+        requestId: 'req-valid-token',
+        data: uploadBody,
+        isLast: true,
+      };
+
+      const request = {
+        method: 'POST',
+        path: '/api/upload?token=valid-token-123', // Token válido
+        headers: { 'content-type': 'multipart/form-data; boundary=----WebKitFormBoundary' },
+      };
+
+      const response = await capturedHandler(chunk, request);
+
+      // Deve processar normalmente (201), não 401
+      expect(response.statusCode).toBe(201);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.file).toBeDefined();
+      expect(body.file.name).toBe('token-test.txt');
     });
   });
 });
