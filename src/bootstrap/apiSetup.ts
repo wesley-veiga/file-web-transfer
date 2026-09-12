@@ -434,6 +434,7 @@ function createErrorResponse(
  * Registra a rota POST /api/upload com streaming.
  *
  * Orquestra:
+ * - Validação de token de query (T-908)
  * - Parser multipart em streaming (chunks incrementais)
  * - Sanitização e anti-duplicata de nome
  * - Escrita incremental de arquivo
@@ -444,6 +445,7 @@ function createErrorResponse(
  * @param maxUploadBytes - Limite de tamanho de upload (ex.: 4GB)
  * @param tracker - Rastreador de mudanças; tocado ao concluir um upload com sucesso,
  *   para que GET /api/events reflita a mudança na próxima consulta de polling.
+ * @param getToken - Função que retorna o token ativo da sessão (T-908). Injetável.
  * @param transferStore - Ações do TransferStore usadas para instrumentar o progresso do
  *   upload (T-602). Padrão: instância de produção (`useTransferStore.getState()`).
  *   Injetável para o `testador` mockar sem depender do Zustand global.
@@ -456,6 +458,7 @@ export function registerUploadRoute(
   fileRepository: FileRepository,
   maxUploadBytes: number,
   tracker: FilesChangedAtTracker,
+  getToken: () => string,
   transferStore: TransferStoreActions = useTransferStore.getState(),
   now: () => number = Date.now,
 ): void {
@@ -472,6 +475,32 @@ export function registerUploadRoute(
     transferId: string | null;
     /** epoch ms da última chamada a `reportProgress` — controla o throttle de 500ms. */
     lastProgressReportAt: number;
+  }
+
+  /**
+   * Extrai e valida o token de query do path do request (T-908).
+   * Retorna true se o token é válido (presente e bate com getToken()),
+   * false caso contrário.
+   *
+   * Nunca ecoa o valor do token recebido — apenas compara internamente.
+   */
+  function validateTokenFromPath(path: string): boolean {
+    const idx = path.indexOf('?');
+    if (idx === -1) {
+      return false; // Sem query string = sem token
+    }
+
+    const queryStr = path.substring(idx + 1);
+    const params = new URLSearchParams(queryStr);
+    const providedToken = params.get('token');
+
+    if (!providedToken) {
+      return false; // Token não presente
+    }
+
+    const activeToken = getToken();
+    // Comparação simples de string — nunca usar == ou truthy checks
+    return providedToken === activeToken;
   }
 
   /**
@@ -532,8 +561,14 @@ export function registerUploadRoute(
 
     let state = activeUploads.get(uploadId);
 
-    // Primeiro chunk: inicializar parser e handle de escrita
+    // Primeiro chunk: validar token (T-908) e inicializar parser e handle de escrita
     if (!state) {
+      // T-908: Validar token antes de fazer qualquer coisa
+      const isTokenValid = validateTokenFromPath(request.path);
+      if (!isTokenValid) {
+        return createErrorResponse(401, 'INVALID_TOKEN', 'Token inválido ou ausente');
+      }
+
       // Extrair boundary do header Content-Type
       const contentType = (request.headers['content-type'] as string) || '';
       const boundaryMatch = contentType.match(/boundary=([^\s;]+)/);
