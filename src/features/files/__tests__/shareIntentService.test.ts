@@ -567,6 +567,62 @@ describe('ShareIntentService', () => {
       expect(result.files).toHaveLength(1);
       expect(result.files[0].sizeBytes).toBe(0);
     });
+
+    it('captura erro que não é instância de Error (linha 107: error instanceof Error)', async () => {
+      mockNativeModule.getShareIntentPayload.mockResolvedValue(['uri-1', 'uri-2']);
+      mockFileRepository.linkFromUri
+        .mockResolvedValueOnce({
+          id: 'file-1',
+          name: 'file.txt',
+          sizeBytes: 100,
+          mimeType: 'text/plain',
+          localUri: 'uri-1',
+          origin: 'shared',
+          createdAt: Date.now(),
+          linked: true,
+        })
+        // Rejeita com um valor que não é Error (string)
+        .mockRejectedValueOnce('Erro de processamento genérico');
+
+      const result = await service.processShareIntent();
+
+      // Primeiro arquivo sucesso, segundo arquivo erro registrado
+      expect(result.files).toHaveLength(1);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].success).toBe(false);
+      expect(result.errors[0].errorMessage).toBe('Erro de processamento genérico');
+      expect(result.hasSuccessfulItems).toBe(true);
+    });
+
+    it('extrai nome usando fallback quando componente do caminho é somente espaços em branco (linha 210)', async () => {
+      // URI que termina com componente de espaços em branco
+      const uri = 'content://provider/   ';
+      const mockEntry: FileEntry = {
+        id: 'file-1',
+        name: 'shared_file',
+        sizeBytes: 100,
+        mimeType: 'application/octet-stream',
+        localUri: uri,
+        origin: 'shared',
+        createdAt: Date.now(),
+        linked: true,
+      };
+
+      mockNativeModule.getShareIntentPayload.mockResolvedValue([uri]);
+      mockFsModule.getInfoAsync.mockResolvedValue({ size: 100 });
+      mockFileRepository.linkFromUri.mockResolvedValue(mockEntry);
+
+      await service.processShareIntent();
+
+      // Deve usar fallback 'shared_file' porque '   '.trim() é vazio
+      expect(mockFileRepository.linkFromUri).toHaveBeenCalledWith(
+        uri,
+        'shared_file', // Fallback usado porque lastComponent é whitespace-only
+        'application/octet-stream',
+        100,
+        'shared',
+      );
+    });
   });
 });
 
