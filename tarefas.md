@@ -243,7 +243,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
 
 > Contexto (rev. 1.10): pivô de produto que substitui a navegação por abas por dois fluxos únicos — Enviar (aberto ao compartilhar arquivo(s) pelo menu do SO) e Receber (aberto por um botão na Home) — pareados por token/QR Code, com o token virando controle de acesso real da API. Reaproveita os módulos de servidor/transferência/arquivos das Fases 0–8. Ver `transferir.md` rev. 2.0.0 para a spec completa (HU-09 a HU-16) e as notas de descontinuação em T-204, T-302, T-303, T-603 e T-801.
 
-- [ ] **T-901 · Spike: integração com o menu de compartilhar do SO (share intent, Android)** ⬅ T-001
+- [x] **T-901 · Spike: integração com o menu de compartilhar do SO (share intent, Android)** ⬅ T-001
   Investigar, na versão do Expo em uso (ler `AGENTS.md` — documentação versionada do Expo antes de codar), como registrar o app como destino do menu de compartilhar do Android (`ACTION_SEND`/`ACTION_SEND_MULTIPLE`, aceitando qualquer tipo de arquivo). Verificar se alguma lib compatível com o Expo managed workflow (config plugin) já resolve isso, ou se é necessário um plugin customizado (`@expo/config-plugins`), como feito na T-807 para o foreground service Android. Registrar a decisão em `docs/adr/003-share-intent.md`.
   *Pronto quando:* ADR escrito com prova de conceito real — outro app do sistema consegue compartilhar ao menos um arquivo para este app no Android. **(timebox: 1 dia)**
   **Nota (rev. 1.11, 2026-09-12):** versão original desta tarefa também investigava a Share Extension do iOS e pedia uma decisão de viabilidade sobre a plataforma; removido — o app é Android-only (decisão de produto, ver `transferir.md` rev. 2.1).
