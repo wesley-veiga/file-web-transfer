@@ -36,14 +36,15 @@ describe('ServerService', () => {
     });
 
     it('deve iniciar servidor em modo wifi com sucesso', async () => {
-      const result = await serverService.start('wifi');
+      const result = await serverService.start('wifi', 'send');
 
       expect(mockHttpModule.start).toHaveBeenCalledWith(8080);
       expect(result).toEqual({
         ip: '192.168.1.42',
         port: 8080,
-        url: 'http://192.168.1.42:8080',
-        sessionId: 'test-session-123',
+        url: 'http://192.168.1.42:8080?token=test-session-123',
+        token: 'test-session-123',
+        mode: 'send',
         networkMode: 'wifi',
       });
     });
@@ -54,7 +55,7 @@ describe('ServerService', () => {
       });
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
@@ -69,7 +70,7 @@ describe('ServerService', () => {
       (Network.getIpAddressAsync as jest.Mock).mockResolvedValue(null);
 
       try {
-        await serverService.start('wifi');
+        await serverService.start('wifi', 'send');
         throw new Error('Expected start() to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(ServerServiceError);
@@ -106,7 +107,7 @@ describe('ServerService', () => {
         .mockRejectedValueOnce(new Error('Port 8080 already in use (EADDRINUSE)'))
         .mockResolvedValueOnce(undefined);
 
-      const result = await serverService.start('wifi');
+      const result = await serverService.start('wifi', 'send');
 
       expect(mockHttpModule.start).toHaveBeenCalledTimes(2);
       expect(mockHttpModule.start).toHaveBeenNthCalledWith(1, 8080);
@@ -116,7 +117,7 @@ describe('ServerService', () => {
 
       // Verificar que resultado contém porta 8081
       expect(result.port).toBe(8081);
-      expect(result.url).toBe('http://192.168.1.42:8081');
+      expect(result.url).toBe('http://192.168.1.42:8081?token=test-session-123');
     });
 
     it('deve relançar ServerServiceError se for já um ServerServiceError', async () => {
@@ -193,9 +194,9 @@ describe('ServerService', () => {
     it('deve retornar URL construída corretamente com IP e porta', async () => {
       (Network.getIpAddressAsync as jest.Mock).mockResolvedValue('10.0.0.5');
 
-      const result = await serverService.start('wifi');
+      const result = await serverService.start('wifi', 'send');
 
-      expect(result.url).toBe('http://10.0.0.5:8080');
+      expect(result.url).toBe('http://10.0.0.5:8080?token=test-session-123');
       expect(result.ip).toBe('10.0.0.5');
       expect(result.port).toBe(8080);
     });
@@ -212,15 +213,26 @@ describe('ServerService', () => {
       expect(mockHttpModule.stop).not.toHaveBeenCalled();
     });
 
-    it('deve gerar sessionId determinístico (mockado)', async () => {
-      const result = await serverService.start('wifi');
+    it('deve gerar token determinístico (mockado)', async () => {
+      const result = await serverService.start('wifi', 'send');
 
-      expect(result.sessionId).toBe('test-session-123');
+      expect(result.token).toBe('test-session-123');
     });
 
     it('deve passar networkMode corretamente no resultado', async () => {
-      const resultWifi = await serverService.start('wifi');
+      const resultWifi = await serverService.start('wifi', 'send');
       expect(resultWifi.networkMode).toBe('wifi');
+    });
+
+    it('deve passar mode corretamente no resultado', async () => {
+      const resultSend = await serverService.start('wifi', 'send');
+      expect(resultSend.mode).toBe('send');
+
+      mockHttpModule.start
+        .mockRejectedValueOnce(new Error('Port in use'))
+        .mockResolvedValueOnce(undefined);
+      const resultReceive = await serverService.start('wifi', 'receive');
+      expect(resultReceive.mode).toBe('receive');
     });
   });
 
@@ -318,7 +330,7 @@ describe('ServerService', () => {
       // Promise que nunca resolve nem rejeita — simula o achado real em T-701.
       mockHttpModule.start.mockReturnValue(new Promise(() => {}));
 
-      const startPromise = serverService.start('wifi');
+      const startPromise = serverService.start('wifi', 'send');
       // Engole a rejeição não tratada até o `await` abaixo observar — evita
       // "Unhandled promise rejection" no console durante o avanço do timer.
       startPromise.catch(() => {});
@@ -333,7 +345,7 @@ describe('ServerService', () => {
       // httpModule.start nunca resolve na primeira tentativa (porta 8080).
       mockHttpModule.start.mockReturnValue(new Promise(() => {}));
 
-      const startPromise = serverService.start('wifi');
+      const startPromise = serverService.start('wifi', 'send');
       startPromise.catch(() => {});
 
       await jest.advanceTimersByTimeAsync(8000);
@@ -359,7 +371,7 @@ describe('ServerService', () => {
     it('não rejeita por timeout quando httpModule.start()/stop() resolvem antes dos 8s', async () => {
       mockHttpModule.stop.mockResolvedValue(undefined);
 
-      const result = await serverService.start('wifi');
+      const result = await serverService.start('wifi', 'send');
 
       expect(result.port).toBe(8080);
       // Nenhum timer de 8s deveria continuar pendente após a resolução bem-sucedida

@@ -20,7 +20,8 @@ describe('ApiRouter', () => {
 
   beforeEach(() => {
     const config: ApiRouterConfig = {
-      getSessionId: () => 'test-123',
+      getToken: () => 'test-123',
+      getMode: () => 'send',
       appVersion: '1.0.0',
       maxUploadBytes: 4294967296,
     };
@@ -192,7 +193,8 @@ describe('ApiRouter', () => {
   describe('branches de erro 500 (cobertura)', () => {
     it('validação de SessionInfo falha (config inválido) → 500', async () => {
       const invalidConfig: ApiRouterConfig = {
-        getSessionId: () => 123 as unknown as string,
+        getToken: () => 123 as unknown as string,
+        getMode: () => 'send' as const,
         appVersion: '1.0.0',
         maxUploadBytes: 4294967296,
       };
