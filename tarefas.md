@@ -252,7 +252,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Renomeia `sessionId` para `token` em `ServerInfo` (spec Seção 3, rev. 2.0) e adiciona o campo `mode: 'send' | 'receive' | null`. `ServerService.start()` passa a receber o modo da sessão como parâmetro e gera o token internamente (reaproveita `generateSessionId`, T-104); a `url` exposta já inclui `?token=<token>`. O token deixa de ser cosmético — passa a ser a credencial validada pela API (ver T-908).
   *Pronto quando:* testes da máquina de estados (T-201) cobrindo o novo campo `mode` e a geração de token em `start(mode)`; nenhuma referência a `sessionId` resta no código do servidor.
 
-- [ ] **T-903 · Receber arquivo(s) via compartilhamento do SO** ⬅ T-901, T-301
+- [x] **T-903 · Receber arquivo(s) via compartilhamento do SO** ⬅ T-901, T-301
   App recebe um ou mais arquivos vindos do menu de compartilhar do SO (decisão desta revisão: suporta múltiplos, via `ACTION_SEND_MULTIPLE`). Os arquivos recebidos não são copiados para o sandbox do app quando possível — reaproveita a técnica de `FileRepository.linkFromUri` (`localUri` externo, `linked: true`) introduzida na T-801; o toggle de UI da T-801 foi descontinuado, mas a técnica de acesso sem cópia continua válida aqui.
   *Pronto quando:* compartilhar 1 arquivo e depois vários arquivos de outro app entrega a este app a lista correta de arquivos vinculados sem duplicação em disco; testes cobrindo payload de compartilhamento único e múltiplo, e item inválido/inacessível isolado sem derrubar o restante.
 
