@@ -5,6 +5,9 @@ export type ServerStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'error
 /** Como o host está conectado à rede que serve os convidados. Único modo suportado: Wi-Fi existente (rede própria removida, ver ADR-002). */
 export type NetworkMode = 'wifi';
 
+/** Modo da sessão ativa (rev. 2.0) — define se a tela do host e a API expõem download ou upload. */
+export type SessionMode = 'send' | 'receive';
+
 export interface ServerInfo {
   status: ServerStatus;
   /** null enquanto idle/error */
@@ -12,10 +15,16 @@ export interface ServerInfo {
   /** IP na rede local, ex.: "192.168.0.12". null enquanto idle/error */
   ip: string | null;
   port: number | null;
-  /** URL completa exibida ao usuário e codificada no QR Code */
+  /** URL completa exibida ao usuário e codificada no QR Code — já inclui `?token=<token>` (rev. 2.0) */
   url: string | null;
-  /** Identificador humano da sessão, ex.: "maçã-42" */
-  sessionId: string | null;
+  /**
+   * Token da sessão, ex.: "maçã-42" (rev. 2.0: renomeia o antigo `sessionId`).
+   * Deixou de ser cosmético — é a credencial de acesso validada pela API (Seção 4).
+   * Gerado pela mesma função (`generateSessionId`, T-104); o campo mudou de nome para refletir a nova semântica de segurança.
+   */
+  token: string | null;
+  /** Modo da sessão ativa — 'send' ao entrar via compartilhamento do SO, 'receive' ao tocar em "Receber arquivo". null enquanto idle/error (rev. 2.0) */
+  mode: SessionMode | null;
   startedAt: number | null; // epoch ms
   error: ServerError | null;
 }

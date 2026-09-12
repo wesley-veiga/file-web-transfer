@@ -12,7 +12,7 @@ import { ApiRouterImpl } from './apiRouter';
 /**
  * Cria uma instância do ApiRouter.
  *
- * @param config Configuração do roteador (sessionId, appVersion, maxUploadBytes)
+ * @param config Configuração do roteador (token, mode, appVersion, maxUploadBytes)
  * @returns Nova instância de ApiRouter
  */
 export function createApiRouter(config: ApiRouterConfig): ApiRouter {

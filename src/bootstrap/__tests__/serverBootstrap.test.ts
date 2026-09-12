@@ -42,11 +42,11 @@ import {
   registerWebUiRoute,
 } from '../apiSetup';
 import { WEB_UI_HTML } from '../../web-ui/webUiHtml';
-// Importado por último de propósito: `initServer()`/`getCurrentSessionId`/`setCurrentSessionId`
+// Importado por último de propósito: `initServer()`/`getCurrentToken`/`setCurrentToken`
 // têm estado de módulo (singleton) compartilhado por todo este arquivo — não há
 // `jest.resetModules()` entre os testes, então a ordem de declaração importa (ver comentário
 // no describe de idempotência).
-import { initServer, getCurrentSessionId, setCurrentSessionId } from '../serverBootstrap';
+import { initServer, getCurrentToken, setCurrentToken } from '../serverBootstrap';
 
 // `jest.mock(...)` é hoistado pelo ts-jest para antes de todos os imports acima, então a
 // ordem de escrita (mocks depois dos imports, aqui) não afeta o comportamento — só deixa o
@@ -134,18 +134,18 @@ function statusLine(socket: MockSocket): string {
 }
 
 describe('serverBootstrap', () => {
-  describe('getCurrentSessionId / setCurrentSessionId', () => {
-    it('reflete o valor setado por setCurrentSessionId', () => {
-      setCurrentSessionId('sessao-abc-123');
-      expect(getCurrentSessionId()).toBe('sessao-abc-123');
+  describe('getCurrentToken / setCurrentToken', () => {
+    it('reflete o valor setado por setCurrentToken', () => {
+      setCurrentToken('sessao-abc-123');
+      expect(getCurrentToken()).toBe('sessao-abc-123');
     });
 
     it('reflete atualizações sucessivas (não fica preso ao primeiro valor)', () => {
-      setCurrentSessionId('primeira-sessao');
-      expect(getCurrentSessionId()).toBe('primeira-sessao');
+      setCurrentToken('primeira-sessao');
+      expect(getCurrentToken()).toBe('primeira-sessao');
 
-      setCurrentSessionId('segunda-sessao');
-      expect(getCurrentSessionId()).toBe('segunda-sessao');
+      setCurrentToken('segunda-sessao');
+      expect(getCurrentToken()).toBe('segunda-sessao');
     });
   });
 
@@ -199,19 +199,21 @@ describe('serverBootstrap', () => {
         await httpModule.stop();
       });
 
-      it('GET /api/session → 200, com o sessionId real atualizado via setCurrentSessionId', async () => {
-        setCurrentSessionId('e2e-session-xyz');
+      it('GET /api/session → 200, com token e mode reais (testados via setCurrentToken)', async () => {
+        setCurrentToken('e2e-session-xyz');
         const socket = connect(server);
 
         await send(socket, buildHead('GET', '/api/session'));
 
         expect(statusLine(socket)).toBe('HTTP/1.1 200 OK');
         const body = jsonBody(socket) as {
-          sessionId: string;
+          mode: 'send' | 'receive' | null;
+          tokenValid: boolean;
           appVersion: string;
           maxUploadBytes: number;
         };
-        expect(body.sessionId).toBe('e2e-session-xyz');
+        expect(body.tokenValid).toBe(true);
+        expect(body.mode).toBeDefined();
         expect(body.appVersion).toEqual(expect.any(String));
         expect(body.maxUploadBytes).toBe(4 * 1024 * 1024 * 1024);
       });

@@ -85,7 +85,8 @@ describe('useServerStore', () => {
         ip: null,
         port: null,
         url: null,
-        sessionId: null,
+        token: null,
+        mode: null,
         startedAt: null,
         error: null,
       },
@@ -104,7 +105,8 @@ describe('useServerStore', () => {
       expect(serverInfo.ip).toBeNull();
       expect(serverInfo.port).toBeNull();
       expect(serverInfo.url).toBeNull();
-      expect(serverInfo.sessionId).toBeNull();
+      expect(serverInfo.token).toBeNull();
+      expect(serverInfo.mode).toBeNull();
       expect(serverInfo.startedAt).toBeNull();
       expect(serverInfo.error).toBeNull();
     });
@@ -122,16 +124,20 @@ describe('useServerStore', () => {
       started({
         ip: '192.168.1.100',
         port: 8080,
-        url: 'http://192.168.1.100:8080',
-        sessionId: 'apple-42',
+        url: 'http://192.168.1.100:8080?token=apple-42',
+        token: 'apple-42',
+        mode: 'send',
         networkMode: 'wifi',
         startedAt: Date.now(),
       });
       expect(useServerStore.getState().serverInfo.status).toBe('running');
       expect(useServerStore.getState().serverInfo.ip).toBe('192.168.1.100');
       expect(useServerStore.getState().serverInfo.port).toBe(8080);
-      expect(useServerStore.getState().serverInfo.url).toBe('http://192.168.1.100:8080');
-      expect(useServerStore.getState().serverInfo.sessionId).toBe('apple-42');
+      expect(useServerStore.getState().serverInfo.url).toBe(
+        'http://192.168.1.100:8080?token=apple-42',
+      );
+      expect(useServerStore.getState().serverInfo.token).toBe('apple-42');
+      expect(useServerStore.getState().serverInfo.mode).toBe('send');
       expect(useServerStore.getState().serverInfo.networkMode).toBe('wifi');
 
       // running → stopping
@@ -144,7 +150,8 @@ describe('useServerStore', () => {
       expect(useServerStore.getState().serverInfo.ip).toBeNull();
       expect(useServerStore.getState().serverInfo.port).toBeNull();
       expect(useServerStore.getState().serverInfo.url).toBeNull();
-      expect(useServerStore.getState().serverInfo.sessionId).toBeNull();
+      expect(useServerStore.getState().serverInfo.token).toBeNull();
+      expect(useServerStore.getState().serverInfo.mode).toBeNull();
       expect(useServerStore.getState().serverInfo.networkMode).toBeNull();
       expect(useServerStore.getState().serverInfo.startedAt).toBeNull();
     });
@@ -190,8 +197,9 @@ describe('useServerStore', () => {
       started({
         ip: '192.168.1.100',
         port: 8080,
-        url: 'http://192.168.1.100:8080',
-        sessionId: 'apple-42',
+        url: 'http://192.168.1.100:8080?token=apple-42',
+        token: 'apple-42',
+        mode: 'send',
         networkMode: 'wifi',
         startedAt: Date.now(),
       });
@@ -255,8 +263,9 @@ describe('useServerStore', () => {
       started({
         ip: '192.168.0.50',
         port: 3000,
-        url: 'http://192.168.0.50:3000',
-        sessionId: 'banana-99',
+        url: 'http://192.168.0.50:3000?token=banana-99',
+        token: 'banana-99',
+        mode: 'receive',
         networkMode: 'wifi',
         startedAt: 1234567890,
       });
@@ -265,8 +274,9 @@ describe('useServerStore', () => {
       expect(info.status).toBe('running');
       expect(info.ip).toBe('192.168.0.50');
       expect(info.port).toBe(3000);
-      expect(info.url).toBe('http://192.168.0.50:3000');
-      expect(info.sessionId).toBe('banana-99');
+      expect(info.url).toBe('http://192.168.0.50:3000?token=banana-99');
+      expect(info.token).toBe('banana-99');
+      expect(info.mode).toBe('receive');
       expect(info.networkMode).toBe('wifi');
       expect(info.startedAt).toBe(1234567890);
     });
@@ -283,7 +293,8 @@ describe('useServerStore', () => {
       expect(info.ip).toBeNull();
       expect(info.port).toBeNull();
       expect(info.url).toBeNull();
-      expect(info.sessionId).toBeNull();
+      expect(info.token).toBeNull();
+      expect(info.mode).toBeNull();
       expect(info.networkMode).toBeNull();
     });
 
@@ -301,7 +312,8 @@ describe('useServerStore', () => {
       expect(info.ip).toBe('192.168.1.1');
       expect(info.port).toBe(8080);
       expect(info.url).toBeNull(); // Not provided
-      expect(info.sessionId).toBeNull(); // Not provided
+      expect(info.token).toBeNull(); // Not provided
+      expect(info.mode).toBeNull(); // Not provided
     });
   });
 
@@ -354,8 +366,9 @@ describe('useServerStore', () => {
       started({
         ip: '192.168.1.100',
         port: 8080,
-        url: 'http://192.168.1.100:8080',
-        sessionId: 'test-123',
+        url: 'http://192.168.1.100:8080?token=test-123',
+        token: 'test-123',
+        mode: 'send',
         networkMode: 'wifi',
         startedAt: Date.now(),
       });
@@ -368,7 +381,8 @@ describe('useServerStore', () => {
       expect(info.ip).toBeNull();
       expect(info.port).toBeNull();
       expect(info.url).toBeNull();
-      expect(info.sessionId).toBeNull();
+      expect(info.token).toBeNull();
+      expect(info.mode).toBeNull();
       expect(info.networkMode).toBeNull();
       expect(info.startedAt).toBeNull();
       expect(info.error).toBeNull();
@@ -406,8 +420,9 @@ describe('useServerStore', () => {
       started({
         ip: '192.168.1.50',
         port: 9000,
-        url: 'http://192.168.1.50:9000',
-        sessionId: 'admin-reset',
+        url: 'http://192.168.1.50:9000?token=admin-reset',
+        token: 'admin-reset',
+        mode: 'receive',
         networkMode: 'wifi',
         startedAt: Date.now(),
       });
@@ -422,7 +437,8 @@ describe('useServerStore', () => {
       expect(info.ip).toBeNull();
       expect(info.port).toBeNull();
       expect(info.url).toBeNull();
-      expect(info.sessionId).toBeNull();
+      expect(info.token).toBeNull();
+      expect(info.mode).toBeNull();
       expect(info.networkMode).toBeNull();
       expect(info.startedAt).toBeNull();
     });

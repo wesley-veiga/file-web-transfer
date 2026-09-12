@@ -388,8 +388,8 @@ export const WEB_UI_HTML = `<!doctype html>
         return response.json();
       })
       .then(function (data) {
-        if (data && typeof data.sessionId === "string") {
-          sessionValue.textContent = data.sessionId;
+        if (data && typeof data.mode === "string") {
+          sessionValue.textContent = "Modo: " + (data.mode === "send" ? "Enviar" : "Receber");
         } else {
           sessionValue.textContent = "Sessão indisponível";
         }

@@ -388,7 +388,8 @@ describe('api schemas', () => {
     describe('valid cases', () => {
       it('parses a complete valid SessionInfo', () => {
         const validPayload = {
-          sessionId: 'maçã-42',
+          mode: 'send' as const,
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: 4294967296,
         };
@@ -400,9 +401,10 @@ describe('api schemas', () => {
         }
       });
 
-      it('parses SessionInfo with empty sessionId string', () => {
+      it('parses SessionInfo with receive mode', () => {
         const payload = {
-          sessionId: '',
+          mode: 'receive' as const,
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: 1,
         };
@@ -413,7 +415,8 @@ describe('api schemas', () => {
 
       it('parses SessionInfo with empty appVersion string', () => {
         const payload = {
-          sessionId: 'test-123',
+          mode: 'send' as const,
+          tokenValid: true,
           appVersion: '',
           maxUploadBytes: 1000000,
         };
@@ -424,7 +427,8 @@ describe('api schemas', () => {
 
       it('parses SessionInfo with maxUploadBytes = 1 (minimum positive)', () => {
         const payload = {
-          sessionId: 'session-id',
+          mode: 'send' as const,
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: 1,
         };
@@ -435,7 +439,8 @@ describe('api schemas', () => {
 
       it('parses SessionInfo with large maxUploadBytes', () => {
         const payload = {
-          sessionId: 'session-id',
+          mode: 'send' as const,
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: 1099511627776, // 1 TB
         };
@@ -444,9 +449,10 @@ describe('api schemas', () => {
         expect(result.success).toBe(true);
       });
 
-      it('parses SessionInfo with unicode sessionId', () => {
+      it('parses SessionInfo with tokenValid = false', () => {
         const payload = {
-          sessionId: '🎉-session-123',
+          mode: 'receive' as const,
+          tokenValid: false,
           appVersion: '2.0.0',
           maxUploadBytes: 5000000000,
         };
@@ -459,7 +465,8 @@ describe('api schemas', () => {
     describe('invalid cases', () => {
       it('rejects SessionInfo with maxUploadBytes = 0', () => {
         const payload = {
-          sessionId: 'session-id',
+          mode: 'send' as const,
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: 0,
         };
@@ -475,7 +482,8 @@ describe('api schemas', () => {
 
       it('rejects SessionInfo with negative maxUploadBytes', () => {
         const payload = {
-          sessionId: 'session-id',
+          mode: 'send' as const,
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: -1000,
         };
@@ -491,7 +499,8 @@ describe('api schemas', () => {
 
       it('rejects SessionInfo with non-integer maxUploadBytes', () => {
         const payload = {
-          sessionId: 'session-id',
+          mode: 'send' as const,
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: 1024.5,
         };
@@ -507,7 +516,8 @@ describe('api schemas', () => {
 
       it('rejects SessionInfo with maxUploadBytes as string', () => {
         const payload = {
-          sessionId: 'session-id',
+          mode: 'send' as const,
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: '1024',
         };
@@ -516,8 +526,9 @@ describe('api schemas', () => {
         expect(result.success).toBe(false);
       });
 
-      it('rejects SessionInfo missing sessionId field', () => {
+      it('rejects SessionInfo missing mode field', () => {
         const payload = {
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: 1000000,
         };
@@ -528,7 +539,8 @@ describe('api schemas', () => {
 
       it('rejects SessionInfo missing appVersion field', () => {
         const payload = {
-          sessionId: 'session-id',
+          mode: 'send' as const,
+          tokenValid: true,
           maxUploadBytes: 1000000,
         };
 
@@ -538,7 +550,8 @@ describe('api schemas', () => {
 
       it('rejects SessionInfo missing maxUploadBytes field', () => {
         const payload = {
-          sessionId: 'session-id',
+          mode: 'send' as const,
+          tokenValid: true,
           appVersion: '1.0.0',
         };
 
@@ -548,7 +561,8 @@ describe('api schemas', () => {
 
       it('rejects SessionInfo with null values', () => {
         const payload = {
-          sessionId: null,
+          mode: null,
+          tokenValid: null,
           appVersion: null,
           maxUploadBytes: null,
         };
@@ -559,7 +573,8 @@ describe('api schemas', () => {
 
       it('rejects SessionInfo with undefined values', () => {
         const payload = {
-          sessionId: undefined,
+          mode: undefined,
+          tokenValid: undefined,
           appVersion: undefined,
           maxUploadBytes: undefined,
         };
@@ -570,7 +585,8 @@ describe('api schemas', () => {
 
       it('rejects SessionInfo with extra fields', () => {
         const payload = {
-          sessionId: 'session-id',
+          mode: 'send' as const,
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: 1000000,
           extraField: 'should be ignored',
@@ -588,7 +604,8 @@ describe('api schemas', () => {
     describe('type inference', () => {
       it('validates inferred SessionInfo type', () => {
         const validSession: SessionInfo = {
-          sessionId: 'test-123',
+          mode: 'send',
+          tokenValid: true,
           appVersion: '1.0.0',
           maxUploadBytes: 4294967296,
         };

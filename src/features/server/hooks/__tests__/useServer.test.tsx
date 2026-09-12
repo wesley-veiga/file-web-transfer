@@ -25,7 +25,8 @@ describe('useServer hook', () => {
         ip: null,
         port: null,
         url: null,
-        sessionId: null,
+        token: null,
+        mode: null,
         startedAt: null,
         error: null,
       },
@@ -57,13 +58,14 @@ describe('useServer hook', () => {
     expect(useServerStore.getState().serverInfo.status).toBe('idle');
 
     await act(async () => {
-      await result.current.start('wifi');
+      await result.current.start('wifi', 'send');
     });
 
     const { serverInfo } = useServerStore.getState();
     expect(serverInfo.status).toBe('running');
     expect(serverInfo.ip).toBe('192.168.1.42');
     expect(serverInfo.port).toBe(8080);
+    expect(serverInfo.mode).toBe('send');
     expect(mockHttpModule.start).toHaveBeenCalledWith(8080);
   });
 
@@ -79,7 +81,7 @@ describe('useServer hook', () => {
     let caughtError: unknown;
     await act(async () => {
       try {
-        await result.current.start('wifi');
+        await result.current.start('wifi', 'receive');
       } catch (error) {
         caughtError = error;
       }
@@ -104,7 +106,7 @@ describe('useServer hook', () => {
       let caughtError: unknown;
       await act(async () => {
         try {
-          await result.current.start('wifi');
+          await result.current.start('wifi', 'send');
         } catch (error) {
           caughtError = error;
         }
@@ -125,9 +127,10 @@ describe('useServer hook', () => {
     expect(result.current).toBeDefined();
 
     await act(async () => {
-      await result.current.start('wifi');
+      await result.current.start('wifi', 'receive');
     });
     expect(useServerStore.getState().serverInfo.status).toBe('running');
+    expect(useServerStore.getState().serverInfo.mode).toBe('receive');
 
     await act(async () => {
       await result.current.stop();
@@ -141,9 +144,10 @@ describe('useServer hook', () => {
     expect(result.current).toBeDefined();
 
     await act(async () => {
-      await result.current.start('wifi');
+      await result.current.start('wifi', 'send');
     });
     expect(useServerStore.getState().serverInfo.networkMode).toBe('wifi');
+    expect(useServerStore.getState().serverInfo.mode).toBe('send');
 
     await act(async () => {
       await result.current.stop();
@@ -153,10 +157,11 @@ describe('useServer hook', () => {
     mockHttpModule.start.mockClear();
 
     await act(async () => {
-      await result.current.start('wifi');
+      await result.current.start('wifi', 'receive');
     });
     const state = useServerStore.getState();
     expect(state.serverInfo.networkMode).toBe('wifi');
+    expect(state.serverInfo.mode).toBe('receive');
     expect(state.serverInfo.status).toBe('running');
 
     await act(async () => {
@@ -175,7 +180,7 @@ describe('useServer hook', () => {
     let caughtError: unknown;
     await act(async () => {
       try {
-        await result.current.start('wifi');
+        await result.current.start('wifi', 'send');
       } catch (error) {
         caughtError = error;
       }
@@ -192,9 +197,10 @@ describe('useServer hook', () => {
     mockHttpModule.start.mockClear();
 
     await act(async () => {
-      await result.current.start('wifi');
+      await result.current.start('wifi', 'send');
     });
     expect(useServerStore.getState().serverInfo.status).toBe('running');
+    expect(useServerStore.getState().serverInfo.mode).toBe('send');
 
     // Testa Error genérico no stop() (linhas 19-26 + 130-135)
     // serverService.stop() não trata erro, então Error genérico vai direto
@@ -222,9 +228,10 @@ describe('useServer hook', () => {
     });
 
     await act(async () => {
-      await result.current.start('wifi');
+      await result.current.start('wifi', 'receive');
     });
     expect(useServerStore.getState().serverInfo.status).toBe('running');
+    expect(useServerStore.getState().serverInfo.mode).toBe('receive');
 
     // Mock stop para rejeitar com valor non-Error (string)
     // Isso vai para mapErrorToServerError() linha 26 (fallback)

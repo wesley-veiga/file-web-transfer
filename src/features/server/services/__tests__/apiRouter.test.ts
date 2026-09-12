@@ -20,7 +20,8 @@ describe('ApiRouter', () => {
 
   beforeEach(() => {
     const config: ApiRouterConfig = {
-      getSessionId: () => 'test-123',
+      getToken: () => 'test-123',
+      getMode: () => 'send',
       appVersion: '1.0.0',
       maxUploadBytes: 4294967296,
     };
@@ -73,7 +74,8 @@ describe('ApiRouter', () => {
       expect(response.headers?.['Content-Type']).toBe('application/json; charset=utf-8');
 
       const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
-      expect(body.sessionId).toBe('test-123');
+      expect(body.mode).toBe('send');
+      expect(body.tokenValid).toBe(true);
       expect(body.appVersion).toBe('1.0.0');
       expect(body.maxUploadBytes).toBe(4294967296);
     });
@@ -192,7 +194,8 @@ describe('ApiRouter', () => {
   describe('branches de erro 500 (cobertura)', () => {
     it('validação de SessionInfo falha (config inválido) → 500', async () => {
       const invalidConfig: ApiRouterConfig = {
-        getSessionId: () => 123 as unknown as string,
+        getToken: () => 'valid-token',
+        getMode: () => 'invalid' as unknown as 'send' | 'receive',
         appVersion: '1.0.0',
         maxUploadBytes: 4294967296,
       };
@@ -377,6 +380,266 @@ describe('ApiRouter', () => {
       });
 
       expect(response.statusCode).toBe(404);
+    });
+  });
+
+  describe('GET /api/session — segurança do token (T-902/T-908)', () => {
+    it('nunca inclui o valor real do token na resposta (segurança crítica)', async () => {
+      const config: ApiRouterConfig = {
+        getToken: () => 'super-secret-token-12345',
+        getMode: () => 'send',
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+      };
+      router = new ApiRouterImpl(config);
+      router.register(mockHttpModule);
+
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/session',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+
+      // Verificação crítica: token nunca deve estar na resposta
+      expect(body).not.toHaveProperty('token');
+      expect(body).not.toHaveProperty('sessionId'); // Retrocompatibilidade: v1 usava sessionId
+      expect(Object.keys(body)).toEqual(['mode', 'tokenValid', 'appVersion', 'maxUploadBytes']);
+
+      // Garantir que a string da resposta também não contém o token por acidente
+      expect(response.body).not.toContain('super-secret-token-12345');
+    });
+
+    it('retorna modo "send" quando getMode() retorna "send"', async () => {
+      const config: ApiRouterConfig = {
+        getToken: () => 'token-123',
+        getMode: () => 'send',
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+      };
+      router = new ApiRouterImpl(config);
+      router.register(mockHttpModule);
+
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/session',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+
+      expect(body.mode).toBe('send');
+    });
+
+    it('retorna modo "receive" quando getMode() retorna "receive"', async () => {
+      const config: ApiRouterConfig = {
+        getToken: () => 'token-456',
+        getMode: () => 'receive',
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+      };
+      router = new ApiRouterImpl(config);
+      router.register(mockHttpModule);
+
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/session',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+
+      expect(body.mode).toBe('receive');
+    });
+
+    it('tokenValid é true no handler atual (será validado em T-908)', async () => {
+      router.register(mockHttpModule);
+
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/session',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+
+      // Atualmente sempre true — T-908 adiciona lógica de validação de token
+      expect(body.tokenValid).toBe(true);
+    });
+
+    it('nunca inclui token mesmo com ?token= na querystring', async () => {
+      router.register(mockHttpModule);
+
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/session?token=some-token-value',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+
+      expect(body).not.toHaveProperty('token');
+      expect(response.body).not.toContain('some-token-value');
+    });
+  });
+
+  describe('sessionInfoSchema validação (Zod contract)', () => {
+    it('rejeita payload sem o campo mode', () => {
+      const invalidPayload = {
+        tokenValid: true,
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+      };
+
+      const parsed = sessionInfoSchema.safeParse(invalidPayload);
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((issue) => issue.path.includes('mode'))).toBe(true);
+      }
+    });
+
+    it('rejeita payload com mode fora do enum', () => {
+      const invalidPayload = {
+        mode: 'invalid-mode',
+        tokenValid: true,
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+      };
+
+      const parsed = sessionInfoSchema.safeParse(invalidPayload);
+      expect(parsed.success).toBe(false);
+    });
+
+    it('rejeita payload sem tokenValid', () => {
+      const invalidPayload = {
+        mode: 'send',
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+      };
+
+      const parsed = sessionInfoSchema.safeParse(invalidPayload);
+      expect(parsed.success).toBe(false);
+    });
+
+    it('rejeita payload com tokenValid não-booleano', () => {
+      const invalidPayload = {
+        mode: 'send',
+        tokenValid: 'true', // string em vez de boolean
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+      };
+
+      const parsed = sessionInfoSchema.safeParse(invalidPayload);
+      expect(parsed.success).toBe(false);
+    });
+
+    it('rejeita payload sem appVersion', () => {
+      const invalidPayload = {
+        mode: 'send',
+        tokenValid: true,
+        maxUploadBytes: 4294967296,
+      };
+
+      const parsed = sessionInfoSchema.safeParse(invalidPayload);
+      expect(parsed.success).toBe(false);
+    });
+
+    it('rejeita payload sem maxUploadBytes', () => {
+      const invalidPayload = {
+        mode: 'send',
+        tokenValid: true,
+        appVersion: '1.0.0',
+      };
+
+      const parsed = sessionInfoSchema.safeParse(invalidPayload);
+      expect(parsed.success).toBe(false);
+    });
+
+    it('rejeita maxUploadBytes com valor não-positivo', () => {
+      const invalidPayload = {
+        mode: 'send',
+        tokenValid: true,
+        appVersion: '1.0.0',
+        maxUploadBytes: 0, // deve ser positivo
+      };
+
+      const parsed = sessionInfoSchema.safeParse(invalidPayload);
+      expect(parsed.success).toBe(false);
+    });
+
+    it('rejeita maxUploadBytes com valor negativo', () => {
+      const invalidPayload = {
+        mode: 'send',
+        tokenValid: true,
+        appVersion: '1.0.0',
+        maxUploadBytes: -1,
+      };
+
+      const parsed = sessionInfoSchema.safeParse(invalidPayload);
+      expect(parsed.success).toBe(false);
+    });
+
+    it('ignora campo extra token se presente (schema permite extras, código não inclui)', () => {
+      const payloadWithExtra = {
+        mode: 'send',
+        tokenValid: true,
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+        token: 'leaked-token', // Campo extra — será ignorado por Zod
+        extraField: 'ignored',
+      };
+
+      const parsed = sessionInfoSchema.safeParse(payloadWithExtra);
+      // Schema permite campos extras, mas não os valida
+      expect(parsed.success).toBe(true);
+      expect(parsed.data?.mode).toBe('send');
+      // Garantir que o campo extra não está nos dados parseados
+      if (parsed.success) {
+        expect(Object.prototype.hasOwnProperty.call(parsed.data, 'token')).toBe(false);
+        expect(Object.prototype.hasOwnProperty.call(parsed.data, 'extraField')).toBe(false);
+      }
+    });
+
+    it('aceita payload válido com modo send', () => {
+      const validPayload = {
+        mode: 'send' as const,
+        tokenValid: true,
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+      };
+
+      const parsed = sessionInfoSchema.safeParse(validPayload);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('aceita payload válido com modo receive', () => {
+      const validPayload = {
+        mode: 'receive' as const,
+        tokenValid: false,
+        appVersion: '2.0.0',
+        maxUploadBytes: 1073741824,
+      };
+
+      const parsed = sessionInfoSchema.safeParse(validPayload);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('aceita tokenValid false', () => {
+      const validPayload = {
+        mode: 'send',
+        tokenValid: false,
+        appVersion: '1.0.0',
+        maxUploadBytes: 4294967296,
+      };
+
+      const parsed = sessionInfoSchema.safeParse(validPayload);
+      expect(parsed.success).toBe(true);
     });
   });
 });

@@ -9,14 +9,16 @@ export const fileEntryDtoSchema = z.object({
 });
 
 export const sessionInfoSchema = z.object({
-  sessionId: z.string(),
+  mode: z.enum(['send', 'receive']),
+  /** true quando o `token` enviado via querystring bate com o token ativo da sessão. Nunca ecoa o valor do token de volta (rev. 2.0). */
+  tokenValid: z.boolean(),
   appVersion: z.string(),
   maxUploadBytes: z.number().int().positive(),
 });
 
 export const apiErrorSchema = z.object({
   error: z.object({
-    code: z.string(),      // ex.: "FILE_TOO_LARGE"
+    code: z.string(), // ex.: "FILE_TOO_LARGE"
     message: z.string(),
   }),
 });

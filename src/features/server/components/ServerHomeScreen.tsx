@@ -18,7 +18,7 @@ interface ServerHomeScreenProps {
  * - idle com rede: botão "Iniciar servidor"
  * - idle sem rede: orientação para conectar-se a uma rede Wi-Fi
  * - starting: spinner de carregamento
- * - running: URL, QR Code, sessionId e botão "Parar"
+ * - running: URL, QR Code, token e botão "Parar"
  * - error: mensagem de erro e botão "Tentar novamente"
  */
 export function ServerHomeScreen({ httpModule }: ServerHomeScreenProps) {
@@ -30,7 +30,9 @@ export function ServerHomeScreen({ httpModule }: ServerHomeScreenProps) {
 
   const handleStartPress = async () => {
     try {
-      await start('wifi');
+      // Default para 'send' — o componente herdado não distingue modos
+      // (T-902: modo será especificado pelas novas telas T-904/T-906)
+      await start('wifi', 'send');
     } catch (error) {
       // Erro já foi mapeado e armazenado no store — logamos `error.cause` (T-701)
       // porque `ServerServiceError.message` é sempre um texto genérico por
@@ -64,7 +66,7 @@ export function ServerHomeScreen({ httpModule }: ServerHomeScreenProps) {
 
   const handleRetryPress = async () => {
     try {
-      await start('wifi');
+      await start('wifi', 'send');
     } catch (error) {
       console.error('[ServerHomeScreen] Erro ao tentar novamente:', error);
       if (error instanceof Error && error.cause !== undefined) {
@@ -163,13 +165,13 @@ export function ServerHomeScreen({ httpModule }: ServerHomeScreenProps) {
                 {serverInfo.url && <QRCode value={serverInfo.url} size={200} />}
               </Card>
 
-              {/* Session ID */}
+              {/* Token */}
               <Card className="mb-6">
                 <Text className="text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark mb-2 uppercase">
-                  ID da sessão
+                  Token
                 </Text>
                 <Text className="text-xl font-bold text-text-light dark:text-text-dark" selectable>
-                  {serverInfo.sessionId}
+                  {serverInfo.token}
                 </Text>
               </Card>
 

@@ -2,7 +2,12 @@ import { useCallback } from 'react';
 import { useServerStore } from '../store/serverStore';
 import { createServerService } from '../services/serverServiceFactory';
 import { ServerServiceError } from '../services/serverService';
-import type { NetworkMode, ServerErrorCode, ServerError as ServerErrorType } from '../types';
+import type {
+  NetworkMode,
+  SessionMode,
+  ServerErrorCode,
+  ServerError as ServerErrorType,
+} from '../types';
 import type { HttpModule } from '../services/httpModule';
 
 /**
@@ -77,7 +82,7 @@ export function useServer(httpModule?: HttpModule) {
   const store = useServerStore();
 
   const start = useCallback(
-    async (networkMode: NetworkMode): Promise<void> => {
+    async (networkMode: NetworkMode, mode: SessionMode): Promise<void> => {
       // Transição: idle → starting
       store.startRequested();
 
@@ -86,7 +91,7 @@ export function useServer(httpModule?: HttpModule) {
         const serverService = createServerService(httpModule);
 
         // Iniciar servidor
-        const result = await serverService.start(networkMode);
+        const result = await serverService.start(networkMode, mode);
 
         // Transição: starting → running
         store.started({
@@ -94,7 +99,8 @@ export function useServer(httpModule?: HttpModule) {
           ip: result.ip,
           port: result.port,
           url: result.url,
-          sessionId: result.sessionId,
+          token: result.token,
+          mode: result.mode,
           startedAt: Date.now(),
         });
       } catch (error) {

@@ -1,20 +1,28 @@
 import type { HttpServerRequest, HttpServerResponse, HttpModule } from './httpModule';
 import type { SessionInfo, ApiError } from '../../../shared/types/api';
 import { sessionInfoSchema, apiErrorSchema } from '../../../shared/types/api';
+import type { SessionMode } from '../types';
 
 /**
  * Configuração do roteador de API.
  */
 export interface ApiRouterConfig {
   /**
-   * Retorna o identificador da sessão atual (gerado pelo ServerService).
+   * Retorna o token da sessão atual (gerado pelo ServerService).
    *
    * É uma função, não um valor fixo, porque o `ApiRouter` é montado uma única vez
    * no boot do app (antes de qualquer `ServerService.start()` acontecer), mas o
-   * `sessionId` muda a cada chamada de `start()`. Ler via função permite que
-   * `GET /api/session` sempre reflita o sessionId da sessão em andamento.
+   * token muda a cada chamada de `start()`. Ler via função permite que
+   * `GET /api/session` sempre reflita o token da sessão em andamento.
+   *
+   * Nota: o token nunca é ecoado na resposta de `/api/session` (rev. 2.0).
    */
-  getSessionId: () => string;
+  getToken: () => string;
+  /**
+   * Retorna o modo da sessão atual ('send' ou 'receive').
+   * Muda a cada chamada de `start()` conforme o modo da sessão.
+   */
+  getMode: () => SessionMode;
   /** Versão do app para exibir na API */
   appVersion: string;
   /** Tamanho máximo de upload em bytes */
@@ -225,11 +233,12 @@ export class ApiRouterImpl implements ApiRouter {
 
   /**
    * Handler para GET /api/session.
-   * Retorna informações da sessão.
+   * Retorna informações da sessão (rev. 2.0: nunca inclui o valor do token, apenas se é válido).
    */
   private async handleGetSession(): Promise<HttpServerResponse> {
     const sessionInfo: SessionInfo = {
-      sessionId: this.config.getSessionId(),
+      mode: this.config.getMode(),
+      tokenValid: true, // TODO(#908): validar token quando middleware estiver implementado
       appVersion: this.config.appVersion,
       maxUploadBytes: this.config.maxUploadBytes,
     };
