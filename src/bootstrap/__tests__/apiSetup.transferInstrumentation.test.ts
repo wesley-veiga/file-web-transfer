@@ -100,6 +100,7 @@ function setupUpload(
     mockFileRepository,
     options.maxUploadBytes ?? 1_000_000,
     tracker,
+    () => 'test-token-123', // T-908: getToken
     mockTransferStore,
     options.now ?? Date.now,
   );
@@ -156,7 +157,7 @@ function multipartHead(filename: string, contentType = 'application/octet-stream
 function baseRequest(remoteAddress?: string): Omit<HttpServerRequest, 'body'> {
   return {
     method: 'POST',
-    path: '/api/upload',
+    path: '/api/upload?token=test-token-123', // T-908: inclui token válido
     headers: CONTENT_TYPE_HEADER,
     ...(remoteAddress !== undefined ? { remoteAddress } : {}),
   };
@@ -358,7 +359,7 @@ describe('T-602 — upload: erros — 400 antes de fileStart (não enfileira, n�
 
     const response = await handler(
       { requestId: 'req-1', data: 'qualquer coisa', isLast: true },
-      { method: 'POST', path: '/api/upload', headers: { 'content-type': 'multipart/form-data' } },
+      { method: 'POST', path: '/api/upload?token=test-token-123', headers: { 'content-type': 'multipart/form-data' } },
     );
 
     expect(response?.statusCode).toBe(400);

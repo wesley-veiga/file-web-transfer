@@ -118,6 +118,7 @@ export function initServer(): void {
     readAsStringAsync: FileSystemLegacy.readAsStringAsync,
   });
   registerEventsRoute(apiRouter, tracker);
-  registerUploadRoute(httpModule, fileRepository, MAX_UPLOAD_BYTES, tracker);
+  // T-908: Passar getToken para validação de token em POST /api/upload
+  registerUploadRoute(httpModule, fileRepository, MAX_UPLOAD_BYTES, tracker, () => tokenBox.current);
   registerWebUiRoute(httpModule);
 }
