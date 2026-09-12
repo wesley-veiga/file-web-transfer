@@ -6,7 +6,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { useColorScheme } from 'react-native';
 import { useAppLifecycle } from '@/features/server/hooks';
 import { useServerStore } from '@/features/server/store/serverStore';
-import { initServer, setCurrentSessionId } from '@/bootstrap/serverBootstrap';
+import { initServer, setCurrentToken, setCurrentMode } from '@/bootstrap/serverBootstrap';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -16,22 +16,35 @@ initServer();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const sessionId = useServerStore(function selectSessionId(state) {
-    return state.serverInfo.sessionId;
+  const token = useServerStore(function selectToken(state) {
+    return state.serverInfo.token;
+  });
+  const mode = useServerStore(function selectMode(state) {
+    return state.serverInfo.mode;
   });
 
   // Monitorar ciclo de vida do app: notificação persistente e stop do servidor ao sair
   useAppLifecycle();
 
-  // Mantém o sessionId lido por GET /api/session sincronizado com o sessionId real
+  // Mantém o token lido pela API sincronizado com o token real
   // gerado a cada ServerService.start() (o ApiRouter foi montado uma única vez acima).
   useEffect(
-    function syncSessionId() {
-      if (sessionId) {
-        setCurrentSessionId(sessionId);
+    function syncToken() {
+      if (token) {
+        setCurrentToken(token);
       }
     },
-    [sessionId],
+    [token],
+  );
+
+  // Mantém o modo lido pela API sincronizado com o modo real
+  useEffect(
+    function syncMode() {
+      if (mode) {
+        setCurrentMode(mode);
+      }
+    },
+    [mode],
   );
 
   return (

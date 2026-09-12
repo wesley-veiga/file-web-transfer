@@ -1,6 +1,6 @@
 import * as Network from 'expo-network';
 import { generateSessionId } from '../../../shared/lib';
-import type { ServerErrorCode, NetworkMode } from '../types';
+import type { ServerErrorCode, NetworkMode, SessionMode } from '../types';
 import type { HttpModule } from './httpModule';
 
 /**
@@ -62,7 +62,8 @@ export interface ServerStartResult {
   ip: string;
   port: number;
   url: string;
-  sessionId: string;
+  token: string;
+  mode: SessionMode;
   networkMode: NetworkMode;
 }
 
@@ -73,20 +74,21 @@ export interface ServerStartResult {
  * - Obter IP local (Wi-Fi)
  * - Tentar portas livre começando de 8080 (fallback incremental)
  * - Iniciar/parar o servidor HTTP
- * - Gerar sessionId
+ * - Gerar token e modo da sessão
  * - Mapear erros de inicialização para `ServerErrorCode`
  *
- * Implementa a HU-01 e HU-02 de `transferir.md`.
+ * Implementa a HU-11 e HU-12 de `transferir.md` (rev. 2.0).
  */
 export interface ServerService {
   /**
    * Inicia o servidor HTTP.
    *
    * @param networkMode Interface de rede a usar (único valor suportado: 'wifi')
+   * @param mode Modo da sessão ('send' ou 'receive')
    * @returns Informações do servidor iniciado
    * @throws ServerError com code específico (NO_NETWORK, PORT_UNAVAILABLE, etc.)
    */
-  start: (networkMode: NetworkMode) => Promise<ServerStartResult>;
+  start: (networkMode: NetworkMode, mode: SessionMode) => Promise<ServerStartResult>;
 
   /**
    * Para o servidor HTTP.
@@ -111,7 +113,7 @@ export class ServerServiceImpl implements ServerService {
     this.httpModule = httpModule;
   }
 
-  async start(networkMode: NetworkMode): Promise<ServerStartResult> {
+  async start(networkMode: NetworkMode, mode: SessionMode): Promise<ServerStartResult> {
     try {
       // Obter IP local conforme o modo de rede
       const ip = await this.getLocalIp(networkMode);
@@ -128,17 +130,18 @@ export class ServerServiceImpl implements ServerService {
         throw this.createServerError('PORT_UNAVAILABLE', 'Nenhuma porta livre disponível');
       }
 
-      // Gerar sessionId
-      const sessionId = generateSessionId();
+      // Gerar token (reaproveita generateSessionId, já que a semântica é a mesma)
+      const token = generateSessionId();
 
-      // Construir URL completa
-      const url = `http://${ip}:${port}`;
+      // Construir URL completa com token na querystring (rev. 2.0)
+      const url = `http://${ip}:${port}?token=${token}`;
 
       return {
         ip,
         port,
         url,
-        sessionId,
+        token,
+        mode,
         networkMode,
       };
     } catch (error) {

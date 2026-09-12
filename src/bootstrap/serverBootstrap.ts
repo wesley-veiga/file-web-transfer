@@ -10,8 +10,8 @@
  *   `setHttpModule()`, para que `createServerService()` deixe de lançar
  *   "HttpModule não foi inicializado".
  * - Montar o `ApiRouter` uma única vez, ANTES de qualquer `ServerService.start()`
- *   acontecer — por isso `ApiRouterConfig.getSessionId` é uma função (lê o
- *   sessionId atual) em vez de um valor fixo (ver `apiRouter.ts`).
+ *   acontecer — por isso `ApiRouterConfig.getToken` e `getMode` são funções (lêem o
+ *   token e modo atuais) em vez de valores fixos (ver `apiRouter.ts`).
  * - Registrar as rotas de arquivos/upload/eventos (`apiSetup.ts`) no roteador.
  */
 
@@ -22,6 +22,7 @@ import { createApiRouter } from '../features/server/services/apiRouterFactory';
 import { createFileRepository } from '../features/files/services/fileRepositoryFactory';
 import { createFilesChangedAtTracker } from '../shared/lib/filesChangedAtTracker';
 import { generateSessionId } from '../shared/lib';
+import type { SessionMode } from '../features/server/types';
 import {
   registerFileRoutes,
   registerUploadRoute,
@@ -50,24 +51,58 @@ const APP_VERSION = '1.0.0';
 
 let initialized = false;
 
-/** Caixa mutável do sessionId atual, lida por `ApiRouterConfig.getSessionId`. */
-const sessionIdBox = { current: generateSessionId() };
+/** Caixa mutável do token atual, lida por `ApiRouterConfig.getToken`. */
+const tokenBox = { current: generateSessionId() };
 
-/** Retorna o sessionId atualmente ativo (da última sessão do servidor iniciada). */
-export function getCurrentSessionId(): string {
-  return sessionIdBox.current;
+/** Caixa mutável do modo de sessão atual, lida por `ApiRouterConfig.getMode`. */
+const modeBox = { current: 'send' as SessionMode };
+
+/** Retorna o token atualmente ativo (da última sessão do servidor iniciada). */
+export function getCurrentToken(): string {
+  return tokenBox.current;
 }
 
 /**
- * Atualiza o sessionId ativo.
+ * Atualiza o token ativo.
  *
- * Deve ser chamado sempre que `ServerServiceImpl.start()` gerar um novo sessionId
- * (isto é, sempre que `serverInfo.sessionId` mudar no `serverStore`), para que
- * `GET /api/session` reflita a sessão em andamento mesmo com o `ApiRouter` montado
+ * Deve ser chamado sempre que `ServerServiceImpl.start()` gerar um novo token
+ * (isto é, sempre que `serverInfo.token` mudar no `serverStore`), para que
+ * a API reflita a sessão em andamento mesmo com o `ApiRouter` montado
  * uma única vez no boot.
  */
+export function setCurrentToken(token: string): void {
+  tokenBox.current = token;
+}
+
+/** Retorna o modo de sessão atualmente ativo. */
+export function getCurrentMode(): SessionMode {
+  return modeBox.current;
+}
+
+/**
+ * Atualiza o modo de sessão ativo.
+ *
+ * Deve ser chamado sempre que `ServerServiceImpl.start()` mude o modo
+ * (isto é, sempre que `serverInfo.mode` mudar no `serverStore`).
+ */
+export function setCurrentMode(mode: SessionMode): void {
+  modeBox.current = mode;
+}
+
+/**
+ * Retrocompatibilidade com código antigo.
+ * @deprecated Use `setCurrentToken()` instead.
+ */
 export function setCurrentSessionId(sessionId: string): void {
-  sessionIdBox.current = sessionId;
+  setCurrentToken(sessionId);
+}
+
+/**
+ * Retrocompatibilidade com código antigo.
+ * @deprecated Use `getCurrentToken()` instead.
+ */
+export function getCurrentSessionId(): string {
+  return getCurrentToken();
 }
 
 /**
@@ -85,7 +120,8 @@ export function initServer(): void {
   setHttpModule(httpModule);
 
   const apiRouter = createApiRouter({
-    getSessionId: () => sessionIdBox.current,
+    getToken: () => tokenBox.current,
+    getMode: () => modeBox.current,
     appVersion: APP_VERSION,
     maxUploadBytes: MAX_UPLOAD_BYTES,
   });
