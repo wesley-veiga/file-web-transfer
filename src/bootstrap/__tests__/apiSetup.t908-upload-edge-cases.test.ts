@@ -48,7 +48,7 @@ describe('T-908 — POST /api/upload token validation edge cases', () => {
 
       const chunk: HttpUploadChunk = {
         requestId: 'req-empty-token',
-        data: Buffer.from(''),
+        data: '',
         isLast: true,
       };
 
@@ -84,7 +84,7 @@ describe('T-908 — POST /api/upload token validation edge cases', () => {
 
       const chunk: HttpUploadChunk = {
         requestId: 'req-space-token',
-        data: Buffer.from(''),
+        data: '',
         isLast: true,
       };
 
@@ -120,7 +120,7 @@ describe('T-908 — POST /api/upload token validation edge cases', () => {
 
       const chunk: HttpUploadChunk = {
         requestId: 'req-case-token',
-        data: Buffer.from(''),
+        data: '',
         isLast: true,
       };
 
@@ -156,7 +156,7 @@ describe('T-908 — POST /api/upload token validation edge cases', () => {
 
       const chunk: HttpUploadChunk = {
         requestId: 'req-secret-token',
-        data: Buffer.from(''),
+        data: '',
         isLast: true,
       };
 
@@ -197,7 +197,7 @@ describe('T-908 — POST /api/upload token validation edge cases', () => {
       // Primeiro chunk com token inválido
       const chunk: HttpUploadChunk = {
         requestId: 'req-early-reject',
-        data: Buffer.from('------WebKit\r\nContent-Disposition: form-data; name="file"...'),
+        data: '------WebKit\r\nContent-Disposition: form-data; name="file"...',
         isLast: false, // Não é o último chunk
       };
 
