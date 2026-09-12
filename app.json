@@ -33,7 +33,8 @@
         }
       ],
       "expo-sharing",
-      "./plugins/withForegroundService"
+      "./plugins/withForegroundService",
+      "./plugins/withShareIntent"
     ],
     "experiments": {
       "typedRoutes": true,
