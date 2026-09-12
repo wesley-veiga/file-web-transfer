@@ -92,6 +92,7 @@ interface RouteEntry {
  * - Sempre retorna respostas JSON com Content-Type correto
  * - Suporta parâmetros de rota (ex.: `/api/files/:id`)
  * - Extrai query strings e passa aos handlers
+ * - Middleware de validação de token (T-908) nas 4 rotas gated
  *
  * É extensível: futuras rotas (T-402, T-403, T-404) podem registrar handlers adicionais
  * sem necessidade de modificar esta classe, desde que sigam o padrão do roteador.
@@ -99,6 +100,13 @@ interface RouteEntry {
 export class ApiRouterImpl implements ApiRouter {
   private readonly config: ApiRouterConfig;
   private readonly routes: Map<string, RouteEntry[]> = new Map();
+  /** Rotas que requerem validação de token (T-908) */
+  private readonly gatedRoutes = new Set([
+    '/api/files',
+    '/api/files/:id/download',
+    '/api/upload',
+    '/api/events',
+  ]);
 
   constructor(config: ApiRouterConfig) {
     this.config = config;
@@ -126,8 +134,28 @@ export class ApiRouterImpl implements ApiRouter {
    * Pode ser estendido para adicionar mais rotas.
    */
   private setupRoutes(): void {
-    // GET /api/session - usa handler adaptado para nova assinatura
-    this.addRoute('GET', '/api/session', () => this.handleGetSession());
+    // GET /api/session - Handler que acessa query para validar token (T-908)
+    this.addRoute('GET', '/api/session', (_request, _params, query) =>
+      Promise.resolve(this.handleGetSession(query)),
+    );
+  }
+
+  /**
+   * Valida o token de query contra o token ativo da sessão.
+   * Retorna true se o token é válido (presente e bate com getToken()),
+   * false caso contrário.
+   *
+   * Nunca ecoa o valor do token recebido — apenas compara internamente.
+   */
+  private validateTokenFromQuery(query: Record<string, string>): boolean {
+    const providedToken = query['token'];
+    if (!providedToken) {
+      return false;
+    }
+    const activeToken = this.config.getToken();
+    // Comparação simples de string — nunca usar == ou truthy checks que possam
+    // falsear a validação por type coercion
+    return providedToken === activeToken;
   }
 
   /**
@@ -198,7 +226,7 @@ export class ApiRouterImpl implements ApiRouter {
 
   /**
    * Interceptor central que processa todos os requests.
-   * Roteador → handler específico → envelope de resposta.
+   * Roteador → validação de token (se rota gated) → handler específico → envelope de resposta.
    */
   private async handleRequest(request: HttpServerRequest): Promise<HttpServerResponse> {
     try {
@@ -216,7 +244,14 @@ export class ApiRouterImpl implements ApiRouter {
       for (const entry of routeEntries) {
         const params = this.matchPattern(entry.pattern, pathname);
         if (params !== null) {
-          // Encontrou matching; executar handler
+          // Encontrou matching; validar token se rota gated (T-908)
+          if (this.gatedRoutes.has(entry.pattern)) {
+            const isTokenValid = this.validateTokenFromQuery(query);
+            if (!isTokenValid) {
+              return this.createErrorResponse(401, 'INVALID_TOKEN', 'Token inválido ou ausente');
+            }
+          }
+          // Executar handler
           return await entry.handler(request, params, query);
         }
       }
@@ -234,11 +269,18 @@ export class ApiRouterImpl implements ApiRouter {
   /**
    * Handler para GET /api/session.
    * Retorna informações da sessão (rev. 2.0: nunca inclui o valor do token, apenas se é válido).
+   * Recebe o token de query como parâmetro, mas não o ecoa — apenas valida internamente.
+   *
+   * Assinatura adaptada: como é registrada via setupRoutes() sem passar query,
+   * precisamos capturar o contexto do request no closure do handleRequest.
+   * Para isso, o handler será invocado diretamente no handleRequest, passando query.
    */
-  private async handleGetSession(): Promise<HttpServerResponse> {
+  private handleGetSession(query: Record<string, string>): HttpServerResponse {
+    const isTokenValid = this.validateTokenFromQuery(query);
+
     const sessionInfo: SessionInfo = {
       mode: this.config.getMode(),
-      tokenValid: true, // TODO(#908): validar token quando middleware estiver implementado
+      tokenValid: isTokenValid, // Agora reflete a validação real (T-908)
       appVersion: this.config.appVersion,
       maxUploadBytes: this.config.maxUploadBytes,
     };

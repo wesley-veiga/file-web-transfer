@@ -203,7 +203,8 @@ describe('serverBootstrap', () => {
         setCurrentToken('e2e-session-xyz');
         const socket = connect(server);
 
-        await send(socket, buildHead('GET', '/api/session'));
+        // T-908: incluir token válido na query para que tokenValid seja true
+        await send(socket, buildHead('GET', '/api/session?token=e2e-session-xyz'));
 
         expect(statusLine(socket)).toBe('HTTP/1.1 200 OK');
         const body = jsonBody(socket) as {
@@ -219,9 +220,11 @@ describe('serverBootstrap', () => {
       });
 
       it('GET /api/files → 200, com lista de arquivos (vazia — sem arquivos reais no ambiente de teste)', async () => {
+        // T-908: GET /api/files é rota gated e precisa de token válido
+        const token = getCurrentToken();
         const socket = connect(server);
 
-        await send(socket, buildHead('GET', '/api/files'));
+        await send(socket, buildHead('GET', `/api/files?token=${token}`));
 
         expect(statusLine(socket)).toBe('HTTP/1.1 200 OK');
         const body = jsonBody(socket) as { files: unknown[] };
@@ -230,9 +233,11 @@ describe('serverBootstrap', () => {
       });
 
       it('GET /api/files/:id/download com id inexistente → 404 FILE_NOT_FOUND', async () => {
+        // T-908: GET /api/files/:id/download é rota gated e precisa de token válido
+        const token = getCurrentToken();
         const socket = connect(server);
 
-        await send(socket, buildHead('GET', '/api/files/id-que-nao-existe/download'));
+        await send(socket, buildHead('GET', `/api/files/id-que-nao-existe/download?token=${token}`));
 
         expect(statusLine(socket)).toBe('HTTP/1.1 404 Not Found');
         const body = jsonBody(socket) as { error: { code: string } };
@@ -243,11 +248,13 @@ describe('serverBootstrap', () => {
         // Content-Type sem "boundary=" faz `registerUploadRoute` responder 400 antes de
         // qualquer chamada a `fileRepository.beginStreamedWrite` — não depende de disco/fs
         // real, então dá para exercitar esse caminho de erro sem simular um upload completo.
+        // T-908: POST /api/upload é rota gated e precisa de token válido
+        const token = getCurrentToken();
         const socket = connect(server);
 
         await send(
           socket,
-          buildHead('POST', '/api/upload', {
+          buildHead('POST', `/api/upload?token=${token}`, {
             'Content-Type': 'multipart/form-data',
             'Content-Length': '0',
           }),
@@ -259,9 +266,11 @@ describe('serverBootstrap', () => {
       });
 
       it('GET /api/events → 200, com filesChangedAt (epoch ms)', async () => {
+        // T-908: GET /api/events é rota gated e precisa de token válido
+        const token = getCurrentToken();
         const socket = connect(server);
 
-        await send(socket, buildHead('GET', '/api/events'));
+        await send(socket, buildHead('GET', `/api/events?token=${token}`));
 
         expect(statusLine(socket)).toBe('HTTP/1.1 200 OK');
         const body = jsonBody(socket) as { filesChangedAt: number };
