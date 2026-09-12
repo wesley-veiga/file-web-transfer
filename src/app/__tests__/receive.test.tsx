@@ -8,7 +8,6 @@
 import React from 'react';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 import ReceiveScreen from '../receive';
 import { useServerStore } from '@/features/server/store/serverStore';
 import { useTransferStore } from '@/features/transfer/store/transferStore';
@@ -610,7 +609,7 @@ describe('ReceiveScreen (T-906)', () => {
       });
 
       mockStartFn.mockClear();
-      const { UNSAFE_getByType } = await render(
+      await render(
         <ReceiveScreen httpModule={mockHttpModule} />,
       );
 
