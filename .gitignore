@@ -21,6 +21,11 @@ dist/
 ios/
 ios/build/
 node_modules/
+# sem barra no final também: cobre o caso de node_modules ser um symlink
+# (ex.: worktrees que compartilham node_modules do checkout principal),
+# que a regra com barra acima não cobre — symlink não conta como diretório
+# para fins de match do gitignore.
+node_modules
 web-build/
 
 # Husky (regenerado por `npm install` via script "prepare")
