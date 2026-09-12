@@ -61,10 +61,10 @@ describe('ApiRouter', () => {
       router.register(mockHttpModule);
     });
 
-    it('deve retornar 200 com SessionInfo válido', async () => {
+    it('deve retornar 200 com SessionInfo válido quando token é válido', async () => {
       const request: HttpServerRequest = {
         method: 'GET',
-        path: '/api/session',
+        path: '/api/session?token=test-123',
         headers: {},
       };
 
@@ -75,15 +75,43 @@ describe('ApiRouter', () => {
 
       const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
       expect(body.mode).toBe('send');
-      expect(body.tokenValid).toBe(true);
+      expect(body.tokenValid).toBe(true); // Token válido
       expect(body.appVersion).toBe('1.0.0');
       expect(body.maxUploadBytes).toBe(4294967296);
+    });
+
+    it('deve retornar 200 com tokenValid: false quando token está ausente', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/session',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.tokenValid).toBe(false); // Sem token = inválido
+    });
+
+    it('deve retornar 200 com tokenValid: false quando token é inválido', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/session?token=wrong-token',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.tokenValid).toBe(false); // Token errado = inválido
     });
 
     it('deve produzir um payload que valida contra sessionInfoSchema (teste de contrato)', async () => {
       const request: HttpServerRequest = {
         method: 'GET',
-        path: '/api/session',
+        path: '/api/session?token=test-123',
         headers: {},
       };
 
@@ -300,7 +328,7 @@ describe('ApiRouter', () => {
       expect(body).toEqual({ custom: true });
     });
 
-    it('addRoute com pattern :id extrai o parâmetro de rota corretamente', async () => {
+    it('addRoute com pattern :id extrai o parâmetro de rota corretamente (com token válido)', async () => {
       let receivedParams: Record<string, string> | null = null;
       router.addRoute('GET', '/api/files/:id/download', (_request, params) => {
         receivedParams = params;
@@ -312,16 +340,17 @@ describe('ApiRouter', () => {
       });
       router.register(mockHttpModule);
 
+      // Nota: /api/files/:id/download é uma rota gated (T-908), precisa de token válido
       await registeredHandler!({
         method: 'GET',
-        path: '/api/files/abc-123/download',
+        path: '/api/files/abc-123/download?token=test-123',
         headers: {},
       });
 
       expect(receivedParams).toEqual({ id: 'abc-123' });
     });
 
-    it('addRoute extrai query string quando presente no path', async () => {
+    it('addRoute extrai query string quando presente no path (com token válido)', async () => {
       let receivedQuery: Record<string, string> | null = null;
       router.addRoute('GET', '/api/files', (_request, _params, query) => {
         receivedQuery = query;
@@ -333,16 +362,18 @@ describe('ApiRouter', () => {
       });
       router.register(mockHttpModule);
 
+      // Nota: /api/files é uma rota gated (T-908), o token é extraído como parte de query
+      // mas continua validado pelo middleware
       await registeredHandler!({
         method: 'GET',
-        path: '/api/files?origin=received&limit=10',
+        path: '/api/files?origin=received&limit=10&token=test-123',
         headers: {},
       });
 
-      expect(receivedQuery).toEqual({ origin: 'received', limit: '10' });
+      expect(receivedQuery).toEqual({ origin: 'received', limit: '10', token: 'test-123' });
     });
 
-    it('addRoute sem query string no path resulta em query vazia', async () => {
+    it('addRoute sem query string no path resulta em query vazia (com token na query)', async () => {
       let receivedQuery: Record<string, string> | null = null;
       router.addRoute('GET', '/api/files', (_request, _params, query) => {
         receivedQuery = query;
@@ -354,16 +385,17 @@ describe('ApiRouter', () => {
       });
       router.register(mockHttpModule);
 
+      // Nota: /api/files é gated, precisa de token na query
       await registeredHandler!({
         method: 'GET',
-        path: '/api/files',
+        path: '/api/files?token=test-123',
         headers: {},
       });
 
-      expect(receivedQuery).toEqual({});
+      expect(receivedQuery).toEqual({ token: 'test-123' });
     });
 
-    it('não bate quando o número de segmentos do path difere do pattern', async () => {
+    it('não bate quando o número de segmentos do path difere do pattern (com token válido)', async () => {
       router.addRoute('GET', '/api/files/:id/download', () =>
         Promise.resolve({
           statusCode: 200,
@@ -373,9 +405,10 @@ describe('ApiRouter', () => {
       );
       router.register(mockHttpModule);
 
+      // Rota gated com número incorreto de segmentos — espera 404
       const response = await registeredHandler!({
         method: 'GET',
-        path: '/api/files/abc-123/download/extra',
+        path: '/api/files/abc-123/download/extra?token=test-123',
         headers: {},
       });
 
@@ -456,20 +489,38 @@ describe('ApiRouter', () => {
       expect(body.mode).toBe('receive');
     });
 
-    it('tokenValid é true no handler atual (será validado em T-908)', async () => {
+    it('tokenValid reflete validação real de token (T-908 implementado)', async () => {
       router.register(mockHttpModule);
 
-      const request: HttpServerRequest = {
+      // Sem token: inválido
+      let request: HttpServerRequest = {
         method: 'GET',
         path: '/api/session',
         headers: {},
       };
+      let response = await registeredHandler!(request);
+      let body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.tokenValid).toBe(false);
 
-      const response = await registeredHandler!(request);
-      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
-
-      // Atualmente sempre true — T-908 adiciona lógica de validação de token
+      // Com token válido: válido
+      request = {
+        method: 'GET',
+        path: '/api/session?token=test-123',
+        headers: {},
+      };
+      response = await registeredHandler!(request);
+      body = JSON.parse(typeof response.body === 'string' ? response.body : '');
       expect(body.tokenValid).toBe(true);
+
+      // Com token inválido: inválido
+      request = {
+        method: 'GET',
+        path: '/api/session?token=wrong',
+        headers: {},
+      };
+      response = await registeredHandler!(request);
+      body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.tokenValid).toBe(false);
     });
 
     it('nunca inclui token mesmo com ?token= na querystring', async () => {
@@ -486,6 +537,157 @@ describe('ApiRouter', () => {
 
       expect(body).not.toHaveProperty('token');
       expect(response.body).not.toContain('some-token-value');
+    });
+  });
+
+  describe('Token validation middleware (T-908) nas rotas gated', () => {
+    beforeEach(() => {
+      router.register(mockHttpModule);
+      // Registrar rotas gated para teste
+      router.addRoute('GET', '/api/files', (_request, _params, _query) =>
+        Promise.resolve({
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ files: [] }),
+        }),
+      );
+      router.addRoute('GET', '/api/files/:id/download', (_request, _params, _query) =>
+        Promise.resolve({
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ data: 'file-content' }),
+        }),
+      );
+      router.addRoute('GET', '/api/events', (_request, _params, _query) =>
+        Promise.resolve({
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ filesChangedAt: 0 }),
+        }),
+      );
+    });
+
+    it('GET /api/files rejeita requisição sem token com 401 INVALID_TOKEN', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/files',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('INVALID_TOKEN');
+    });
+
+    it('GET /api/files rejeita requisição com token inválido com 401 INVALID_TOKEN', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/files?token=wrong-token',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('INVALID_TOKEN');
+    });
+
+    it('GET /api/files aceita requisição com token válido', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/files?token=test-123',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body).toHaveProperty('files');
+    });
+
+    it('GET /api/files/:id/download rejeita requisição sem token com 401 INVALID_TOKEN', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/files/abc-123/download',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('INVALID_TOKEN');
+    });
+
+    it('GET /api/files/:id/download aceita requisição com token válido', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/files/abc-123/download?token=test-123',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      expect(response.statusCode).toBe(200);
+    });
+
+    it('GET /api/events rejeita requisição sem token com 401 INVALID_TOKEN', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/events',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.error.code).toBe('INVALID_TOKEN');
+    });
+
+    it('GET /api/events aceita requisição com token válido', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/events?token=test-123',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      expect(response.statusCode).toBe(200);
+    });
+
+    it('GET /api/session permanece público (sem token)', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/session',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      // 200, mas tokenValid será false
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(typeof response.body === 'string' ? response.body : '');
+      expect(body.tokenValid).toBe(false);
+    });
+
+    it('nunca ecoa o valor do token recebido na resposta de erro 401', async () => {
+      const request: HttpServerRequest = {
+        method: 'GET',
+        path: '/api/files?token=super-secret-token-12345',
+        headers: {},
+      };
+
+      const response = await registeredHandler!(request);
+
+      expect(response.statusCode).toBe(401);
+      // Garantir que a resposta não contém o token em nenhum lugar
+      expect(response.body).not.toContain('super-secret-token-12345');
     });
   });
 
