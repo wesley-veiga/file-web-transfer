@@ -8,6 +8,7 @@
 import React from 'react';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import ReceiveScreen from '../receive';
 import { useServerStore } from '@/features/server/store/serverStore';
 import { useTransferStore } from '@/features/transfer/store/transferStore';
@@ -17,6 +18,9 @@ import type { HttpModule } from '@/features/server/services/httpModule';
 jest.mock('@/features/server/hooks/useServer');
 jest.mock('@/features/server/hooks/useNetworkStatus');
 jest.mock('@/features/files/hooks/useReceivedFiles');
+jest.mock('expo-router', () => ({
+  useRouter: jest.fn(),
+}));
 jest.mock('@/features/files/components/ReceivedFolderConfigurationSection', () => ({
   ReceivedFolderConfigurationSection: ({ onConfigured }: { onConfigured?: () => void }) => {
     const React = require('react');
@@ -51,8 +55,10 @@ const mockHttpModule: HttpModule = {
 
 describe('ReceiveScreen (T-906)', () => {
   let mockStartFn: jest.Mock;
+  let mockStopFn: jest.Mock;
   let mockOpenFileFn: jest.Mock;
   let mockShareFileFn: jest.Mock;
+  let mockRouterReplace: jest.Mock;
 
   beforeEach(() => {
     cleanup();
@@ -62,10 +68,11 @@ describe('ReceiveScreen (T-906)', () => {
     useTransferStore.getState().reset();
 
     mockStartFn = jest.fn().mockResolvedValue(undefined);
+    mockStopFn = jest.fn().mockResolvedValue(undefined);
     const mockUseServer = useServer as jest.MockedFunction<typeof useServer>;
     mockUseServer.mockReturnValue({
       start: mockStartFn,
-      stop: jest.fn().mockResolvedValue(undefined),
+      stop: mockStopFn,
       reset: jest.fn(),
     });
 
@@ -84,6 +91,17 @@ describe('ReceiveScreen (T-906)', () => {
       removeFile: jest.fn().mockResolvedValue(undefined),
       loadReceivedFiles: jest.fn().mockResolvedValue(undefined),
       files: [],
+    });
+
+    mockRouterReplace = jest.fn();
+    (useRouter as jest.Mock).mockReturnValue({
+      replace: mockRouterReplace,
+      push: jest.fn(),
+      back: jest.fn(),
+      canGoBack: jest.fn().mockReturnValue(true),
+      setParams: jest.fn(),
+      dismissAll: jest.fn(),
+      dismiss: jest.fn(),
     });
   });
 
@@ -1171,6 +1189,479 @@ describe('ReceiveScreen (T-906)', () => {
       await waitFor(() => {
         expect(screen.queryByTestId('mock-config-section')).toBeNull();
       });
+    });
+  });
+
+  describe('T-907 — Encerrar sessão ativa', () => {
+    it('exibe botão de encerrar sessão quando servidor está rodando', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      expect(endSessionButton).toBeTruthy();
+    });
+
+    it('não exibe botão de encerrar sessão quando servidor não está rodando', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'idle',
+        },
+      }));
+
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.queryByTestId('end-session-button');
+      expect(endSessionButton).toBeNull();
+    });
+
+    it('sem transferência ativa: mostra Alert de confirmação ao pressionar botão', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert');
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      useTransferStore.setState(() => ({
+        transfers: [],
+      }));
+
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      fireEvent.press(endSessionButton);
+
+      // Verify Alert.alert was called with the "no active transfer" message
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Encerrar sessão?',
+          'Você será levado de volta à tela inicial.',
+          expect.any(Array),
+        );
+      });
+
+      alertSpy.mockRestore();
+    });
+
+    it('com transferência ativa: mostra Alert com mensagem de aviso', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert');
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      const transferId = useTransferStore.getState().enqueue({
+        direction: 'upload',
+        fileName: 'photo.jpg',
+        sizeBytes: 5242880,
+        peerIp: '192.168.1.101',
+      });
+      useTransferStore.getState().reportProgress(transferId, 2621440);
+
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      fireEvent.press(endSessionButton);
+
+      // Verify Alert.alert was called with the "active transfer" message
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Encerrar sessão?',
+          'Há transferências em andamento. Tem certeza que deseja encerrar a sessão?',
+          expect.any(Array),
+        );
+      });
+
+      alertSpy.mockRestore();
+    });
+
+    it('sem transferência: ao confirmar, chama stop() e navega para home', async () => {
+      const alertSpy = jest
+        .spyOn(Alert, 'alert')
+        .mockImplementation((title, message, buttons) => {
+          // Simulate user confirming - press the "Encerrar" button (second button)
+          if (buttons && buttons.length >= 2) {
+            buttons[1].onPress?.();
+          }
+        });
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      useTransferStore.setState(() => ({
+        transfers: [],
+      }));
+
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      fireEvent.press(endSessionButton);
+
+      // Wait for stop to be called
+      await waitFor(() => {
+        expect(mockStopFn).toHaveBeenCalled();
+      });
+
+      // Verify navigation to home
+      expect(mockRouterReplace).toHaveBeenCalledWith('/');
+
+      alertSpy.mockRestore();
+    });
+
+    it('com transferência ativa: ao confirmar, chama stop() e navega para home', async () => {
+      const alertSpy = jest
+        .spyOn(Alert, 'alert')
+        .mockImplementation((title, message, buttons) => {
+          // Simulate user confirming - press the "Encerrar" button (second button)
+          if (buttons && buttons.length >= 2) {
+            buttons[1].onPress?.();
+          }
+        });
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      const transferId = useTransferStore.getState().enqueue({
+        direction: 'upload',
+        fileName: 'photo.jpg',
+        sizeBytes: 5242880,
+        peerIp: '192.168.1.101',
+      });
+      useTransferStore.getState().reportProgress(transferId, 2621440);
+
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      fireEvent.press(endSessionButton);
+
+      // Wait for stop to be called
+      await waitFor(() => {
+        expect(mockStopFn).toHaveBeenCalled();
+      });
+
+      // Verify navigation to home
+      expect(mockRouterReplace).toHaveBeenCalledWith('/');
+
+      alertSpy.mockRestore();
+    });
+
+    it('sem transferência: ao cancelar, não chama stop() nem navega', async () => {
+      const alertSpy = jest
+        .spyOn(Alert, 'alert')
+        .mockImplementation((title, message, buttons) => {
+          // Simulate user cancelling - press the "Cancelar" button (first button)
+          if (buttons && buttons.length >= 1) {
+            buttons[0].onPress?.();
+          }
+        });
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      useTransferStore.setState(() => ({
+        transfers: [],
+      }));
+
+      mockStopFn.mockClear();
+      mockRouterReplace.mockClear();
+
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      fireEvent.press(endSessionButton);
+
+      // Wait a bit to allow async operations
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Verify stop was NOT called
+      expect(mockStopFn).not.toHaveBeenCalled();
+
+      // Verify navigation did NOT happen
+      expect(mockRouterReplace).not.toHaveBeenCalled();
+
+      alertSpy.mockRestore();
+    });
+
+    it('com transferência: ao cancelar, não chama stop() nem navega', async () => {
+      const alertSpy = jest
+        .spyOn(Alert, 'alert')
+        .mockImplementation((title, message, buttons) => {
+          // Simulate user cancelling - press the "Cancelar" button (first button)
+          if (buttons && buttons.length >= 1) {
+            buttons[0].onPress?.();
+          }
+        });
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      const transferId = useTransferStore.getState().enqueue({
+        direction: 'upload',
+        fileName: 'photo.jpg',
+        sizeBytes: 5242880,
+        peerIp: '192.168.1.101',
+      });
+      useTransferStore.getState().reportProgress(transferId, 2621440);
+
+      mockStartFn.mockClear();
+      mockStopFn.mockClear();
+      mockRouterReplace.mockClear();
+
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      fireEvent.press(endSessionButton);
+
+      // Wait a bit to allow async operations
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Verify stop was NOT called
+      expect(mockStopFn).not.toHaveBeenCalled();
+
+      // Verify navigation did NOT happen
+      expect(mockRouterReplace).not.toHaveBeenCalled();
+
+      alertSpy.mockRestore();
+    });
+
+    it('ao confirmar: erro ao chamar stop() mostra Alert de erro', async () => {
+      const alertSpy = jest
+        .spyOn(Alert, 'alert')
+        .mockImplementation((title, message, buttons) => {
+          // Simulate user confirming - press the "Encerrar" button (second button)
+          if (title === 'Encerrar sessão?' && buttons && buttons.length >= 2) {
+            buttons[1].onPress?.();
+          }
+        });
+
+      // Mock stop to reject
+      mockStopFn.mockRejectedValueOnce(new Error('Failed to stop server'));
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      useTransferStore.setState(() => ({
+        transfers: [],
+      }));
+
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      fireEvent.press(endSessionButton);
+
+      // Wait for the error alert to be shown
+      await waitFor(() => {
+        // Should have called Alert.alert at least twice:
+        // 1. The confirmation dialog
+        // 2. The error dialog
+        // Check second call (index 1)
+        expect(alertSpy).toHaveBeenNthCalledWith(
+          2,
+          'Erro',
+          'Não foi possível encerrar a sessão.',
+        );
+      });
+
+      // Verify navigation did NOT happen after error
+      expect(mockRouterReplace).not.toHaveBeenCalled();
+
+      alertSpy.mockRestore();
+    });
+
+    it('usa router.replace (não router.push) para voltar ao home', async () => {
+      const alertSpy = jest
+        .spyOn(Alert, 'alert')
+        .mockImplementation((title, message, buttons) => {
+          // Simulate user confirming
+          if (buttons && buttons.length >= 2) {
+            buttons[1].onPress?.();
+          }
+        });
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      useTransferStore.setState(() => ({
+        transfers: [],
+      }));
+
+      const mockPush = jest.fn();
+      (useRouter as jest.Mock).mockReturnValue({
+        replace: mockRouterReplace,
+        push: mockPush,
+        back: jest.fn(),
+        canGoBack: jest.fn().mockReturnValue(true),
+        setParams: jest.fn(),
+        dismissAll: jest.fn(),
+        dismiss: jest.fn(),
+      });
+
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      fireEvent.press(endSessionButton);
+
+      await waitFor(() => {
+        expect(mockRouterReplace).toHaveBeenCalledWith('/');
+        expect(mockPush).not.toHaveBeenCalled();
+      });
+
+      alertSpy.mockRestore();
+    });
+
+    it('com múltiplas transferências: ao confirmar, para o servidor e navega', async () => {
+      const alertSpy = jest
+        .spyOn(Alert, 'alert')
+        .mockImplementation((title, message, buttons) => {
+          if (buttons && buttons.length >= 2) {
+            buttons[1].onPress?.();
+          }
+        });
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      const id1 = useTransferStore.getState().enqueue({
+        direction: 'upload',
+        fileName: 'file1.pdf',
+        sizeBytes: 1024 * 1024,
+        peerIp: '192.168.1.101',
+      });
+
+      const id2 = useTransferStore.getState().enqueue({
+        direction: 'upload',
+        fileName: 'file2.zip',
+        sizeBytes: 2048 * 1024,
+        peerIp: '192.168.1.102',
+      });
+
+      useTransferStore.getState().reportProgress(id1, 512 * 1024);
+      useTransferStore.getState().reportProgress(id2, 1024 * 1024);
+
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      fireEvent.press(endSessionButton);
+
+      await waitFor(() => {
+        expect(mockStopFn).toHaveBeenCalled();
+        expect(mockRouterReplace).toHaveBeenCalledWith('/');
+      });
+
+      alertSpy.mockRestore();
     });
   });
 });
