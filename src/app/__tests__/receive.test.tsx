@@ -17,6 +17,23 @@ import type { HttpModule } from '@/features/server/services/httpModule';
 jest.mock('@/features/server/hooks/useServer');
 jest.mock('@/features/server/hooks/useNetworkStatus');
 jest.mock('@/features/files/hooks/useReceivedFiles');
+jest.mock('@/features/files/components/ReceivedFolderConfigurationSection', () => ({
+  ReceivedFolderConfigurationSection: ({ onConfigured }: { onConfigured?: () => void }) => {
+    const React = require('react');
+    const { View, Text, TouchableOpacity } = require('react-native');
+    return (
+      <View testID="mock-config-section">
+        <Text>Mock Configuration Section</Text>
+        <TouchableOpacity
+          testID="mock-config-complete"
+          onPress={() => onConfigured?.()}
+        >
+          <Text>Complete Config</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  },
+}));
 
 import { useServer } from '@/features/server/hooks/useServer';
 import { useNetworkStatus } from '@/features/server/hooks/useNetworkStatus';
@@ -936,6 +953,223 @@ describe('ReceiveScreen (T-906)', () => {
       await waitFor(() => {
         // Should attempt to start from error state
         expect(mockStartFn).toHaveBeenCalledWith('wifi', 'receive');
+      });
+    });
+  });
+
+  describe('Configuration button (T-911)', () => {
+    it('renders config button with gear icon', async () => {
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const configButton = screen.getByTestId('config-button');
+      expect(configButton).toBeDefined();
+    });
+
+    it('config button is visible when server is idle', async () => {
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      await waitFor(() => {
+        const configButton = screen.getByTestId('config-button');
+        expect(configButton).toBeDefined();
+      });
+    });
+
+    it('opens configuration section when config button is pressed', async () => {
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const configButton = screen.getByTestId('config-button');
+      fireEvent.press(configButton);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('mock-config-section')).toBeDefined();
+      });
+    });
+
+    it('closes configuration section when config button is pressed again', async () => {
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const configButton = screen.getByTestId('config-button');
+
+      // First click to open
+      fireEvent.press(configButton);
+      await waitFor(() => {
+        expect(screen.getByTestId('mock-config-section')).toBeDefined();
+      });
+
+      // Second click to close
+      fireEvent.press(configButton);
+      await waitFor(() => {
+        expect(screen.queryByTestId('mock-config-section')).toBeNull();
+      });
+    });
+
+    it('closes configuration section when onConfigured callback is called', async () => {
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const configButton = screen.getByTestId('config-button');
+
+      // Open configuration
+      fireEvent.press(configButton);
+      await waitFor(() => {
+        expect(screen.getByTestId('mock-config-section')).toBeDefined();
+      });
+
+      // Trigger onConfigured callback
+      const completeButton = screen.getByTestId('mock-config-complete');
+      fireEvent.press(completeButton);
+
+      // Verify section is closed
+      await waitFor(() => {
+        expect(screen.queryByTestId('mock-config-section')).toBeNull();
+      });
+    });
+
+    it('config button remains visible when server is starting', async () => {
+      useServerStore.getState().startRequested();
+
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      await waitFor(() => {
+        const configButton = screen.getByTestId('config-button');
+        expect(configButton).toBeDefined();
+      });
+    });
+
+    it('config button remains visible when server has error', async () => {
+      useServerStore.getState().startRequested();
+      useServerStore.getState().failed({
+        code: 'PORT_UNAVAILABLE',
+        message: 'No port available',
+      });
+
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      await waitFor(() => {
+        const configButton = screen.getByTestId('config-button');
+        expect(configButton).toBeDefined();
+      });
+    });
+
+    it('config button remains visible when server is running', async () => {
+      useServerStore.getState().startRequested();
+      useServerStore.getState().started({
+        networkMode: 'wifi',
+        ip: '192.168.1.100',
+        port: 8080,
+        url: 'http://192.168.1.100:8080?token=test',
+        token: 'test',
+        mode: 'receive',
+        startedAt: Date.now(),
+      });
+
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      await waitFor(() => {
+        const configButton = screen.getByTestId('config-button');
+        expect(configButton).toBeDefined();
+      });
+    });
+
+    it('config button remains visible when transfer is active', async () => {
+      useServerStore.getState().startRequested();
+      useServerStore.getState().started({
+        networkMode: 'wifi',
+        ip: '192.168.1.100',
+        port: 8080,
+        url: 'http://192.168.1.100:8080?token=test',
+        token: 'test',
+        mode: 'receive',
+        startedAt: Date.now(),
+      });
+
+      useTransferStore.getState().enqueue({
+        direction: 'upload',
+        fileName: 'test.txt',
+        sizeBytes: 1024,
+        peerIp: '192.168.1.101',
+      });
+
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      await waitFor(() => {
+        const configButton = screen.getByTestId('config-button');
+        expect(configButton).toBeDefined();
+      });
+    });
+
+    it('config button remains visible when transfer is completed', async () => {
+      useServerStore.getState().startRequested();
+      useServerStore.getState().started({
+        networkMode: 'wifi',
+        ip: '192.168.1.100',
+        port: 8080,
+        url: 'http://192.168.1.100:8080?token=test',
+        token: 'test',
+        mode: 'receive',
+        startedAt: Date.now(),
+      });
+
+      const transferId = useTransferStore.getState().enqueue({
+        direction: 'upload',
+        fileName: 'test.txt',
+        sizeBytes: 1024,
+        peerIp: '192.168.1.101',
+      });
+      useTransferStore.getState().complete(transferId);
+
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      await waitFor(() => {
+        const configButton = screen.getByTestId('config-button');
+        expect(configButton).toBeDefined();
+      });
+    });
+
+    it('allows toggling configuration section multiple times', async () => {
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const configButton = screen.getByTestId('config-button');
+
+      // Open
+      fireEvent.press(configButton);
+      await waitFor(() => {
+        expect(screen.getByTestId('mock-config-section')).toBeDefined();
+      });
+
+      // Close
+      fireEvent.press(configButton);
+      await waitFor(() => {
+        expect(screen.queryByTestId('mock-config-section')).toBeNull();
+      });
+
+      // Open again
+      fireEvent.press(configButton);
+      await waitFor(() => {
+        expect(screen.getByTestId('mock-config-section')).toBeDefined();
+      });
+
+      // Close again
+      fireEvent.press(configButton);
+      await waitFor(() => {
+        expect(screen.queryByTestId('mock-config-section')).toBeNull();
+      });
+    });
+
+    it('configuration section does not appear by default', async () => {
+      mockStartFn.mockClear();
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('mock-config-section')).toBeNull();
       });
     });
   });
