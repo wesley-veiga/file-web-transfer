@@ -153,6 +153,494 @@ function isDownloadPanelVisible(): boolean {
   return panel !== null && !panel.classList.contains('hidden');
 }
 
+describe('caixa de confirmação de token (T-910)', () => {
+  describe('mostrar caixa de confirmação quando token está ausente ou inválido', () => {
+    it('mostra a caixa de confirmação quando não há token na URL', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          // Simular resposta com tokenValid: false (sem token na URL)
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+              appVersion: '1.0.0',
+              maxUploadBytes: 4294967296,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const confirmBox = document.getElementById('token-confirmation-box');
+        expect(confirmBox?.classList.contains('hidden')).toBe(false);
+
+        const uploadPanel = document.getElementById('tab-upload');
+        const downloadPanel = document.getElementById('tab-download');
+        expect(uploadPanel?.classList.contains('hidden')).toBe(true);
+        expect(downloadPanel?.classList.contains('hidden')).toBe(true);
+
+        done();
+      }, 50);
+    });
+
+    it('exibe a mensagem de erro quando fetch falha', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          return Promise.reject(new Error('Network error'));
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        }) as unknown as Promise<Response>;
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const confirmBox = document.getElementById('token-confirmation-box');
+        expect(confirmBox?.classList.contains('hidden')).toBe(false);
+        done();
+      }, 50);
+    });
+  });
+
+  describe('submissão de token', () => {
+    it('aceita token válido digitado manualmente e mostra a view correta', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url.startsWith('/api/session')) {
+          // Primeira chamada: sem token (tokenValid: false)
+          if (!url.includes('token=')) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({
+                tokenValid: false,
+                mode: null,
+                appVersion: '1.0.0',
+                maxUploadBytes: 4294967296,
+              }),
+            }) as unknown as Promise<Response>;
+          }
+          // Segunda chamada: com token "test-valid"
+          if (url.includes('token=test-valid')) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({
+                tokenValid: true,
+                mode: 'receive',
+                appVersion: '1.0.0',
+                maxUploadBytes: 4294967296,
+              }),
+            }) as unknown as Promise<Response>;
+          }
+          // Outros tokens: inválidos
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ filesChangedAt: 0 }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL: ' + url));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const confirmBox = document.getElementById('token-confirmation-box');
+        expect(confirmBox?.classList.contains('hidden')).toBe(false);
+
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+
+        tokenInput.value = 'test-valid';
+        submitBtn.click();
+
+        // Wait for async fetch to complete
+        setTimeout(() => {
+          // Confirmação deve desaparecer
+          expect(confirmBox?.classList.contains('hidden')).toBe(true);
+
+          // View apropriada (upload para 'receive') deve aparecer
+          const uploadPanel = document.getElementById('tab-upload');
+          const downloadPanel = document.getElementById('tab-download');
+          expect(uploadPanel?.classList.contains('hidden')).toBe(false);
+          expect(downloadPanel?.classList.contains('hidden')).toBe(true);
+
+          done();
+        }, 150);
+      }, 50);
+    });
+
+    it('mostra mensagem de erro quando token é inválido', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+              appVersion: '1.0.0',
+              maxUploadBytes: 4294967296,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+        const errorMsg = document.getElementById('token-error-message');
+
+        tokenInput.value = 'token-errado';
+        submitBtn.click();
+
+        setTimeout(() => {
+          expect(errorMsg?.classList.contains('visible')).toBe(true);
+          expect(errorMsg?.textContent).toContain('Token inválido');
+
+          // Confirmação deve continuar visível
+          const confirmBox = document.getElementById('token-confirmation-box');
+          expect(confirmBox?.classList.contains('hidden')).toBe(false);
+
+          done();
+        }, 150);
+      }, 50);
+    });
+
+    it('permite nova tentativa após erro de token inválido', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          if (url.includes('token=retry-ok')) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({
+                tokenValid: true,
+                mode: 'send',
+                appVersion: '1.0.0',
+                maxUploadBytes: 4294967296,
+              }),
+            }) as unknown as Promise<Response>;
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+              appVersion: '1.0.0',
+              maxUploadBytes: 4294967296,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+
+        // Primeira tentativa: token errado
+        tokenInput.value = 'errado1';
+        submitBtn.click();
+
+        setTimeout(() => {
+          const errorMsg = document.getElementById('token-error-message');
+          expect(errorMsg?.classList.contains('visible')).toBe(true);
+
+          // Segunda tentativa: token correto
+          tokenInput.value = 'retry-ok';
+          submitBtn.click();
+
+          setTimeout(() => {
+            expect(errorMsg?.classList.contains('visible')).toBe(false);
+            const confirmBox = document.getElementById('token-confirmation-box');
+            expect(confirmBox?.classList.contains('hidden')).toBe(true);
+
+            done();
+          }, 150);
+        }, 150);
+      }, 50);
+    });
+
+    it('permite submissão via tecla Enter no input', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          if (url.includes('token=enter-token')) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({
+                tokenValid: true,
+                mode: 'receive',
+                appVersion: '1.0.0',
+                maxUploadBytes: 4294967296,
+              }),
+            }) as unknown as Promise<Response>;
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+              appVersion: '1.0.0',
+              maxUploadBytes: 4294967296,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+
+        tokenInput.value = 'enter-token';
+        const event = new KeyboardEvent('keydown', { key: 'Enter' });
+        tokenInput.dispatchEvent(event);
+
+        setTimeout(() => {
+          const confirmBox = document.getElementById('token-confirmation-box');
+          expect(confirmBox?.classList.contains('hidden')).toBe(true);
+
+          done();
+        }, 150);
+      }, 50);
+    });
+  });
+
+  describe('experiência de usuário da confirmação de token', () => {
+    it('limpa mensagem de erro quando usuário começa a digitar', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+        const errorMsg = document.getElementById('token-error-message');
+
+        // Tentar enviar sem valor
+        submitBtn.click();
+
+        setTimeout(() => {
+          expect(errorMsg?.classList.contains('visible')).toBe(true);
+
+          // Usuário começa a digitar
+          tokenInput.value = 'a';
+          tokenInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+          expect(errorMsg?.classList.contains('visible')).toBe(false);
+
+          done();
+        }, 50);
+      }, 50);
+    });
+
+    it('não permite envio com token vazio', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+        const errorMsg = document.getElementById('token-error-message');
+
+        submitBtn.click();
+
+        setTimeout(() => {
+          expect(errorMsg?.classList.contains('visible')).toBe(true);
+          expect(errorMsg?.textContent).toContain('vazio');
+
+          done();
+        }, 50);
+      }, 50);
+    });
+
+    it('atualiza a URL quando token válido é confirmado', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          if (url.includes('token=novo-token')) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({
+                tokenValid: true,
+                mode: 'send',
+                appVersion: '1.0.0',
+                maxUploadBytes: 4294967296,
+              }),
+            }) as unknown as Promise<Response>;
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+              appVersion: '1.0.0',
+              maxUploadBytes: 4294967296,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+
+        tokenInput.value = 'novo-token';
+        submitBtn.click();
+
+        setTimeout(() => {
+          expect(window.location.search).toContain('token=novo-token');
+          done();
+        }, 150);
+      }, 50);
+    });
+  });
+});
+
 describe('renderização condicional por modo (T-909)', () => {
 
   describe('loadSession() - busca da sessão e renderização condicional', () => {
@@ -226,7 +714,7 @@ describe('renderização condicional por modo (T-909)', () => {
       }, 50);
     });
 
-    it('exibe "Sessão indisponível" quando fetch falha (erro de rede)', (done) => {
+    it('mostra confirmação de token quando fetch falha (erro de rede)', (done) => {
       FakeXhr.instances = [];
       (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
 
@@ -246,13 +734,13 @@ describe('renderização condicional por modo (T-909)', () => {
       document.close();
 
       setTimeout(() => {
-        const sessionValue = document.getElementById('session-value');
-        expect(sessionValue?.textContent).toContain('Sessão indisponível');
+        const confirmBox = document.getElementById('token-confirmation-box');
+        expect(confirmBox?.classList.contains('hidden')).toBe(false);
         done();
       }, 50);
     });
 
-    it('exibe "Sessão indisponível" quando response.ok é false', (done) => {
+    it('mostra confirmação de token quando response.ok é false', (done) => {
       FakeXhr.instances = [];
       (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
 
@@ -275,8 +763,8 @@ describe('renderização condicional por modo (T-909)', () => {
       document.close();
 
       setTimeout(() => {
-        const sessionValue = document.getElementById('session-value');
-        expect(sessionValue?.textContent).toContain('Sessão indisponível');
+        const confirmBox = document.getElementById('token-confirmation-box');
+        expect(confirmBox?.classList.contains('hidden')).toBe(false);
         done();
       }, 50);
     });
@@ -452,13 +940,15 @@ describe('renderização condicional por modo (T-909)', () => {
         ];
         setInputFiles(fileInput, files);
 
-        // Não há botão de confirmação no HTML para modo upload
-        const confirmButton = Array.from(document.querySelectorAll('button')).find(
-          (btn) => btn.textContent?.toLowerCase().includes('confirmar') ||
-                   btn.textContent?.toLowerCase().includes('enviar')
+        // Não há botão de envio específico no upload area
+        // (o botão de confirmação de token é para token, não para upload)
+        const uploadSection = document.getElementById('tab-upload');
+        const uploadButtons = uploadSection?.querySelectorAll('button') || [];
+        // Nenhum botão no upload area exceto retry buttons (que aparecem em erros)
+        const nonRetryButtons = Array.from(uploadButtons).filter(
+          (btn) => !btn.classList.contains('retry-btn')
         );
-        // Não deve haver botão específico de envio (apenas retry para erros)
-        expect(!confirmButton || confirmButton.classList.contains('retry-btn')).toBe(true);
+        expect(nonRetryButtons.length).toBe(0);
 
         // Disparar change event no input
         fireEvent(fileInput, 'change');

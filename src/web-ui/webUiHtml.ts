@@ -291,6 +291,100 @@ export const WEB_UI_HTML = `<!doctype html>
     font-size: 0.8rem;
     color: var(--muted);
   }
+
+  #token-confirmation-box {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    max-width: 400px;
+    margin: 1rem auto;
+  }
+
+  #token-confirmation-box h2 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+  }
+
+  #token-confirmation-box p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+
+  .token-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .token-input-group label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--fg);
+  }
+
+  .token-input-group input[type="text"] {
+    padding: 0.6rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: monospace;
+    font-size: 1rem;
+  }
+
+  .token-input-group input[type="text"]:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+  }
+
+  .token-confirmation-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .token-confirmation-actions button {
+    flex: 1;
+    padding: 0.6rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+
+  .token-confirmation-actions .submit-btn {
+    background: var(--accent);
+    color: white;
+  }
+
+  .token-confirmation-actions .submit-btn:hover {
+    opacity: 0.9;
+  }
+
+  .token-confirmation-actions .submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #token-error-message {
+    padding: 0.6rem 0.85rem;
+    background: var(--danger-bg);
+    color: var(--danger-fg);
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
+    display: none;
+  }
+
+  #token-error-message.visible {
+    display: block;
+  }
 </style>
 </head>
 <body>
@@ -304,6 +398,19 @@ export const WEB_UI_HTML = `<!doctype html>
       <span class="value" id="session-value">Carregando sessão…</span>
     </div>
   </header>
+
+  <div id="token-confirmation-box" class="hidden">
+    <h2>Confirmar Token</h2>
+    <p>Digite o token exibido no dispositivo que está compartilhando</p>
+    <div id="token-error-message"></div>
+    <div class="token-input-group">
+      <label for="token-input">Token</label>
+      <input type="text" id="token-input" placeholder="ex: maçã-42" autocomplete="off">
+    </div>
+    <div class="token-confirmation-actions">
+      <button type="button" class="submit-btn" id="token-submit-btn">Confirmar</button>
+    </div>
+  </div>
 
   <section id="tab-upload" class="tab-panel">
     <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Selecionar arquivos para enviar">
@@ -344,6 +451,89 @@ export const WEB_UI_HTML = `<!doctype html>
     }
   }
 
+  function showTokenConfirmationBox() {
+    var tokenBox = document.getElementById("token-confirmation-box");
+    var sessionBadge = document.querySelector(".session-badge");
+    var uploadPanel = document.getElementById("tab-upload");
+    var downloadPanel = document.getElementById("tab-download");
+
+    tokenBox.classList.remove("hidden");
+    sessionBadge.style.display = "none";
+    uploadPanel.classList.add("hidden");
+    downloadPanel.classList.add("hidden");
+
+    // Focus on input
+    setTimeout(function () {
+      var input = document.getElementById("token-input");
+      if (input) input.focus();
+    }, 0);
+  }
+
+  function hideTokenConfirmationBox() {
+    var tokenBox = document.getElementById("token-confirmation-box");
+    var sessionBadge = document.querySelector(".session-badge");
+    tokenBox.classList.add("hidden");
+    sessionBadge.style.display = "";
+  }
+
+  function clearTokenError() {
+    var errorMsg = document.getElementById("token-error-message");
+    errorMsg.classList.remove("visible");
+    errorMsg.textContent = "";
+  }
+
+  function showTokenError(message) {
+    var errorMsg = document.getElementById("token-error-message");
+    errorMsg.textContent = message;
+    errorMsg.classList.add("visible");
+  }
+
+  function updateUrlWithToken(token) {
+    var newUrl = window.location.pathname + "?token=" + encodeURIComponent(token);
+    window.history.replaceState(null, "", newUrl);
+  }
+
+  function tryToken(token) {
+    if (!token || !token.trim()) {
+      showTokenError("Token não pode estar vazio");
+      return;
+    }
+
+    var sessionValue = document.getElementById("session-value");
+    var submitBtn = document.getElementById("token-submit-btn");
+    submitBtn.disabled = true;
+
+    fetch("/api/session?token=" + encodeURIComponent(token))
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("status " + response.status);
+        }
+        return response.json();
+      })
+      .then(function (data) {
+        if (data && data.tokenValid === true && typeof data.mode === "string") {
+          // Valid token: update URL, hide confirmation box, show appropriate view
+          updateUrlWithToken(token);
+          hideTokenConfirmationBox();
+          clearTokenError();
+
+          var modeLabel = data.mode === "send" ? "Enviar" : "Receber";
+          sessionValue.textContent = "Modo: " + modeLabel;
+          renderConditionalView(data.mode);
+
+          submitBtn.disabled = false;
+        } else {
+          // Invalid token response
+          showTokenError("Token inválido. Tente novamente.");
+          submitBtn.disabled = false;
+        }
+      })
+      .catch(function () {
+        showTokenError("Erro ao validar token. Tente novamente.");
+        submitBtn.disabled = false;
+      });
+  }
+
   function loadSession() {
     var sessionValue = document.getElementById("session-value");
     var token = getTokenFromUrl();
@@ -357,16 +547,25 @@ export const WEB_UI_HTML = `<!doctype html>
         return response.json();
       })
       .then(function (data) {
-        if (data && typeof data.mode === "string") {
+        if (data && data.tokenValid === true && typeof data.mode === "string") {
+          // Valid token: show appropriate view
           var modeLabel = data.mode === "send" ? "Enviar" : "Receber";
           sessionValue.textContent = "Modo: " + modeLabel;
           renderConditionalView(data.mode);
+        } else if (data && data.tokenValid === false) {
+          // No token or invalid token: show confirmation box
+          sessionValue.textContent = "Carregando sessão…";
+          showTokenConfirmationBox();
         } else {
+          // Unexpected response
           sessionValue.textContent = "Sessão indisponível";
+          showTokenConfirmationBox();
         }
       })
       .catch(function () {
-        sessionValue.textContent = "Sessão indisponível";
+        // Network error: show confirmation box
+        sessionValue.textContent = "Carregando sessão…";
+        showTokenConfirmationBox();
       });
   }
 
@@ -728,8 +927,32 @@ export const WEB_UI_HTML = `<!doctype html>
     setInterval(pollEvents, 3000);
   }
 
+  function setupTokenConfirmation() {
+    var submitBtn = document.getElementById("token-submit-btn");
+    var tokenInput = document.getElementById("token-input");
+
+    submitBtn.addEventListener("click", function () {
+      var token = tokenInput.value;
+      tryToken(token);
+    });
+
+    tokenInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        var token = tokenInput.value;
+        tryToken(token);
+      }
+    });
+
+    // Clear error message when user starts typing
+    tokenInput.addEventListener("input", function () {
+      clearTokenError();
+    });
+  }
+
   loadSession();
   setupUpload();
+  setupTokenConfirmation();
   setupPolling();
 })();
 </script>
