@@ -78,8 +78,8 @@ describe('T-001 Bootstrap - Integration', () => {
       });
     });
 
-    it('src/app/(tabs)/index.tsx exists', () => {
-      const filePath = path.join(process.cwd(), 'src/app/(tabs)/index.tsx');
+    it('src/app/index.tsx (Home idle) exists', () => {
+      const filePath = path.join(process.cwd(), 'src/app/index.tsx');
       expect(fs.existsSync(filePath)).toBe(true);
     });
 
@@ -87,34 +87,22 @@ describe('T-001 Bootstrap - Integration', () => {
       const filePath = path.join(process.cwd(), 'src/app/_layout.tsx');
       expect(fs.existsSync(filePath)).toBe(true);
     });
+
+    it('src/app/(tabs) directory does not exist (removed in T-912)', () => {
+      const dirPath = path.join(process.cwd(), 'src/app/(tabs)');
+      expect(fs.existsSync(dirPath)).toBe(false);
+    });
   });
 
   describe('Home Screen Content', () => {
-    it('Home screen uses ServerHomeScreen component (T-204)', () => {
-      const indexPath = path.join(process.cwd(), 'src/app/(tabs)/index.tsx');
-      const content = fs.readFileSync(indexPath, 'utf-8');
-      expect(content).toContain('ServerHomeScreen');
-      expect(content).toContain('features/server');
-    });
-
-    it('ServerHomeScreen uses Screen component from shared/components', () => {
-      const screenHomePath = path.join(
-        process.cwd(),
-        'src/features/server/components/ServerHomeScreen.tsx',
-      );
-      const content = fs.readFileSync(screenHomePath, 'utf-8');
-      expect(content).toContain('Screen');
-      expect(content).toContain('shared/components');
-    });
-
-    it('Home screen uses expo-splash-screen', () => {
-      const indexPath = path.join(process.cwd(), 'src/app/(tabs)/index.tsx');
+    it('Home idle screen (T-905) uses expo-splash-screen', () => {
+      const indexPath = path.join(process.cwd(), 'src/app/index.tsx');
       const content = fs.readFileSync(indexPath, 'utf-8');
       expect(content).toContain('expo-splash-screen');
     });
 
-    it('Home screen has proper theme support via Screen component', () => {
-      const indexPath = path.join(process.cwd(), 'src/app/(tabs)/index.tsx');
+    it('Home idle screen has proper theme support via Screen component', () => {
+      const indexPath = path.join(process.cwd(), 'src/app/index.tsx');
       const content = fs.readFileSync(indexPath, 'utf-8');
       // Screen component handles theme support internally
       expect(content).toContain('Screen');
@@ -123,6 +111,14 @@ describe('T-001 Bootstrap - Integration', () => {
       const screenContent = fs.readFileSync(screenPath, 'utf-8');
       expect(screenContent).toContain('dark:');
       expect(screenContent).toContain('SafeAreaView');
+    });
+
+    it('ServerHomeScreen component does not exist (removed in T-912)', () => {
+      const screenHomePath = path.join(
+        process.cwd(),
+        'src/features/server/components/ServerHomeScreen.tsx',
+      );
+      expect(fs.existsSync(screenHomePath)).toBe(false);
     });
   });
 

@@ -6,10 +6,10 @@
  */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import { useColorScheme } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
-import HomeScreen from '../(tabs)/index';
+import HomeIdleScreen from '../index';
 import RootLayout from '../_layout';
 
 // Type-safe mock functions
@@ -29,33 +29,33 @@ describe('Component Integration Tests', () => {
     mockedPreventAutoHideAsync.mockReturnValue(undefined);
   });
 
-  describe('HomeScreen Rendering', () => {
-    it('renders HomeScreen component without crashing', () => {
-      expect(() => render(<HomeScreen />)).not.toThrow();
+  describe('HomeIdleScreen Rendering', () => {
+    it('renders HomeIdleScreen component without crashing', () => {
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
     });
 
-    it('HomeScreen renders with valid JSX', () => {
-      expect(() => render(<HomeScreen />)).not.toThrow();
+    it('HomeIdleScreen renders with valid JSX', () => {
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
     });
 
-    it('HomeScreen renders with light theme mock', () => {
+    it('HomeIdleScreen renders with light theme mock', () => {
       mockedUseColorScheme.mockReturnValue('light');
-      expect(() => render(<HomeScreen />)).not.toThrow();
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
     });
 
-    it('HomeScreen renders with dark theme mock', () => {
+    it('HomeIdleScreen renders with dark theme mock', () => {
       mockedUseColorScheme.mockReturnValue('dark');
-      expect(() => render(<HomeScreen />)).not.toThrow();
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
     });
 
-    it('HomeScreen renders with undefined theme', () => {
+    it('HomeIdleScreen renders with undefined theme', () => {
       mockedUseColorScheme.mockReturnValue(undefined);
-      expect(() => render(<HomeScreen />)).not.toThrow();
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
     });
 
-    it('HomeScreen renders with null theme', () => {
+    it('HomeIdleScreen renders with null theme', () => {
       mockedUseColorScheme.mockReturnValue(null);
-      expect(() => render(<HomeScreen />)).not.toThrow();
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
     });
   });
 
@@ -81,8 +81,8 @@ describe('Component Integration Tests', () => {
   });
 
   describe('Component Interaction with Mocks', () => {
-    it('HomeScreen renders successfully with mocks', () => {
-      expect(() => render(<HomeScreen />)).not.toThrow();
+    it('HomeIdleScreen renders successfully with mocks', () => {
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
     });
 
     it('RootLayout renders successfully with mocks', () => {
@@ -93,24 +93,24 @@ describe('Component Integration Tests', () => {
       mockedUseColorScheme.mockReturnValue('light');
 
       expect(() => {
-        render(<HomeScreen />);
+        render(<HomeIdleScreen />);
         render(<RootLayout />);
       }).not.toThrow();
     });
 
     it('Components render with different theme values', () => {
       mockedUseColorScheme.mockReturnValue('light');
-      expect(() => render(<HomeScreen />)).not.toThrow();
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
 
       jest.clearAllMocks();
       mockedUseColorScheme.mockReturnValue('dark');
-      expect(() => render(<HomeScreen />)).not.toThrow();
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
     });
   });
 
   describe('Code Execution Verification', () => {
-    it('HomeScreen component renders successfully via React', () => {
-      const tree = render(<HomeScreen />);
+    it('HomeIdleScreen component renders successfully via React', () => {
+      const tree = render(<HomeIdleScreen />);
       expect(tree).toBeDefined();
     });
 
@@ -128,10 +128,10 @@ describe('Component Integration Tests', () => {
   });
 
   describe('React Component Validity', () => {
-    it('HomeScreen can be rendered multiple times via JSX', () => {
+    it('HomeIdleScreen can be rendered multiple times via JSX', () => {
       expect(() => {
-        render(<HomeScreen />);
-        render(<HomeScreen />);
+        render(<HomeIdleScreen />);
+        render(<HomeIdleScreen />);
       }).not.toThrow();
     });
 
@@ -144,19 +144,19 @@ describe('Component Integration Tests', () => {
 
     it('Both components can be rendered multiple times without error', () => {
       expect(() => {
-        render(<HomeScreen />);
+        render(<HomeIdleScreen />);
         render(<RootLayout />);
-        render(<HomeScreen />);
+        render(<HomeIdleScreen />);
         render(<RootLayout />);
       }).not.toThrow();
     });
   });
 
   describe('Error Handling', () => {
-    it('HomeScreen handles splash screen rejections gracefully', () => {
+    it('HomeIdleScreen handles splash screen rejections gracefully', () => {
       mockedHideAsync.mockRejectedValueOnce(new Error('Splash error'));
 
-      const tree = render(<HomeScreen />);
+      const tree = render(<HomeIdleScreen />);
       expect(tree).toBeDefined();
     });
 
@@ -164,15 +164,15 @@ describe('Component Integration Tests', () => {
       mockedUseColorScheme.mockReturnValue(undefined);
 
       expect(() => {
-        render(<HomeScreen />);
+        render(<HomeIdleScreen />);
         render(<RootLayout />);
       }).not.toThrow();
     });
   });
 
   describe('Lifecycle and State', () => {
-    it('HomeScreen component can mount and render', () => {
-      expect(() => render(<HomeScreen />)).not.toThrow();
+    it('HomeIdleScreen component can mount and render', () => {
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
     });
 
     it('RootLayout component can mount and render', () => {
@@ -181,10 +181,10 @@ describe('Component Integration Tests', () => {
 
     it('Components handle state changes through theme', () => {
       mockedUseColorScheme.mockReturnValue('light');
-      expect(() => render(<HomeScreen />)).not.toThrow();
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
 
       mockedUseColorScheme.mockReturnValue('dark');
-      expect(() => render(<HomeScreen />)).not.toThrow();
+      expect(() => render(<HomeIdleScreen />)).not.toThrow();
     });
   });
 
@@ -212,7 +212,7 @@ describe('Component Integration Tests', () => {
 
     it('All render operations work with current mocks', () => {
       expect(() => {
-        render(<HomeScreen />);
+        render(<HomeIdleScreen />);
         render(<RootLayout />);
       }).not.toThrow();
     });
