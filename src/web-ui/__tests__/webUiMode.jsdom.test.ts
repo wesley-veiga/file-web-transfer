@@ -9,8 +9,9 @@
  * Verifica que:
  * - Modo 'send': apenas painel de download é visível
  * - Modo 'receive': apenas painel de upload é visível
- * - Upload de múltiplos arquivos inicia automaticamente (já coberto por webUiUpload.jsdom.test.ts,
- *   mas confirmado aqui no contexto de renderização condicional)
+ * - Upload de múltiplos arquivos inicia automaticamente
+ * - loadSession() trata erros de rede e resposta inválida
+ * - renderConditionalView() garante que apenas uma view é visível por vez
  */
 
 import { WEB_UI_HTML } from '../webUiHtml';
@@ -154,6 +155,133 @@ function isDownloadPanelVisible(): boolean {
 
 describe('renderização condicional por modo (T-909)', () => {
 
+  describe('loadSession() - busca da sessão e renderização condicional', () => {
+    it('envia requisição para GET /api/session ao carregar', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      let sessionFetchCalled = false;
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          sessionFetchCalled = true;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              mode: 'send',
+              tokenValid: true,
+              appVersion: '1.0.0',
+              maxUploadBytes: 4294967296,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        expect(sessionFetchCalled).toBe(true);
+        done();
+      }, 50);
+    });
+
+    it('exibe "Sessão indisponível" quando a resposta não contém mode', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ tokenValid: true }), // sem mode
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const sessionValue = document.getElementById('session-value');
+        expect(sessionValue?.textContent).toContain('Sessão indisponível');
+        done();
+      }, 50);
+    });
+
+    it('exibe "Sessão indisponível" quando fetch falha (erro de rede)', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          return Promise.reject(new Error('Network error'));
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        }) as unknown as Promise<Response>;
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const sessionValue = document.getElementById('session-value');
+        expect(sessionValue?.textContent).toContain('Sessão indisponível');
+        done();
+      }, 50);
+    });
+
+    it('exibe "Sessão indisponível" quando response.ok é false', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          return Promise.resolve({
+            ok: false,
+            json: async () => ({}),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        }) as unknown as Promise<Response>;
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const sessionValue = document.getElementById('session-value');
+        expect(sessionValue?.textContent).toContain('Sessão indisponível');
+        done();
+      }, 50);
+    });
+  });
+
   describe('modo "send"', () => {
     beforeEach(() => {
       loadPageWithMode('send');
@@ -241,6 +369,105 @@ describe('renderização condicional por modo (T-909)', () => {
         // Garantia adicional: nenhum dos dois pode estar visível ao mesmo tempo
         expect(!(isDownloadPanelVisible() && isUploadPanelVisible())).toBe(true);
         done();
+      }, 50);
+    });
+
+    it('garante que exatamente um painel é visível em cada modo', (done) => {
+      loadPageWithMode('send');
+      setTimeout(() => {
+        const downloadVisible = isDownloadPanelVisible();
+        const uploadVisible = isUploadPanelVisible();
+        // Exatamente um dos dois deve estar visível (XOR lógico)
+        expect(downloadVisible !== uploadVisible).toBe(true);
+
+        // Teste similar para modo receive
+        loadPageWithMode('receive');
+        setTimeout(() => {
+          const dlVisible = isDownloadPanelVisible();
+          const ulVisible = isUploadPanelVisible();
+          expect(dlVisible !== ulVisible).toBe(true);
+          done();
+        }, 50);
+      }, 50);
+    });
+
+    it('verifica que renderConditionalView() usa classe CSS "hidden" corretamente', (done) => {
+      loadPageWithMode('send');
+      setTimeout(() => {
+        const uploadPanel = document.getElementById('tab-upload');
+        const downloadPanel = document.getElementById('tab-download');
+
+        // Em modo send: upload deve ter classe hidden, download não deve
+        expect(uploadPanel?.classList.contains('hidden')).toBe(true);
+        expect(downloadPanel?.classList.contains('hidden')).toBe(false);
+
+        // A classe hidden deve fazer display: none
+        const uploadStyle = window.getComputedStyle(uploadPanel!);
+        const downloadStyle = window.getComputedStyle(downloadPanel!);
+
+        expect(uploadStyle.display).toBe('none');
+        expect(downloadStyle.display).not.toBe('none');
+
+        done();
+      }, 50);
+    });
+  });
+
+  describe('upload múltiplo automático (sem clique extra)', () => {
+    it('inicia o envio automaticamente ao selecionar múltiplos arquivos', (done) => {
+      loadPageWithMode('receive');
+      setTimeout(() => {
+        const fileInput = document.getElementById('file-input') as HTMLInputElement;
+        const files = [
+          makeFile('arquivo1.txt', 100),
+          makeFile('arquivo2.txt', 200),
+          makeFile('arquivo3.txt', 300),
+        ];
+        setInputFiles(fileInput, files);
+
+        // Simular mudança no input (como se o usuário tivesse selecionado os arquivos)
+        fireEvent(fileInput, 'change');
+
+        // Depois de um curto tempo, os itens devem estar na fila e o upload iniciado
+        setTimeout(() => {
+          // Verificar que pelo menos um XHR foi criado (indicando que processUploadQueue foi chamado)
+          expect(FakeXhr.instances.length).toBeGreaterThan(0);
+
+          // Verificar que os itens estão sendo renderizados
+          const uploadItems = Array.from(document.querySelectorAll('#upload-list li'));
+          expect(uploadItems.length).toBeGreaterThanOrEqual(3);
+
+          done();
+        }, 100);
+      }, 50);
+    });
+
+    it('não requer botão de confirmação para iniciar upload de múltiplos arquivos', (done) => {
+      loadPageWithMode('receive');
+      setTimeout(() => {
+        const fileInput = document.getElementById('file-input') as HTMLInputElement;
+        const files = [
+          makeFile('doc1.pdf', 5000),
+          makeFile('doc2.pdf', 6000),
+        ];
+        setInputFiles(fileInput, files);
+
+        // Não há botão de confirmação no HTML para modo upload
+        const confirmButton = Array.from(document.querySelectorAll('button')).find(
+          (btn) => btn.textContent?.toLowerCase().includes('confirmar') ||
+                   btn.textContent?.toLowerCase().includes('enviar')
+        );
+        // Não deve haver botão específico de envio (apenas retry para erros)
+        expect(!confirmButton || confirmButton.classList.contains('retry-btn')).toBe(true);
+
+        // Disparar change event no input
+        fireEvent(fileInput, 'change');
+
+        setTimeout(() => {
+          // Verificar que XHR foi criado (upload iniciado sem clique extra)
+          expect(FakeXhr.instances.length).toBeGreaterThan(0);
+          done();
+        }, 50);
       }, 50);
     });
   });
