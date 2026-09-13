@@ -3,9 +3,11 @@
  *
  * T-001 · Bootstrap do projeto Expo
  * Testa estrutura e configuração do layout raiz
+ *
+ * T-904 · Detecção de share intent e roteamento
+ * Testa detecção de abertura via compartilhamento do SO
  */
 
-import React from 'react';
 import { useColorScheme } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import RootLayout from '../_layout';
@@ -386,9 +388,119 @@ describe('RootLayout (_layout.tsx)', () => {
       const closeBraces = (fileContent.match(/\}/g) || []).length;
       expect(openBraces).toEqual(closeBraces);
 
-      const openTags = (fileContent.match(/</g) || []).length;
-      const closeTags = (fileContent.match(/>/g) || []).length;
+      // Count JSX tags, excluding arrow functions (=>) to avoid false positives
+      const contentWithoutArrows = fileContent.replace(/=>/g, '');
+      const openTags = (contentWithoutArrows.match(/</g) || []).length;
+      const closeTags = (contentWithoutArrows.match(/>/g) || []).length;
       expect(openTags).toEqual(closeTags);
+    });
+  });
+
+  describe('Share Intent Detection and Routing (T-904)', () => {
+    it('imports createShareIntentService for detecting share intent', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('createShareIntentService');
+    });
+
+    it('imports createFileRepository', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('createFileRepository');
+    });
+
+    it('uses useRouter hook to navigate', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('useRouter');
+      expect(fileContent).toContain("from 'expo-router'");
+    });
+
+    it('checks share intent on component mount', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('checkShareIntent');
+      expect(fileContent).toContain('useEffect');
+    });
+
+    it('routes to /send if share intent has successful items', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain("router.replace('/send')");
+      expect(fileContent).toContain('hasSuccessfulItems');
+    });
+
+    it('handles share intent processing errors gracefully', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('catch');
+      expect(fileContent).toContain('console.error');
+    });
+
+    it('sets shareIntentProcessed state flag', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('setShareIntentProcessed');
+      expect(fileContent).toContain('shareIntentProcessed');
+    });
+  });
+
+  describe('Code quality and structure', () => {
+    it('does not use any TypeScript "any" type', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      // Check for explicit "any" type annotation (excluding comments and strings)
+      const lines = fileContent.split('\n');
+      let hasAnyType = false;
+      for (const line of lines) {
+        if (line.includes(': any') && !line.trim().startsWith('//')) {
+          hasAnyType = true;
+          break;
+        }
+      }
+      expect(hasAnyType).toBe(false);
+    });
+
+    it('initializes HTTP server at module load time', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('initServer()');
+    });
+
+    it('synchronizes token from server store with API', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('setCurrentToken');
+      expect(fileContent).toContain('token');
+    });
+
+    it('synchronizes mode from server store with API', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('setCurrentMode');
+      expect(fileContent).toContain('mode');
     });
   });
 });

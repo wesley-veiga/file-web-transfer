@@ -17,6 +17,12 @@ jest.mock('expo-status-bar', () => ({
   StatusBar: (props: any) => React.createElement('StatusBar', props),
 }));
 
+// Mock expo-keep-awake for keep-screen-awake during transfers (T-904)
+jest.mock('expo-keep-awake', () => ({
+  activateKeepAwake: jest.fn(),
+  deactivateKeepAwake: jest.fn(),
+}));
+
 // Mock react-native-qrcode-svg for unit tests
 jest.mock(
   'react-native-qrcode-svg',
@@ -54,7 +60,7 @@ jest.mock('expo-crypto', () => {
   };
 });
 
-// Mock expo-router for Stack and ThemeProvider
+// Mock expo-router for Stack, ThemeProvider, and useRouter (T-904)
 jest.mock('expo-router', () => ({
   Stack: (props: any) => {
     return React.createElement('Stack', { screenOptions: props.screenOptions }, props.children);
@@ -64,6 +70,12 @@ jest.mock('expo-router', () => ({
   },
   DarkTheme: { isDark: true },
   DefaultTheme: { isDark: false },
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+    navigate: jest.fn(),
+  }),
 }));
 
 // Setup react-native with proper component mocks
