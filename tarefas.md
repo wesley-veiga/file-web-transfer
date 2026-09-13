@@ -284,7 +284,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Ao acessar a página sem `?token=` na URL, ou com `tokenValid: false`, a página exibe uma caixa de texto pedindo o token em vez do conteúdo de download/upload; ao confirmar um token válido, passa a exibir a view apropriada ao modo (T-909) sem precisar recarregar a página com a querystring correta. Token inválido exibe mensagem de erro e permite nova tentativa.
   *Pronto quando:* critérios de aceite da HU-15 atendidos; teste cobre acesso sem token, com token inválido e com token válido digitado manualmente.
 
-- [ ] **T-911 · Reancorar configuração de pasta de recebidos na nova navegação** ⬅ T-802, T-906 **[P]**
+- [x] **T-911 · Reancorar configuração de pasta de recebidos na nova navegação** ⬅ T-802, T-906 **[P]**
   A funcionalidade da T-802 (escolher pasta externa para arquivos recebidos via SAF) continua válida, mas seu ponto de entrada na UI dependia da antiga Home/Servidor (T-204), descontinuada por esta revisão. Adicionar um acesso discreto (ex.: ícone de configurações na Home idle, T-905, ou na tela Receber, T-906) que não contradiga o layout mínimo exigido para a Home (título + texto de apoio + botão "Receber arquivo").
   *Pronto quando:* configuração de pasta de recebidos continua acessível e funcional, sem regressão em relação à T-802; layout da Home idle continua atendendo aos critérios da T-905/HU-10.
 
