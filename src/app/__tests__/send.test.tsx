@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, cleanup } from '@testing-library/react-native';
+import { render, screen, waitFor, cleanup, act } from '@testing-library/react-native';
 import SendScreen from '../send';
 import { useServer } from '@/features/server/hooks/useServer';
 import { useServerStore } from '@/features/server/store/serverStore';
@@ -8,10 +8,7 @@ import type { HttpModule } from '@/features/server/services/httpModule';
 
 // Mock dependencies - only mock hooks and native modules, NOT the stores
 jest.mock('@/features/server/hooks/useServer');
-jest.mock('expo-keep-awake', () => ({
-  activateKeepAwake: jest.fn(),
-  deactivateKeepAwake: jest.fn(),
-}));
+// expo-keep-awake is mocked in jest.setup.ts
 
 const mockHttpModule: HttpModule = {
   start: jest.fn().mockResolvedValue(undefined),
@@ -290,6 +287,69 @@ describe('SendScreen (T-904)', () => {
       await waitFor(() => {
         expect(mockDeactivateKeepAwake).toHaveBeenCalled();
       });
+    });
+
+    it('desativa keep-awake ao desmontar componente com transferência ainda ativa (CRÍTICO - nunca travado ligado)', async () => {
+      mockActivateKeepAwake.mockClear();
+      mockDeactivateKeepAwake.mockClear();
+
+      // Set up the server store with running state
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      // Add an ACTIVE transfer that will still be active when we unmount
+      useTransferStore.setState((state) => ({
+        transfers: [
+          {
+            id: 'transfer-1',
+            direction: 'download',
+            fileName: 'large-file.iso',
+            sizeBytes: 1024 * 1024 * 500, // 500 MB
+            transferredBytes: 1024 * 1024 * 100, // 100 MB transferred
+            status: 'active', // Still active - will unmount without completing
+            peerIp: '192.168.1.101',
+            startedAt: Date.now(),
+            finishedAt: null, // Not finished
+            speedBps: 1024 * 1024 * 5, // 5 MB/s
+            errorMessage: null,
+          },
+        ],
+      }));
+
+      // Render the component
+      const { unmount } = await render(<SendScreen httpModule={mockHttpModule} />);
+
+      // Verify that keep-awake was activated during render
+      await waitFor(() => {
+        expect(mockActivateKeepAwake).toHaveBeenCalled();
+      });
+
+      // Count deactivateKeepAwake calls BEFORE unmount
+      const callsBeforeUnmount = mockDeactivateKeepAwake.mock.calls.length;
+
+      // Unmount the component while transfer is STILL ACTIVE
+      // This tests the cleanup effect: useEffect(() => { return () => { deactivateKeepAwake(); } }, [])
+      // Must wrap unmount in act() to ensure cleanup effects run
+      await act(async () => {
+        unmount();
+      });
+
+      // The critical assertion: deactivateKeepAwake MUST be called on unmount
+      // even though the transfer is still active (not completed)
+      // This prevents keep-awake from being left in a "locked on" state forever
+      const callsAfterUnmount = mockDeactivateKeepAwake.mock.calls.length;
+      expect(callsAfterUnmount).toBeGreaterThan(callsBeforeUnmount);
     });
 
     it('mantém keep-awake ligado enquanto há transferências active ou queued', async () => {
