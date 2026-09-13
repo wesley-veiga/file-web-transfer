@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { Screen, Button, Card } from '@/shared/components';
 import { useServer } from '@/features/server/hooks/useServer';
 import { useServerStore } from '@/features/server/store/serverStore';
 import { useTransferStore } from '@/features/transfer/store/transferStore';
 import { useReceivedFiles } from '@/features/files/hooks/useReceivedFiles';
+import { ReceivedFolderConfigurationSection } from '@/features/files/components/ReceivedFolderConfigurationSection';
 import { formatBytes } from '@/shared/lib';
 import type { HttpModule } from '@/features/server/services/httpModule';
 import type { Transfer } from '@/features/transfer/types';
@@ -37,6 +38,7 @@ export default function ReceiveScreen({ httpModule }: ReceiveScreenProps) {
   const serverInfo = useServerStore((state) => state.serverInfo);
   const transfers = useTransferStore((state) => state.transfers);
   const { openFile, shareFile } = useReceivedFiles();
+  const [showConfiguration, setShowConfiguration] = useState(false);
 
   // Determinar o estado atual da tela
   const activeTransfers = useMemo(
@@ -108,15 +110,38 @@ export default function ReceiveScreen({ httpModule }: ReceiveScreenProps) {
         contentContainerClassName="pb-8"
       >
         <View className="flex-1 py-8">
-          {/* Header */}
-          <View className="mb-8">
-            <Text className="text-3xl font-bold text-text-light dark:text-text-dark mb-2">
-              Receber arquivo
-            </Text>
-            <Text className="text-base text-text-secondary-light dark:text-text-secondary-dark">
-              Compartilhe o QR Code ou o código de acesso
-            </Text>
+          {/* Header com botão de configurações — T-911 */}
+          <View className="mb-8 flex-row items-start justify-between">
+            <View className="flex-1">
+              <Text className="text-3xl font-bold text-text-light dark:text-text-dark mb-2">
+                Receber arquivo
+              </Text>
+              <Text className="text-base text-text-secondary-light dark:text-text-secondary-dark">
+                Compartilhe o QR Code ou o código de acesso
+              </Text>
+            </View>
+            {/* Botão de configurações discreto — T-911 */}
+            <TouchableOpacity
+              onPress={() => setShowConfiguration(!showConfiguration)}
+              testID="config-button"
+              className="ml-2"
+            >
+              <Text className="text-2xl text-text-light dark:text-text-dark">
+                ⚙
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          {/* Seção de configuração da pasta de recebidos — T-911 */}
+          {showConfiguration && (
+            <View className="mb-8">
+              <ReceivedFolderConfigurationSection
+                onConfigured={() => {
+                  setShowConfiguration(false);
+                }}
+              />
+            </View>
+          )}
 
           {/* Estado: Iniciando */}
           {serverInfo.status === 'starting' && (
