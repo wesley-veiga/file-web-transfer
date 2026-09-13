@@ -17,6 +17,12 @@ jest.mock('expo-status-bar', () => ({
   StatusBar: (props: any) => React.createElement('StatusBar', props),
 }));
 
+// Mock expo-keep-awake for keep-screen-awake during transfers (T-904)
+jest.mock('expo-keep-awake', () => ({
+  activateKeepAwake: jest.fn(),
+  deactivateKeepAwake: jest.fn(),
+}));
+
 // Mock react-native-qrcode-svg for unit tests
 jest.mock(
   'react-native-qrcode-svg',
