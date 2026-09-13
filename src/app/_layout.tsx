@@ -79,11 +79,17 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-        }}
-      />
+      {/* Aguarda verificação de share intent antes de renderizar a navegação.
+          Evita flash visual da Home idle se app foi aberto via compartilhamento do SO
+          (T-904: share intent será detectado e redirecionará para /send antes que o
+          Stack seja renderizado, prevenindo exibição breve da Home). */}
+      {shareIntentProcessed && (
+        <Stack
+          screenOptions={{
+            headerShown: false,
+          }}
+        />
+      )}
     </ThemeProvider>
   );
 }
