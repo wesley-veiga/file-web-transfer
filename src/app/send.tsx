@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { View, Text, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { activateKeepAwake, deactivateKeepAwake } from 'expo-keep-awake';
 import { Screen, Button, Card } from '@/shared/components';
@@ -34,7 +35,8 @@ interface SendScreenProps {
  * - transferindo: mostrando progresso de download(s) ativa(s)
  */
 export default function SendScreen({ httpModule }: SendScreenProps) {
-  const { start } = useServer(httpModule);
+  const { start, stop } = useServer(httpModule);
+  const router = useRouter();
   const serverInfo = useServerStore((state) => state.serverInfo);
   const transfers = useTransferStore((state) => state.transfers);
 
@@ -116,6 +118,74 @@ export default function SendScreen({ httpModule }: SendScreenProps) {
     }
   };
 
+  /**
+   * T-907 — Encerrar sessão ativa (Enviar/Receber → Home)
+   *
+   * Se houver transferência em andamento, pede confirmação antes de encerrar.
+   * Ao encerrar: para o servidor, volta para Home idle.
+   */
+  const handleEndSessionPress = () => {
+    if (activeTransfers.length > 0) {
+      // Com transferência ativa, pede confirmação
+      Alert.alert(
+        'Encerrar sessão?',
+        'Há transferências em andamento. Tem certeza que deseja encerrar a sessão?',
+        [
+          {
+            text: 'Cancelar',
+            onPress: () => {
+              // Usuário mudou de ideia, não faz nada
+            },
+            style: 'cancel',
+          },
+          {
+            text: 'Encerrar',
+            onPress: async () => {
+              try {
+                await stop();
+                // Navegar de volta para Home idle após parar o servidor
+                router.replace('/');
+              } catch (error) {
+                console.error('[SendScreen] Erro ao encerrar sessão:', error);
+                Alert.alert('Erro', 'Não foi possível encerrar a sessão.');
+              }
+            },
+            style: 'destructive',
+          },
+        ],
+      );
+    } else {
+      // Sem transferência ativa, encerra direto
+      Alert.alert(
+        'Encerrar sessão?',
+        'Você será levado de volta à tela inicial.',
+        [
+          {
+            text: 'Cancelar',
+            onPress: () => {
+              // Usuário mudou de ideia, não faz nada
+            },
+            style: 'cancel',
+          },
+          {
+            text: 'Encerrar',
+            onPress: async () => {
+              try {
+                await stop();
+                // Navegar de volta para Home idle após parar o servidor
+                router.replace('/');
+              } catch (error) {
+                console.error('[SendScreen] Erro ao encerrar sessão:', error);
+                Alert.alert('Erro', 'Não foi possível encerrar a sessão.');
+              }
+            },
+            style: 'destructive',
+          },
+        ],
+      );
+    }
+  };
+
   return (
     <Screen className="flex-1 px-4">
       <ScrollView
@@ -159,14 +229,25 @@ export default function SendScreen({ httpModule }: SendScreenProps) {
           {/* Estado: Running */}
           {serverInfo.status === 'running' && serverInfo.url && serverInfo.token && (
             <View>
-              {/* Header com token como título */}
-              <View className="mb-8">
-                <Text className="text-3xl font-bold text-text-light dark:text-text-dark mb-2">
-                  {serverInfo.token}
-                </Text>
-                <Text className="text-base text-text-secondary-light dark:text-text-secondary-dark">
-                  Compartilhe o QR Code ou o código para enviar
-                </Text>
+              {/* Header com token como título e botão de encerrar sessão */}
+              <View className="mb-8 flex-row items-start justify-between">
+                <View className="flex-1 pr-4">
+                  <Text className="text-3xl font-bold text-text-light dark:text-text-dark mb-2">
+                    {serverInfo.token}
+                  </Text>
+                  <Text className="text-base text-text-secondary-light dark:text-text-secondary-dark">
+                    Compartilhe o QR Code ou o código para enviar
+                  </Text>
+                </View>
+                {/* Botão de encerrar sessão — T-907 */}
+                <Button
+                  label="✕"
+                  variant="secondary"
+                  size="sm"
+                  onPress={handleEndSessionPress}
+                  testID="end-session-button"
+                  className="mt-0"
+                />
               </View>
 
               {/* QR Code */}

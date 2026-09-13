@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { Screen, Button, Card } from '@/shared/components';
 import { useServer } from '@/features/server/hooks/useServer';
@@ -34,7 +35,8 @@ interface ReceiveScreenProps {
  * - concluído: mostrando arquivo recebido com ação "Abrir/Compartilhar"
  */
 export default function ReceiveScreen({ httpModule }: ReceiveScreenProps) {
-  const { start } = useServer(httpModule);
+  const { start, stop } = useServer(httpModule);
+  const router = useRouter();
   const serverInfo = useServerStore((state) => state.serverInfo);
   const transfers = useTransferStore((state) => state.transfers);
   const { openFile, shareFile } = useReceivedFiles();
@@ -102,6 +104,74 @@ export default function ReceiveScreen({ httpModule }: ReceiveScreenProps) {
     });
   };
 
+  /**
+   * T-907 — Encerrar sessão ativa (Enviar/Receber → Home)
+   *
+   * Se houver transferência em andamento, pede confirmação antes de encerrar.
+   * Ao encerrar: para o servidor, volta para Home idle.
+   */
+  const handleEndSessionPress = () => {
+    if (activeTransfers.length > 0) {
+      // Com transferência ativa, pede confirmação
+      Alert.alert(
+        'Encerrar sessão?',
+        'Há transferências em andamento. Tem certeza que deseja encerrar a sessão?',
+        [
+          {
+            text: 'Cancelar',
+            onPress: () => {
+              // Usuário mudou de ideia, não faz nada
+            },
+            style: 'cancel',
+          },
+          {
+            text: 'Encerrar',
+            onPress: async () => {
+              try {
+                await stop();
+                // Navegar de volta para Home idle após parar o servidor
+                router.replace('/');
+              } catch (error) {
+                console.error('[ReceiveScreen] Erro ao encerrar sessão:', error);
+                Alert.alert('Erro', 'Não foi possível encerrar a sessão.');
+              }
+            },
+            style: 'destructive',
+          },
+        ],
+      );
+    } else {
+      // Sem transferência ativa, encerra direto
+      Alert.alert(
+        'Encerrar sessão?',
+        'Você será levado de volta à tela inicial.',
+        [
+          {
+            text: 'Cancelar',
+            onPress: () => {
+              // Usuário mudou de ideia, não faz nada
+            },
+            style: 'cancel',
+          },
+          {
+            text: 'Encerrar',
+            onPress: async () => {
+              try {
+                await stop();
+                // Navegar de volta para Home idle após parar o servidor
+                router.replace('/');
+              } catch (error) {
+                console.error('[ReceiveScreen] Erro ao encerrar sessão:', error);
+                Alert.alert('Erro', 'Não foi possível encerrar a sessão.');
+              }
+            },
+            style: 'destructive',
+          },
+        ],
+      );
+    }
+  };
+
   return (
     <Screen className="flex-1 px-4">
       <ScrollView
@@ -110,7 +180,7 @@ export default function ReceiveScreen({ httpModule }: ReceiveScreenProps) {
         contentContainerClassName="pb-8"
       >
         <View className="flex-1 py-8">
-          {/* Header com botão de configurações — T-911 */}
+          {/* Header com botões de configurações e encerrar — T-911, T-907 */}
           <View className="mb-8 flex-row items-start justify-between">
             <View className="flex-1">
               <Text className="text-3xl font-bold text-text-light dark:text-text-dark mb-2">
@@ -120,16 +190,29 @@ export default function ReceiveScreen({ httpModule }: ReceiveScreenProps) {
                 Compartilhe o QR Code ou o código de acesso
               </Text>
             </View>
-            {/* Botão de configurações discreto — T-911 */}
-            <TouchableOpacity
-              onPress={() => setShowConfiguration(!showConfiguration)}
-              testID="config-button"
-              className="ml-2"
-            >
-              <Text className="text-2xl text-text-light dark:text-text-dark">
-                ⚙
-              </Text>
-            </TouchableOpacity>
+            {/* Botões de ação (config e encerrar) — T-911, T-907 */}
+            <View className="flex-row gap-2 ml-2">
+              <TouchableOpacity
+                onPress={() => setShowConfiguration(!showConfiguration)}
+                testID="config-button"
+                className="px-2"
+              >
+                <Text className="text-2xl text-text-light dark:text-text-dark">
+                  ⚙
+                </Text>
+              </TouchableOpacity>
+              {serverInfo.status === 'running' && (
+                <TouchableOpacity
+                  onPress={handleEndSessionPress}
+                  testID="end-session-button"
+                  className="px-2"
+                >
+                  <Text className="text-2xl text-text-light dark:text-text-dark">
+                    ✕
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
           {/* Seção de configuração da pasta de recebidos — T-911 */}
