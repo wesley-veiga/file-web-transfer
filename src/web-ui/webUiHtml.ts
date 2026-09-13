@@ -115,30 +115,6 @@ export const WEB_UI_HTML = `<!doctype html>
     display: none;
   }
 
-  nav.tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-  }
-
-  nav.tabs button {
-    flex: 1;
-    padding: 0.65rem 0.5rem;
-    font-size: 0.95rem;
-    font-family: inherit;
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    background: var(--card-bg);
-    color: var(--fg);
-    cursor: pointer;
-  }
-
-  nav.tabs button.active {
-    background: var(--accent);
-    color: #ffffff;
-    border-color: var(--accent);
-  }
-
   section.tab-panel {
     background: var(--card-bg);
     border: 1px solid var(--border);
@@ -329,11 +305,6 @@ export const WEB_UI_HTML = `<!doctype html>
     </div>
   </header>
 
-  <nav class="tabs">
-    <button type="button" id="tab-upload-btn" class="active">Enviar arquivos</button>
-    <button type="button" id="tab-download-btn">Baixar arquivos</button>
-  </nav>
-
   <section id="tab-upload" class="tab-panel">
     <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Selecionar arquivos para enviar">
       <p>Toque para escolher arquivos ou arraste aqui</p>
@@ -353,34 +324,32 @@ export const WEB_UI_HTML = `<!doctype html>
 (function () {
   "use strict";
 
-  function setupTabs() {
-    var uploadBtn = document.getElementById("tab-upload-btn");
-    var downloadBtn = document.getElementById("tab-download-btn");
+  function getTokenFromUrl() {
+    var match = window.location.search.match(/[?&]token=([^&]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  function renderConditionalView(mode) {
     var uploadPanel = document.getElementById("tab-upload");
     var downloadPanel = document.getElementById("tab-download");
 
-    function showUpload() {
-      uploadBtn.classList.add("active");
-      downloadBtn.classList.remove("active");
+    if (mode === "send") {
+      // Modo send: mostrar SÓ download (lista de arquivos para receber)
+      uploadPanel.classList.add("hidden");
+      downloadPanel.classList.remove("hidden");
+    } else if (mode === "receive") {
+      // Modo receive: mostrar SÓ upload (área para enviar arquivos)
       uploadPanel.classList.remove("hidden");
       downloadPanel.classList.add("hidden");
     }
-
-    function showDownload() {
-      downloadBtn.classList.add("active");
-      uploadBtn.classList.remove("active");
-      downloadPanel.classList.remove("hidden");
-      uploadPanel.classList.add("hidden");
-    }
-
-    uploadBtn.addEventListener("click", showUpload);
-    downloadBtn.addEventListener("click", showDownload);
   }
 
   function loadSession() {
     var sessionValue = document.getElementById("session-value");
+    var token = getTokenFromUrl();
+    var sessionUrl = "/api/session" + (token ? "?token=" + encodeURIComponent(token) : "");
 
-    fetch("/api/session")
+    fetch(sessionUrl)
       .then(function (response) {
         if (!response.ok) {
           throw new Error("status " + response.status);
@@ -389,7 +358,9 @@ export const WEB_UI_HTML = `<!doctype html>
       })
       .then(function (data) {
         if (data && typeof data.mode === "string") {
-          sessionValue.textContent = "Modo: " + (data.mode === "send" ? "Enviar" : "Receber");
+          var modeLabel = data.mode === "send" ? "Enviar" : "Receber";
+          sessionValue.textContent = "Modo: " + modeLabel;
+          renderConditionalView(data.mode);
         } else {
           sessionValue.textContent = "Sessão indisponível";
         }
@@ -757,7 +728,6 @@ export const WEB_UI_HTML = `<!doctype html>
     setInterval(pollEvents, 3000);
   }
 
-  setupTabs();
   loadSession();
   setupUpload();
   setupPolling();
