@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, cleanup, act } from '@testing-library/react-native';
+import { useRouter } from 'expo-router';
 import SendScreen from '../send';
 import { useServer } from '@/features/server/hooks/useServer';
 import { useServerStore } from '@/features/server/store/serverStore';
@@ -8,6 +9,9 @@ import type { HttpModule } from '@/features/server/services/httpModule';
 
 // Mock dependencies - only mock hooks and native modules, NOT the stores
 jest.mock('@/features/server/hooks/useServer');
+jest.mock('expo-router', () => ({
+  useRouter: jest.fn(),
+}));
 // expo-keep-awake is mocked in jest.setup.ts
 
 const mockHttpModule: HttpModule = {
@@ -22,13 +26,16 @@ const mockHttpModule: HttpModule = {
 
 const mockUseServer = useServer as jest.MockedFunction<typeof useServer>;
 
-// Import mocked module after mock setup
+// Import mocked modules after mock setup
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const KeepAwake = require('expo-keep-awake');
 const mockActivateKeepAwake = KeepAwake.activateKeepAwake as jest.Mock;
 const mockDeactivateKeepAwake = KeepAwake.deactivateKeepAwake as jest.Mock;
 
 describe('SendScreen (T-904)', () => {
   let mockStartFn: jest.Mock;
+  let mockStopFn: jest.Mock;
+  let mockRouterReplace: jest.Mock;
 
   beforeEach(() => {
     cleanup();
@@ -39,10 +46,23 @@ describe('SendScreen (T-904)', () => {
     useTransferStore.getState().reset();
 
     mockStartFn = jest.fn().mockResolvedValue(undefined);
+    mockStopFn = jest.fn().mockResolvedValue(undefined);
+    mockRouterReplace = jest.fn();
+
     mockUseServer.mockReturnValue({
       start: mockStartFn,
-      stop: jest.fn().mockResolvedValue(undefined),
+      stop: mockStopFn,
       reset: jest.fn(),
+    });
+
+    (useRouter as jest.Mock).mockReturnValue({
+      replace: mockRouterReplace,
+      push: jest.fn(),
+      back: jest.fn(),
+      canGoBack: jest.fn().mockReturnValue(true),
+      setParams: jest.fn(),
+      dismissAll: jest.fn(),
+      dismiss: jest.fn(),
     });
   });
 
@@ -607,6 +627,43 @@ describe('SendScreen (T-904)', () => {
       await render(<SendScreen httpModule={mockHttpModule} />);
 
       expect(screen.getByText('açúcar-17')).toBeTruthy();
+    });
+  });
+
+  describe('T-907 — Encerrar sessão ativa', () => {
+    it('exibe botão de encerrar sessão quando servidor está rodando', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      expect(endSessionButton).toBeTruthy();
+    });
+
+    it('não exibe botão de encerrar sessão quando servidor não está rodando', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'idle',
+        },
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.queryByTestId('end-session-button');
+      expect(endSessionButton).toBeNull();
     });
   });
 

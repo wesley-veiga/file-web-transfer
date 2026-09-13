@@ -6,8 +6,9 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react-native';
 import { Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import ReceiveScreen from '../receive';
 import { useServerStore } from '@/features/server/store/serverStore';
 import { useTransferStore } from '@/features/transfer/store/transferStore';
@@ -17,6 +18,9 @@ import type { HttpModule } from '@/features/server/services/httpModule';
 jest.mock('@/features/server/hooks/useServer');
 jest.mock('@/features/server/hooks/useNetworkStatus');
 jest.mock('@/features/files/hooks/useReceivedFiles');
+jest.mock('expo-router', () => ({
+  useRouter: jest.fn(),
+}));
 jest.mock('@/features/files/components/ReceivedFolderConfigurationSection', () => ({
   ReceivedFolderConfigurationSection: ({ onConfigured }: { onConfigured?: () => void }) => {
     const React = require('react');
@@ -51,8 +55,10 @@ const mockHttpModule: HttpModule = {
 
 describe('ReceiveScreen (T-906)', () => {
   let mockStartFn: jest.Mock;
+  let mockStopFn: jest.Mock;
   let mockOpenFileFn: jest.Mock;
   let mockShareFileFn: jest.Mock;
+  let mockRouterReplace: jest.Mock;
 
   beforeEach(() => {
     cleanup();
@@ -62,10 +68,11 @@ describe('ReceiveScreen (T-906)', () => {
     useTransferStore.getState().reset();
 
     mockStartFn = jest.fn().mockResolvedValue(undefined);
+    mockStopFn = jest.fn().mockResolvedValue(undefined);
     const mockUseServer = useServer as jest.MockedFunction<typeof useServer>;
     mockUseServer.mockReturnValue({
       start: mockStartFn,
-      stop: jest.fn().mockResolvedValue(undefined),
+      stop: mockStopFn,
       reset: jest.fn(),
     });
 
@@ -84,6 +91,17 @@ describe('ReceiveScreen (T-906)', () => {
       removeFile: jest.fn().mockResolvedValue(undefined),
       loadReceivedFiles: jest.fn().mockResolvedValue(undefined),
       files: [],
+    });
+
+    mockRouterReplace = jest.fn();
+    (useRouter as jest.Mock).mockReturnValue({
+      replace: mockRouterReplace,
+      push: jest.fn(),
+      back: jest.fn(),
+      canGoBack: jest.fn().mockReturnValue(true),
+      setParams: jest.fn(),
+      dismissAll: jest.fn(),
+      dismiss: jest.fn(),
     });
   });
 
@@ -1171,6 +1189,43 @@ describe('ReceiveScreen (T-906)', () => {
       await waitFor(() => {
         expect(screen.queryByTestId('mock-config-section')).toBeNull();
       });
+    });
+  });
+
+  describe('T-907 — Encerrar sessão ativa', () => {
+    it('exibe botão de encerrar sessão quando servidor está rodando', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'receive',
+          startedAt: Date.now(),
+        },
+      }));
+
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.getByTestId('end-session-button');
+      expect(endSessionButton).toBeTruthy();
+    });
+
+    it('não exibe botão de encerrar sessão quando servidor não está rodando', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'idle',
+        },
+      }));
+
+      await render(<ReceiveScreen httpModule={mockHttpModule} />);
+
+      const endSessionButton = screen.queryByTestId('end-session-button');
+      expect(endSessionButton).toBeNull();
     });
   });
 });
