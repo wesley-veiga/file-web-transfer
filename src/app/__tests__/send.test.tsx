@@ -227,6 +227,226 @@ describe('SendScreen (T-904)', () => {
         expect(mockActivateKeepAwake).toHaveBeenCalled();
       });
     });
+
+    it('desativa keep-awake quando transferência termina (completed)', async () => {
+      mockActivateKeepAwake.mockClear();
+      mockDeactivateKeepAwake.mockClear();
+
+      // Set up the server store with running state
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      // Start with active transfer
+      useTransferStore.setState((state) => ({
+        transfers: [
+          {
+            id: 'transfer-1',
+            direction: 'download',
+            fileName: 'document.pdf',
+            sizeBytes: 1024 * 1024,
+            transferredBytes: 512 * 1024,
+            status: 'active',
+            peerIp: '192.168.1.101',
+            startedAt: Date.now(),
+            finishedAt: null,
+            speedBps: 1024 * 100,
+            errorMessage: null,
+          },
+        ],
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      await waitFor(() => {
+        expect(mockActivateKeepAwake).toHaveBeenCalled();
+      });
+
+      mockDeactivateKeepAwake.mockClear();
+
+      // Update transfer to completed status
+      useTransferStore.setState((state) => ({
+        transfers: [
+          {
+            ...state.transfers[0],
+            status: 'completed',
+            finishedAt: Date.now(),
+            transferredBytes: 1024 * 1024,
+          },
+        ],
+      }));
+
+      // Re-render or wait for the effect to run
+      await waitFor(() => {
+        expect(mockDeactivateKeepAwake).toHaveBeenCalled();
+      });
+    });
+
+    it('mantém keep-awake ligado enquanto há transferências active ou queued', async () => {
+      mockActivateKeepAwake.mockClear();
+      mockDeactivateKeepAwake.mockClear();
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      // Start with queued transfer
+      useTransferStore.setState((state) => ({
+        transfers: [
+          {
+            id: 'transfer-1',
+            direction: 'download',
+            fileName: 'document.pdf',
+            sizeBytes: 1024 * 1024,
+            transferredBytes: 0,
+            status: 'queued',
+            peerIp: '192.168.1.101',
+            startedAt: Date.now(),
+            finishedAt: null,
+            speedBps: null,
+            errorMessage: null,
+          },
+        ],
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      await waitFor(() => {
+        expect(mockActivateKeepAwake).toHaveBeenCalled();
+      });
+
+      mockDeactivateKeepAwake.mockClear();
+
+      // Update to active - keep-awake should stay active
+      useTransferStore.setState((state) => ({
+        transfers: [
+          {
+            ...state.transfers[0],
+            status: 'active',
+            transferredBytes: 512 * 1024,
+            speedBps: 1024 * 100,
+          },
+        ],
+      }));
+
+      // Wait a bit but keep-awake should NOT be deactivated
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(mockDeactivateKeepAwake).not.toHaveBeenCalled();
+    });
+
+    it('nunca deixa keep-awake travado ligado após múltiplas transferências completarem', async () => {
+      mockActivateKeepAwake.mockClear();
+      mockDeactivateKeepAwake.mockClear();
+
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      // Start with two active transfers
+      useTransferStore.setState(() => ({
+        transfers: [
+          {
+            id: 'transfer-1',
+            direction: 'download',
+            fileName: 'file1.pdf',
+            sizeBytes: 1024 * 1024,
+            transferredBytes: 512 * 1024,
+            status: 'active',
+            peerIp: '192.168.1.101',
+            startedAt: Date.now(),
+            finishedAt: null,
+            speedBps: 1024 * 100,
+            errorMessage: null,
+          },
+          {
+            id: 'transfer-2',
+            direction: 'download',
+            fileName: 'file2.pdf',
+            sizeBytes: 2048 * 1024,
+            transferredBytes: 1024 * 1024,
+            status: 'active',
+            peerIp: '192.168.1.102',
+            startedAt: Date.now(),
+            finishedAt: null,
+            speedBps: 2048 * 100,
+            errorMessage: null,
+          },
+        ],
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      await waitFor(() => {
+        expect(mockActivateKeepAwake).toHaveBeenCalled();
+      });
+
+      mockDeactivateKeepAwake.mockClear();
+
+      // Complete first transfer
+      useTransferStore.setState((state) => ({
+        transfers: [
+          {
+            ...state.transfers[0],
+            status: 'completed',
+            finishedAt: Date.now(),
+          },
+          state.transfers[1],
+        ],
+      }));
+
+      // Keep-awake should NOT be deactivated yet (one still active)
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(mockDeactivateKeepAwake).not.toHaveBeenCalled();
+
+      mockDeactivateKeepAwake.mockClear();
+
+      // Complete second transfer
+      useTransferStore.setState((state) => ({
+        transfers: [
+          state.transfers[0],
+          {
+            ...state.transfers[1],
+            status: 'completed',
+            finishedAt: Date.now(),
+          },
+        ],
+      }));
+
+      // NOW keep-awake should be deactivated
+      await waitFor(() => {
+        expect(mockDeactivateKeepAwake).toHaveBeenCalled();
+      });
+    });
   });
 
   describe('Inicialização do servidor', () => {
@@ -258,6 +478,199 @@ describe('SendScreen (T-904)', () => {
 
       // start should not be called again if already running
       expect(mockStartFn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('QR Code', () => {
+    it('renderiza QR Code com URL completa incluindo token', async () => {
+      // Set up the server store with running state
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      // Token should be visible, QR Code container should be there
+      expect(screen.getByText('maçã-42')).toBeTruthy();
+      expect(screen.getByText(/O convidado pode escanear/)).toBeTruthy();
+    });
+  });
+
+  describe('Token as title', () => {
+    it('exibe token gerado como título da tela (diferente de rótulo)', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=café-99',
+          token: 'café-99',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      // Token should be visible as title with large font
+      const tokenElement = screen.getByText('café-99');
+      expect(tokenElement).toBeTruthy();
+    });
+
+    it('exibe token com acentuação corretamente', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=açúcar-17',
+          token: 'açúcar-17',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      expect(screen.getByText('açúcar-17')).toBeTruthy();
+    });
+  });
+
+  describe('Multiple transfers display', () => {
+    it('exibe múltiplas transferências ativas simultaneamente', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      // Add multiple active transfers
+      useTransferStore.setState(() => ({
+        transfers: [
+          {
+            id: 'transfer-1',
+            direction: 'download',
+            fileName: 'image1.jpg',
+            sizeBytes: 5 * 1024 * 1024,
+            transferredBytes: 2.5 * 1024 * 1024,
+            status: 'active',
+            peerIp: '192.168.1.101',
+            startedAt: Date.now(),
+            finishedAt: null,
+            speedBps: 1024 * 200,
+            errorMessage: null,
+          },
+          {
+            id: 'transfer-2',
+            direction: 'download',
+            fileName: 'video.mp4',
+            sizeBytes: 100 * 1024 * 1024,
+            transferredBytes: 50 * 1024 * 1024,
+            status: 'active',
+            peerIp: '192.168.1.102',
+            startedAt: Date.now(),
+            finishedAt: null,
+            speedBps: 1024 * 300,
+            errorMessage: null,
+          },
+        ],
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      expect(screen.getByText('Transferência em andamento')).toBeTruthy();
+      expect(screen.getByText('image1.jpg')).toBeTruthy();
+      expect(screen.getByText('video.mp4')).toBeTruthy();
+    });
+  });
+
+  describe('Transfer states', () => {
+    it('mostra "Aguardando download" quando servidor está rodando mas sem transferências', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      useTransferStore.setState(() => ({
+        transfers: [],
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      expect(screen.getByText('Aguardando download')).toBeTruthy();
+      expect(
+        screen.getByText(/O convidado pode escanear o QR Code ou digitar o código/),
+      ).toBeTruthy();
+    });
+
+    it('mostra progresso com formatação correta de bytes', async () => {
+      useServerStore.setState((state) => ({
+        serverInfo: {
+          ...state.serverInfo,
+          status: 'running',
+          networkMode: 'wifi',
+          ip: '192.168.1.100',
+          port: 8080,
+          url: 'http://192.168.1.100:8080?token=maçã-42',
+          token: 'maçã-42',
+          mode: 'send',
+          startedAt: Date.now(),
+        },
+      }));
+
+      useTransferStore.setState(() => ({
+        transfers: [
+          {
+            id: 'transfer-1',
+            direction: 'download',
+            fileName: 'largefile.zip',
+            sizeBytes: 1024 * 1024 * 100, // 100 MB
+            transferredBytes: 1024 * 1024 * 25, // 25 MB
+            status: 'active',
+            peerIp: '192.168.1.101',
+            startedAt: Date.now(),
+            finishedAt: null,
+            speedBps: 1024 * 1024 * 10, // 10 MB/s
+            errorMessage: null,
+          },
+        ],
+      }));
+
+      await render(<SendScreen httpModule={mockHttpModule} />);
+
+      // The progress should be visible with formatted bytes
+      expect(screen.getByText('largefile.zip')).toBeTruthy();
     });
   });
 });

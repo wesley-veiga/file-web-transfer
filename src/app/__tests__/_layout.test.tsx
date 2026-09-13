@@ -458,4 +458,49 @@ describe('RootLayout (_layout.tsx)', () => {
       expect(fileContent).toContain('shareIntentProcessed');
     });
   });
+
+  describe('Code quality and structure', () => {
+    it('does not use any TypeScript "any" type', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      // Check for explicit "any" type annotation (excluding comments and strings)
+      const lines = fileContent.split('\n');
+      let hasAnyType = false;
+      for (const line of lines) {
+        if (line.includes(': any') && !line.trim().startsWith('//')) {
+          hasAnyType = true;
+          break;
+        }
+      }
+      expect(hasAnyType).toBe(false);
+    });
+
+    it('initializes HTTP server at module load time', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('initServer()');
+    });
+
+    it('synchronizes token from server store with API', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('setCurrentToken');
+      expect(fileContent).toContain('token');
+    });
+
+    it('synchronizes mode from server store with API', () => {
+      const fileContent = require('fs').readFileSync(
+        require('path').join(__dirname, '../_layout.tsx'),
+        'utf-8',
+      );
+      expect(fileContent).toContain('setCurrentMode');
+      expect(fileContent).toContain('mode');
+    });
+  });
 });
