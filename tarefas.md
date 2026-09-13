@@ -268,7 +268,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   Ao tocar em "Receber arquivo" (T-905), inicia o servidor em modo `'receive'` (T-902) e exibe o QR Code (URL + `?token=<token>`) e também o **token como texto visível** (rótulo dedicado, diferente do uso do token como título na T-904). Mostra progresso de upload(s) em andamento (reaproveita T-601) e, ao concluir, ação inline "Abrir/Compartilhar" para o arquivo recebido, reaproveitando o comportamento da antiga aba Recebidos (T-303, descontinuada como aba).
   *Pronto quando:* critérios de aceite da HU-12 atendidos; testes de componente para os estados idle/iniciando/erro/recebendo/concluído.
 
-- [ ] **T-907 · Encerrar sessão ativa (Enviar/Receber → Home)** ⬅ T-904, T-906
+- [x] **T-907 · Encerrar sessão ativa (Enviar/Receber → Home)** ⬅ T-904, T-906
   Ação de encerrar sessão disponível nas telas de Enviar (T-904) e Receber (T-906), reaproveitando `ServerService.stop()`; pede confirmação se houver transferência em andamento (comportamento herdado da antiga HU-02). Ao encerrar: token invalidado, servidor parado, porta liberada, app volta à Home idle (T-905). Fechar o app de verdade continua parando o servidor (T-205/T-808, sem mudança).
   *Pronto quando:* critérios de aceite da HU-16 atendidos; testes cobrindo confirmação com/sem transferência ativa e retorno ao estado idle.
 
