@@ -488,6 +488,288 @@ describe('caixa de confirmação de token (T-910)', () => {
         }, 150);
       }, 50);
     });
+
+    it('rejeita resposta com tokenValid=true mas sem mode', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          if (url.includes('token=bad-mode')) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({
+                tokenValid: true,
+                // mode está ausente/undefined - resposta inconsistente
+              }),
+            }) as unknown as Promise<Response>;
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+        const errorMsg = document.getElementById('token-error-message');
+
+        tokenInput.value = 'bad-mode';
+        submitBtn.click();
+
+        setTimeout(() => {
+          expect(errorMsg?.classList.contains('visible')).toBe(true);
+          expect(errorMsg?.textContent).toContain('Token inválido');
+          const confirmBox = document.getElementById('token-confirmation-box');
+          expect(confirmBox?.classList.contains('hidden')).toBe(false);
+          done();
+        }, 150);
+      }, 50);
+    });
+
+    it('encoda corretamente token com acentos/caracteres especiais na URL', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      const specialToken = 'maçã-42';
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          if (url.includes('token=' + encodeURIComponent(specialToken))) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({
+                tokenValid: true,
+                mode: 'receive',
+                appVersion: '1.0.0',
+                maxUploadBytes: 4294967296,
+              }),
+            }) as unknown as Promise<Response>;
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+
+        tokenInput.value = specialToken;
+        submitBtn.click();
+
+        setTimeout(() => {
+          const expectedEncoded = encodeURIComponent(specialToken);
+          expect(window.location.search).toContain('token=' + expectedEncoded);
+          const confirmBox = document.getElementById('token-confirmation-box');
+          expect(confirmBox?.classList.contains('hidden')).toBe(true);
+          done();
+        }, 150);
+      }, 50);
+    });
+
+    it('desativa o botão durante requisição de validação e reativa após resposta', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      let fetchResolveFn: (() => void) | null = null;
+      const fetchPromise = new Promise<void>((resolve) => {
+        fetchResolveFn = resolve;
+      });
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          return fetchPromise.then(() => ({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+            }),
+          })) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+
+        tokenInput.value = 'test-token';
+        submitBtn.click();
+
+        expect(submitBtn.disabled).toBe(true);
+
+        if (fetchResolveFn) fetchResolveFn();
+
+        setTimeout(() => {
+          expect(submitBtn.disabled).toBe(false);
+          done();
+        }, 150);
+      }, 50);
+    });
+
+    it('não recarrega a página ao confirmar token válido, apenas atualiza DOM', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          if (url.includes('token=no-reload')) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({
+                tokenValid: true,
+                mode: 'send',
+                appVersion: '1.0.0',
+                maxUploadBytes: 4294967296,
+              }),
+            }) as unknown as Promise<Response>;
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+
+        const headBefore = document.head;
+        const bodyBefore = document.body;
+
+        tokenInput.value = 'no-reload';
+        submitBtn.click();
+
+        setTimeout(() => {
+          const headAfter = document.head;
+          const bodyAfter = document.body;
+          expect(headAfter === headBefore).toBe(true);
+          expect(bodyAfter === bodyBefore).toBe(true);
+
+          const confirmBox = document.getElementById('token-confirmation-box');
+          const downloadPanel = document.getElementById('tab-download');
+          expect(confirmBox?.classList.contains('hidden')).toBe(true);
+          expect(downloadPanel?.classList.contains('hidden')).toBe(false);
+
+          done();
+        }, 150);
+      }, 50);
+    });
+
+    it('rejeita token com apenas espaços em branco', (done) => {
+      FakeXhr.instances = [];
+      (window as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
+
+      let tokenSubmitFetchCount = 0;
+      window.fetch = jest.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/session')) {
+          if (url.includes('token=')) {
+            tokenSubmitFetchCount++;
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              tokenValid: false,
+              mode: null,
+            }),
+          }) as unknown as Promise<Response>;
+        }
+        if (url.startsWith('/api/events') || url.startsWith('/api/files')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => (url.startsWith('/api/events') ? { filesChangedAt: 0 } : { files: [] }),
+          }) as unknown as Promise<Response>;
+        }
+        return Promise.reject(new Error('Unexpected URL'));
+      });
+
+      document.open();
+      document.write(WEB_UI_HTML);
+      document.close();
+
+      setTimeout(() => {
+        const tokenInput = document.getElementById('token-input') as HTMLInputElement;
+        const submitBtn = document.getElementById('token-submit-btn') as HTMLButtonElement;
+        const errorMsg = document.getElementById('token-error-message');
+
+        // Reset count before our test
+        tokenSubmitFetchCount = 0;
+
+        tokenInput.value = '   \t   ';
+        submitBtn.click();
+
+        setTimeout(() => {
+          expect(errorMsg?.classList.contains('visible')).toBe(true);
+          expect(errorMsg?.textContent).toContain('vazio');
+          // Não deve fazer fetch com token quando rejeita localmente por espaços
+          expect(tokenSubmitFetchCount).toBe(0);
+
+          done();
+        }, 50);
+      }, 50);
+    });
   });
 
   describe('experiência de usuário da confirmação de token', () => {
