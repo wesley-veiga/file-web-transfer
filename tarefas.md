@@ -280,7 +280,7 @@ Uma tarefa só é marcada `[x]` quando os três passos passam.
   A página web deixa de assumir upload e download sempre disponíveis ao mesmo tempo: com um token na querystring, consulta `GET /api/session?token=...` e renderiza só a view correspondente ao `mode` ativo — lista de arquivo(s) para baixar (modo `send`, reaproveita T-503) ou área de upload (modo `receive`, reaproveita T-502). Upload passa a suportar seleção múltipla (decisão desta revisão), mantendo a fila sequencial já existente (T-502), com a transferência iniciando automaticamente ao selecionar o(s) arquivo(s), sem botão extra de confirmação.
   *Pronto quando:* critérios de aceite da HU-13/HU-14 (lado convidado) atendidos; teste garante que a view do modo errado nunca aparece; upload de múltiplos arquivos inicia sem clique adicional.
 
-- [ ] **T-910 · Web-ui: caixa de confirmação de token** ⬅ T-908, T-909
+- [x] **T-910 · Web-ui: caixa de confirmação de token** ⬅ T-908, T-909
   Ao acessar a página sem `?token=` na URL, ou com `tokenValid: false`, a página exibe uma caixa de texto pedindo o token em vez do conteúdo de download/upload; ao confirmar um token válido, passa a exibir a view apropriada ao modo (T-909) sem precisar recarregar a página com a querystring correta. Token inválido exibe mensagem de erro e permite nova tentativa.
   *Pronto quando:* critérios de aceite da HU-15 atendidos; teste cobre acesso sem token, com token inválido e com token válido digitado manualmente.
 
