@@ -40,7 +40,7 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [],
+            'intent-filter': [],
           },
         },
       };
@@ -48,9 +48,9 @@ describe('withShareIntent (T-901)', () => {
       const result = withShareIntent(config);
 
       // Verifica que foi adicionado exatamente um intent filter
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(1);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(1);
 
-      const addedFilter = result.modResults.mainActivity.intentFilter[0];
+      const addedFilter = result.modResults.mainActivity['intent-filter'][0];
 
       // Verifica as ações
       expect(addedFilter.action).toBeDefined();
@@ -63,13 +63,13 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [],
+            'intent-filter': [],
           },
         },
       };
 
       const result = withShareIntent(config);
-      const addedFilter = result.modResults.mainActivity.intentFilter[0];
+      const addedFilter = result.modResults.mainActivity['intent-filter'][0];
 
       // Verifica a categoria
       expect(addedFilter.category).toBeDefined();
@@ -81,13 +81,13 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [],
+            'intent-filter': [],
           },
         },
       };
 
       const result = withShareIntent(config);
-      const addedFilter = result.modResults.mainActivity.intentFilter[0];
+      const addedFilter = result.modResults.mainActivity['intent-filter'][0];
 
       // Verifica o data type
       expect(addedFilter.data).toBeDefined();
@@ -107,22 +107,22 @@ describe('withShareIntent (T-901)', () => {
       const result = withShareIntent(config);
 
       // Verifica que o array foi criado
-      expect(result.modResults.mainActivity.intentFilter).toBeDefined();
-      expect(Array.isArray(result.modResults.mainActivity.intentFilter)).toBe(true);
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(1);
+      expect(result.modResults.mainActivity['intent-filter']).toBeDefined();
+      expect(Array.isArray(result.modResults.mainActivity['intent-filter'])).toBe(true);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(1);
     });
 
     it('estrutura completa do intent filter está correta', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [],
+            'intent-filter': [],
           },
         },
       };
 
       const result = withShareIntent(config);
-      const filter = result.modResults.mainActivity.intentFilter[0];
+      const filter = result.modResults.mainActivity['intent-filter'][0];
 
       // Verifica a estrutura completa
       expect(filter).toHaveProperty('action');
@@ -163,7 +163,7 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [existingFilter],
+            'intent-filter': [existingFilter],
           },
         },
       };
@@ -171,9 +171,9 @@ describe('withShareIntent (T-901)', () => {
       const result = withShareIntent(config);
 
       // Verifica que continua com apenas 1 intent filter (não foi duplicado)
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(1);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(1);
       // Verifica que é o mesmo filter (ou equivalente)
-      expect(result.modResults.mainActivity.intentFilter[0]).toBe(existingFilter);
+      expect(result.modResults.mainActivity['intent-filter'][0]).toBe(existingFilter);
     });
 
     it('não adiciona intent filter se SEND_MULTIPLE já existe isoladamente', () => {
@@ -186,7 +186,7 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [existingFilter],
+            'intent-filter': [existingFilter],
           },
         },
       };
@@ -194,25 +194,25 @@ describe('withShareIntent (T-901)', () => {
       const result = withShareIntent(config);
 
       // Verifica que não foi adicionado novo filter
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(1);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(1);
     });
 
     it('roda o plugin duas vezes sem duplicar', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [],
+            'intent-filter': [],
           },
         },
       };
 
       // Primeira execução
       let result = withShareIntent(config);
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(1);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(1);
 
       // Segunda execução na mesma config
       result = withShareIntent(result);
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(1);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(1);
     });
 
     it('preserva outros intent filters ao adicionar o de compartilhamento', () => {
@@ -224,7 +224,7 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [otherFilter],
+            'intent-filter': [otherFilter],
           },
         },
       };
@@ -232,10 +232,10 @@ describe('withShareIntent (T-901)', () => {
       const result = withShareIntent(config);
 
       // Verifica que ambos os filters estão presentes
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(2);
-      expect(result.modResults.mainActivity.intentFilter[0]).toBe(otherFilter);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(2);
+      expect(result.modResults.mainActivity['intent-filter'][0]).toBe(otherFilter);
       // O novo filter é o segundo
-      expect(result.modResults.mainActivity.intentFilter[1].action).toHaveLength(2);
+      expect(result.modResults.mainActivity['intent-filter'][1].action).toHaveLength(2);
     });
   });
 
@@ -276,7 +276,7 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [filter1, filter2],
+            'intent-filter': [filter1, filter2],
           },
         },
       };
@@ -284,12 +284,12 @@ describe('withShareIntent (T-901)', () => {
       const result = withShareIntent(config);
 
       // Verifica que foram preservados e adicionado um novo
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(3);
-      expect(result.modResults.mainActivity.intentFilter[0]).toBe(filter1);
-      expect(result.modResults.mainActivity.intentFilter[1]).toBe(filter2);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(3);
+      expect(result.modResults.mainActivity['intent-filter'][0]).toBe(filter1);
+      expect(result.modResults.mainActivity['intent-filter'][1]).toBe(filter2);
 
       // Verifica que o novo filter tem SEND/SEND_MULTIPLE
-      const newFilter = result.modResults.mainActivity.intentFilter[2];
+      const newFilter = result.modResults.mainActivity['intent-filter'][2];
       expect(newFilter.action).toHaveLength(2);
       expect(newFilter.action[0].$['android:name']).toBe('android.intent.action.SEND');
     });
@@ -303,7 +303,7 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [existingFilter],
+            'intent-filter': [existingFilter],
           },
         },
       };
@@ -311,7 +311,7 @@ describe('withShareIntent (T-901)', () => {
       const result = withShareIntent(config);
 
       // Verifica que o filter de compartilhamento não foi adicionado (já existe SEND)
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(1);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(1);
     });
 
     it('configuração com mainActivity mas sem intentFilter inicializa corretamente', () => {
@@ -327,9 +327,9 @@ describe('withShareIntent (T-901)', () => {
       const result = withShareIntent(config);
 
       // Verifica que foi criado o array e adicionado o filter
-      expect(result.modResults.mainActivity.intentFilter).toBeDefined();
-      expect(Array.isArray(result.modResults.mainActivity.intentFilter)).toBe(true);
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(1);
+      expect(result.modResults.mainActivity['intent-filter']).toBeDefined();
+      expect(Array.isArray(result.modResults.mainActivity['intent-filter'])).toBe(true);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(1);
       // Verifica que a propriedade anterior foi preservada
       expect(result.modResults.mainActivity.someOtherProperty).toBe('value');
     });
@@ -344,7 +344,7 @@ describe('withShareIntent (T-901)', () => {
         },
         modResults: {
           mainActivity: {
-            intentFilter: [],
+            'intent-filter': [],
             someOtherField: 'preserved',
           },
         },
@@ -356,14 +356,14 @@ describe('withShareIntent (T-901)', () => {
       expect(result.expo).toEqual(config.expo);
       expect(result.modResults.mainActivity.someOtherField).toBe('preserved');
       // Verifica que o intent filter foi adicionado
-      expect(result.modResults.mainActivity.intentFilter).toHaveLength(1);
+      expect(result.modResults.mainActivity['intent-filter']).toHaveLength(1);
     });
 
     it('mantém estrutura de config para repassar a próximos plugins', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [],
+            'intent-filter': [],
           },
         },
       };
@@ -373,7 +373,7 @@ describe('withShareIntent (T-901)', () => {
       // Verifica que o return ainda tem modResults e mainActivity (estrutura correta)
       expect(result).toHaveProperty('modResults');
       expect(result.modResults).toHaveProperty('mainActivity');
-      expect(result.modResults.mainActivity).toHaveProperty('intentFilter');
+      expect(result.modResults.mainActivity).toHaveProperty('intent-filter');
     });
   });
 
@@ -382,13 +382,13 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [],
+            'intent-filter': [],
           },
         },
       };
 
       const result = withShareIntent(config);
-      const filter = result.modResults.mainActivity.intentFilter[0];
+      const filter = result.modResults.mainActivity['intent-filter'][0];
 
       // Verifica os nomes exatos (não versões abreviadas ou incorretas)
       expect(filter.action[0].$['android:name']).toBe('android.intent.action.SEND');
@@ -405,13 +405,13 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [],
+            'intent-filter': [],
           },
         },
       };
 
       const result = withShareIntent(config);
-      const filter = result.modResults.mainActivity.intentFilter[0];
+      const filter = result.modResults.mainActivity['intent-filter'][0];
 
       expect(filter.category[0].$['android:name']).toBe('android.intent.category.DEFAULT');
 
@@ -423,18 +423,38 @@ describe('withShareIntent (T-901)', () => {
       const config = {
         modResults: {
           mainActivity: {
-            intentFilter: [],
+            'intent-filter': [],
           },
         },
       };
 
       const result = withShareIntent(config);
-      const filter = result.modResults.mainActivity.intentFilter[0];
+      const filter = result.modResults.mainActivity['intent-filter'][0];
 
       expect(filter.data[0].$['android:mimeType']).toBe('*/*');
 
       // Não deve conter outras restrições de tipo
       expect(filter.data).toHaveLength(1);
+    });
+  });
+
+  describe('regressão: chave da propriedade no AndroidManifest (bug pós-T-901)', () => {
+    it('nunca cria a chave camelCase intentFilter (tag XML inválida, ignorada pelo Android)', () => {
+      const config = {
+        modResults: {
+          mainActivity: {
+            'intent-filter': [],
+          },
+        },
+      };
+
+      const result = withShareIntent(config);
+
+      // A chave usada pelo builder de XML do Expo é literal: 'intent-filter' (kebab-case).
+      // Uma chave 'intentFilter' geraria uma tag <intentFilter> inválida e silenciosamente
+      // ignorada pelo parser de manifest do Android — o app nunca apareceria no share sheet.
+      expect(result.modResults.mainActivity).not.toHaveProperty('intentFilter');
+      expect(result.modResults.mainActivity).toHaveProperty('intent-filter');
     });
   });
 });
