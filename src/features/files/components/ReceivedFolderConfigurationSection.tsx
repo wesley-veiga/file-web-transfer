@@ -10,7 +10,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useReceivedFolderConfiguration } from '../hooks/useReceivedFolderConfiguration';
 import type { FileRepository, FileSystemModule } from '../services/fileRepository';
-import type { FolderSharingModule } from '../services/folderSharingService';
+import { humanizeFolderUri, type FolderSharingModule } from '../services/folderSharingService';
 
 export interface ReceivedFolderConfigurationSectionProps {
   /** Para injetar mock em testes. */
@@ -100,12 +100,12 @@ export function ReceivedFolderConfigurationSection({
             Pasta Configurada
           </Text>
           <Text className="mt-1 break-words text-sm text-blue-600 dark:text-blue-300">
-            {configuredFolderUri}
+            {humanizeFolderUri(configuredFolderUri)}
           </Text>
         </View>
       )}
 
-      <View className="flex-row gap-2">
+      <View className="mt-4 flex-row gap-2">
         <TouchableOpacity
           onPress={handleSelectFolder}
           disabled={isSelecting}
