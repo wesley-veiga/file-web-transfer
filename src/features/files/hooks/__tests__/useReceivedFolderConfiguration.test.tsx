@@ -56,15 +56,17 @@ describe('useReceivedFolderConfiguration hook (T-802)', () => {
       }),
     );
 
+    let succeeded: boolean | undefined;
     await act(async () => {
-      await result.current.selectFolder();
+      succeeded = await result.current.selectFolder();
     });
 
     expect(mockFolderSharingModule.requestDirectoryPermissionsAsync).toHaveBeenCalled();
     expect(mockFileRepository.setReceivedFolderUri).toHaveBeenCalledWith(folderUri);
+    expect(succeeded).toBe(true);
   });
 
-  it('selectFolder: ignora cancelamento (permissão negada)', async () => {
+  it('selectFolder: ignora cancelamento (permissão negada) e retorna false', async () => {
     mockFolderSharingModule.requestDirectoryPermissionsAsync.mockResolvedValue({
       granted: false,
     });
@@ -76,14 +78,16 @@ describe('useReceivedFolderConfiguration hook (T-802)', () => {
       }),
     );
 
+    let succeeded: boolean | undefined;
     await act(async () => {
-      await result.current.selectFolder();
+      succeeded = await result.current.selectFolder();
     });
 
     expect(mockFileRepository.setReceivedFolderUri).not.toHaveBeenCalled();
+    expect(succeeded).toBe(false);
   });
 
-  it('selectFolder: trata erro SAF', async () => {
+  it('selectFolder: trata erro SAF e retorna false', async () => {
     mockFolderSharingModule.requestDirectoryPermissionsAsync.mockRejectedValue(
       new Error('SAF error'),
     );
@@ -95,14 +99,16 @@ describe('useReceivedFolderConfiguration hook (T-802)', () => {
       }),
     );
 
+    let succeeded: boolean | undefined;
     await act(async () => {
-      await result.current.selectFolder();
+      succeeded = await result.current.selectFolder();
     });
 
     expect(result.current.error).toBe('SAF error');
+    expect(succeeded).toBe(false);
   });
 
-  it('clearFolder: remove configuração', async () => {
+  it('clearFolder: remove configuração e retorna true', async () => {
     const folderUri = 'content://com.android.externalstorage.documents/tree/primary%3ADownload';
     mockFileRepository.getReceivedFolderUri.mockResolvedValue(folderUri);
     mockFileRepository.setReceivedFolderUri.mockResolvedValue(undefined);
@@ -114,14 +120,16 @@ describe('useReceivedFolderConfiguration hook (T-802)', () => {
       }),
     );
 
+    let succeeded: boolean | undefined;
     await act(async () => {
-      await result.current.clearFolder();
+      succeeded = await result.current.clearFolder();
     });
 
     expect(mockFileRepository.setReceivedFolderUri).toHaveBeenCalledWith(null);
+    expect(succeeded).toBe(true);
   });
 
-  it('clearFolder: trata erro', async () => {
+  it('clearFolder: trata erro e retorna false', async () => {
     mockFileRepository.setReceivedFolderUri.mockRejectedValue(new Error('Storage error'));
 
     const { result } = await renderHook(() =>
@@ -131,11 +139,13 @@ describe('useReceivedFolderConfiguration hook (T-802)', () => {
       }),
     );
 
+    let succeeded: boolean | undefined;
     await act(async () => {
-      await result.current.clearFolder();
+      succeeded = await result.current.clearFolder();
     });
 
     expect(result.current.error).toBe('Storage error');
+    expect(succeeded).toBe(false);
   });
 
   it('expõe funções selectFolder e clearFolder', async () => {
