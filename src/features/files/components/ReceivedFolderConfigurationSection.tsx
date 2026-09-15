@@ -41,8 +41,13 @@ export function ReceivedFolderConfigurationSection({
   const handleSelectFolder = async () => {
     setIsSelecting(true);
     try {
-      await selectFolder();
-      onConfigured?.();
+      const succeeded = await selectFolder();
+      // Só notifica (e, na tela de Receber, fecha a seção) quando uma pasta foi
+      // de fato configurada — nunca em cancelamento ou erro, senão o usuário
+      // nunca chega a ver a confirmação "Pasta Configurada" nem a mensagem de erro.
+      if (succeeded) {
+        onConfigured?.();
+      }
     } finally {
       setIsSelecting(false);
     }
@@ -51,8 +56,10 @@ export function ReceivedFolderConfigurationSection({
   const handleClearFolder = async () => {
     setIsSelecting(true);
     try {
-      await clearFolder();
-      onConfigured?.();
+      const succeeded = await clearFolder();
+      if (succeeded) {
+        onConfigured?.();
+      }
     } finally {
       setIsSelecting(false);
     }
@@ -75,9 +82,9 @@ export function ReceivedFolderConfigurationSection({
         <Text className="text-lg font-semibold text-gray-900 dark:text-white">
           Local de Recebidos
         </Text>
-        <Text className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+        <Text className="mt-1 mb-4 text-sm text-gray-600 dark:text-gray-400">
           Escolha uma pasta onde os arquivos recebidos serão salvos. Sem configuração, os arquivos
-          são salvos no armazenamento interno do app.
+          são salvos no armazenamento interno do app e apagados caso o app seja desinstalado.
         </Text>
       </View>
 

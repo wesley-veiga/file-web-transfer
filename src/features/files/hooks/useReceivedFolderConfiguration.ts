@@ -30,10 +30,17 @@ export interface UseReceivedFolderConfigurationReturn {
   isLoading: boolean;
   /** Mensagem de erro, se houver */
   error: string | null;
-  /** Abre o seletor de pasta do SAF e configura a pasta */
-  selectFolder: () => Promise<void>;
-  /** Remove a pasta configurada (volta a usar a sandbox) */
-  clearFolder: () => Promise<void>;
+  /**
+   * Abre o seletor de pasta do SAF e configura a pasta.
+   * @returns `true` se uma pasta foi de fato configurada; `false` se o usuário
+   * cancelou o seletor ou se ocorreu um erro (ver `error`) — nesses casos nada muda.
+   */
+  selectFolder: () => Promise<boolean>;
+  /**
+   * Remove a pasta configurada (volta a usar a sandbox).
+   * @returns `true` se a configuração foi removida; `false` se ocorreu um erro.
+   */
+  clearFolder: () => Promise<boolean>;
 }
 
 export function useReceivedFolderConfiguration(
@@ -76,11 +83,15 @@ export function useReceivedFolderConfiguration(
       if (folderUri) {
         await fileRepository.setReceivedFolderUri(folderUri);
         setConfiguredFolderUri(folderUri);
+        return true;
       }
-      // Se cancelado pelo usuário (folderUri === null), não atualiza nada
+      // Cancelado pelo usuário (folderUri === null) — não é um erro, mas também
+      // não há nada novo para confirmar na UI.
+      return false;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao acessar a pasta';
       setError(message);
+      return false;
     }
   }, [fileRepository, folderSharingModule]);
 
@@ -89,9 +100,11 @@ export function useReceivedFolderConfiguration(
     try {
       await fileRepository.setReceivedFolderUri(null);
       setConfiguredFolderUri(null);
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao limpar configuração';
       setError(message);
+      return false;
     }
   }, [fileRepository]);
 
