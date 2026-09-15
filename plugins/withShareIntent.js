@@ -43,12 +43,16 @@ function withShareIntentManifest(config) {
   return withAndroidManifest(config, (config) => {
     const mainActivity = AndroidConfig.Manifest.getMainActivityOrThrow(config.modResults);
 
-    if (!mainActivity.intentFilter) {
-      mainActivity.intentFilter = [];
+    // Nota (correção pós-T-901): a chave precisa ser exatamente 'intent-filter' (kebab-case),
+    // pois o builder de XML do Expo usa a chave do objeto como nome literal da tag. Usar
+    // `intentFilter` (camelCase) gera uma tag `<intentFilter>` inválida, silenciosamente
+    // ignorada pelo Android — o app nunca aparecia no menu de compartilhar do SO.
+    if (!mainActivity['intent-filter']) {
+      mainActivity['intent-filter'] = [];
     }
 
     // Verifica se o intent filter de SEND já existe para evitar duplicatas
-    const shareIntentFilterExists = mainActivity.intentFilter.some((filter) => {
+    const shareIntentFilterExists = mainActivity['intent-filter'].some((filter) => {
       const actions = filter.action || [];
       return actions.some((action) => SHARE_INTENT_ACTIONS.includes(action.$['android:name']));
     });
@@ -69,7 +73,7 @@ function withShareIntentManifest(config) {
         ],
       };
 
-      mainActivity.intentFilter.push(shareIntentFilter);
+      mainActivity['intent-filter'].push(shareIntentFilter);
     }
 
     return config;
