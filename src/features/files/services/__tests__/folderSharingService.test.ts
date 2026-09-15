@@ -4,6 +4,7 @@
  *
  * Testa:
  * - extractFileNameFromUri: decodificação de URI SAF real (percent-encoding, `:`/`/`)
+ * - humanizeFolderUri: rótulo legível para URI de árvore SAF (T-915)
  * - guessMimeTypeFromName: extensões conhecidas, desconhecidas e sem extensão
  * - requestFolderAccess: concedida/negada
  * - listFolderFiles: filtra subpastas, ignora item problemático, mapeia campos
@@ -11,6 +12,7 @@
 
 import {
   extractFileNameFromUri,
+  humanizeFolderUri,
   guessMimeTypeFromName,
   requestFolderAccess,
   listFolderFiles,
@@ -45,6 +47,50 @@ describe('extractFileNameFromUri', () => {
     // split é "" (falsy), então cai no fallback (o próprio `decoded`).
     const uri = 'content://.../document/primary%3APasta%2F';
     expect(extractFileNameFromUri(uri)).toBe('primary:Pasta/');
+  });
+});
+
+describe('humanizeFolderUri (T-915)', () => {
+  it('armazenamento interno (primary) com caminho de um nível', () => {
+    const uri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments';
+    expect(humanizeFolderUri(uri)).toBe('Armazenamento interno / Documents');
+  });
+
+  it('armazenamento interno (primary) com caminho de múltiplos níveis', () => {
+    const uri = 'content://com.android.externalstorage.documents/tree/primary%3ADownload%2FTeste';
+    expect(humanizeFolderUri(uri)).toBe('Armazenamento interno / Download / Teste');
+  });
+
+  it('armazenamento interno (primary) na raiz (caminho vazio)', () => {
+    const uri = 'content://com.android.externalstorage.documents/tree/primary%3A';
+    expect(humanizeFolderUri(uri)).toBe('Armazenamento interno');
+  });
+
+  it('volume externo (cartão SD/OTG, id opaco) vira "Armazenamento externo"', () => {
+    const uri = 'content://com.android.externalstorage.documents/tree/1234-5678%3APictures';
+    expect(humanizeFolderUri(uri)).toBe('Armazenamento externo / Pictures');
+  });
+
+  it('decodifica espaços e acentos percent-encoded no caminho', () => {
+    const uri =
+      'content://com.android.externalstorage.documents/tree/primary%3ARecebidos%20do%20app';
+    expect(humanizeFolderUri(uri)).toBe('Armazenamento interno / Recebidos do app');
+  });
+
+  it('document id sem ":" retorna o document id decodificado como está', () => {
+    const uri = 'content://com.example.provider/tree/algum-id-opaco';
+    expect(humanizeFolderUri(uri)).toBe('algum-id-opaco');
+  });
+
+  it('URI sem "/tree/" (formato inesperado) retorna a URI original', () => {
+    const uri = 'content://com.example.provider/document/primary%3ADocuments';
+    expect(humanizeFolderUri(uri)).toBe(uri);
+  });
+
+  it('não lança quando o document id não é percent-encoding válido', () => {
+    const uri = 'content://com.android.externalstorage.documents/tree/primary%3AInv%';
+    expect(() => humanizeFolderUri(uri)).not.toThrow();
+    expect(humanizeFolderUri(uri)).toBe(uri);
   });
 });
 

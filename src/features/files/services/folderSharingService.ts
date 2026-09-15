@@ -96,6 +96,56 @@ export function extractFileNameFromUri(uri: string): string {
   return decodedParts[decodedParts.length - 1] || decoded;
 }
 
+/**
+ * Converte uma URI de árvore SAF (`tree/...`, retornada por
+ * `requestDirectoryPermissionsAsync`) num rótulo legível para exibir na UI.
+ *
+ * O document id de uma URI SAF de armazenamento externo tem o formato
+ * `<volumeId>:<caminho>` (percent-encoded): `primary` é o armazenamento interno
+ * do aparelho; qualquer outro volume (cartão SD, pen drive OTG) recebe um id
+ * opaco tipo `1234-5678`. Nenhum dos dois é um nome que um usuário reconheça —
+ * por isso `primary` vira "Armazenamento interno" e qualquer outro volume vira
+ * "Armazenamento externo", com o caminho decodificado (sem `%XX`, com `/`) em
+ * seguida.
+ *
+ * URIs de outros provedores SAF (Google Drive, Dropbox etc., também
+ * selecionáveis no seletor de pasta do SO) não seguem esse formato — nesses
+ * casos, e em qualquer entrada que não se pareça com uma URI SAF válida, cai no
+ * fallback de decodificar o document id inteiro como está, em vez de arriscar
+ * um rótulo tecnicamente incorreto.
+ */
+export function humanizeFolderUri(uri: string): string {
+  const treeMarker = '/tree/';
+  const treeIndex = uri.indexOf(treeMarker);
+  if (treeIndex === -1) {
+    return uri;
+  }
+
+  const rawDocumentId = uri.slice(treeIndex + treeMarker.length);
+  let documentId: string;
+  try {
+    documentId = decodeURIComponent(rawDocumentId);
+  } catch {
+    return uri;
+  }
+
+  const separatorIndex = documentId.indexOf(':');
+  if (separatorIndex === -1) {
+    return documentId;
+  }
+
+  const volumeId = documentId.slice(0, separatorIndex);
+  const path = documentId.slice(separatorIndex + 1);
+  const volumeLabel = volumeId === 'primary' ? 'Armazenamento interno' : 'Armazenamento externo';
+
+  if (!path) {
+    return volumeLabel;
+  }
+
+  const pathLabel = path.split('/').filter(Boolean).join(' / ');
+  return `${volumeLabel} / ${pathLabel}`;
+}
+
 /** Infere o MIME type pela extensão do nome; `application/octet-stream` se desconhecida/ausente. */
 export function guessMimeTypeFromName(name: string): string {
   const dotIndex = name.lastIndexOf('.');
